@@ -55,7 +55,10 @@ pub enum RichBlock {
     },
     Collapsible {
         header: String,
+        /// Inline styling, as in [`RichBlock::Paragraph`].
+        header_entities: Vec<TextEntity>,
         body: String,
+        body_entities: Vec<TextEntity>,
         open: bool,
     },
     Document {

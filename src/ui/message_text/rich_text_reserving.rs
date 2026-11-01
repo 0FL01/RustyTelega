@@ -21,6 +21,82 @@ pub(in crate::ui) fn rich_text_reserving(
     reserve: Option<Pixels>,
     cx: &mut Context<QuillApp>,
 ) -> AnyElement {
+    text_at(
+        0,
+        text,
+        entities,
+        msg_key,
+        is_caption,
+        revealed,
+        font,
+        emoji_paths,
+        layered,
+        reserve,
+        cx,
+    )
+}
+
+/// One text of a rich message's block: its runs get reveal keys of their
+/// own, since a message has many such texts and a spoiler reveals alone.
+pub(super) fn rich_part_line(
+    part: RichPart,
+    text: &str,
+    entities: &[TextEntity],
+    msg_key: (i64, u64),
+    revealed: &std::collections::HashSet<(i64, u64, u64, bool)>,
+    font: Pixels,
+    cx: &mut Context<QuillApp>,
+) -> AnyElement {
+    text_at(
+        part.first_run(),
+        text,
+        entities,
+        msg_key,
+        false,
+        revealed,
+        font,
+        // Instant View richText* has no custom emoji entities
+        // (richTextCustomEmoji degrades to alternative_text).
+        &HashMap::new(),
+        &HashMap::new(),
+        None,
+        cx,
+    )
+}
+
+/// Which text of a rich message this is: a block, and within it a list item
+/// or the header or body of a collapsible block.
+#[derive(Clone, Copy)]
+pub(super) struct RichPart {
+    pub(super) block: usize,
+    pub(super) part: usize,
+}
+
+impl RichPart {
+    /// The first run index of this text; [`RUN_BITS`] leaves room for its runs.
+    pub(super) fn first_run(self) -> usize {
+        ((self.block + 1) << 40) | (self.part << RUN_BITS)
+    }
+}
+
+/// The low bits of a run index count runs within one text.
+pub(super) const RUN_BITS: u32 = 20;
+
+/// Lays out `text` with its runs numbered from `first_run`.
+#[allow(clippy::too_many_arguments)]
+fn text_at(
+    first_run: usize,
+    text: &str,
+    entities: &[TextEntity],
+    msg_key: (i64, u64),
+    is_caption: bool,
+    revealed: &std::collections::HashSet<(i64, u64, u64, bool)>,
+    font: Pixels,
+    emoji_paths: &HashMap<i64, ImageSource>,
+    layered: &HashMap<i64, StickerView>,
+    reserve: Option<Pixels>,
+    cx: &mut Context<QuillApp>,
+) -> AnyElement {
     let runs = styled_runs(text, entities);
     let mut column = div()
         .id(("msg-rich-text", msg_key.1 * 2 + is_caption as u64))
@@ -42,7 +118,7 @@ pub(in crate::ui) fn rich_text_reserving(
             };
             column = column.child(quote_block(
                 block,
-                start,
+                first_run + start,
                 msg_key,
                 is_caption,
                 revealed,
@@ -56,7 +132,7 @@ pub(in crate::ui) fn rich_text_reserving(
         if run.style.pre {
             column = column.child(paint_text_run(
                 run,
-                index,
+                first_run + index,
                 msg_key,
                 is_caption,
                 revealed,
@@ -80,7 +156,7 @@ pub(in crate::ui) fn rich_text_reserving(
         };
         column = column.child(inline_paragraph(
             paragraph,
-            start,
+            first_run + start,
             msg_key,
             is_caption,
             revealed,
@@ -176,7 +252,11 @@ pub(super) fn inline_paragraph(
     .selection_color(accent().opacity(0.35).into())
     .message(msg_key)
     // Messages read top to bottom by id; paragraphs within one in order.
-    .document_order(msg_key.1.saturating_mul(1024) + first_index as u64 * 2 + is_caption as u64)
+    .document_order(
+        msg_key.1.saturating_mul(1024)
+            + (first_index & ((1 << RUN_BITS) - 1)) as u64 * 2
+            + is_caption as u64,
+    )
     .on_click(click_ranges, move |ix, _, cx| {
         let Some(action) = actions.get(ix).cloned() else {
             return;

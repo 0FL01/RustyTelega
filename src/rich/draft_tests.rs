@@ -154,6 +154,92 @@ fn a_list_from_tdlib_keeps_its_formatting_through_the_editor() {
     assert_eq!(item.entities.len(), 1);
 }
 
+fn styled(parts: Vec<Value>) -> Value {
+    json!({ "@type": "richTexts", "texts": parts })
+}
+
+fn plain(text: &str) -> Value {
+    json!({ "@type": "richTextPlain", "text": text })
+}
+
+fn bold_part(text: &str, entities: &[TextEntity]) -> Vec<String> {
+    entities
+        .iter()
+        .filter(|entity| matches!(entity.kind, TextEntityKind::Bold))
+        .filter_map(|entity| text.get(entity.utf8_start..entity.utf8_end))
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn a_block_quote_keeps_its_formatting_behind_the_quote_mark() {
+    let block = parse_page_block(&json!({
+        "@type": "pageBlockBlockQuote",
+        "blocks": [
+            paragraph(styled(vec![plain("one "), bold("two")])),
+            paragraph(styled(vec![bold("three"), plain(" four")])),
+        ],
+    }));
+    let RichBlock::Paragraph { text, entities, .. } = block else {
+        panic!("a quote is a paragraph");
+    };
+    assert_eq!(text, "❝ one two\n❝ three four");
+    assert_eq!(bold_part(&text, &entities), ["two", "three"]);
+}
+
+#[test]
+fn an_expandable_quote_keeps_header_and_body_formatting() {
+    let block = parse_page_block(&json!({
+        "@type": "pageBlockExpandableBlockQuote",
+        "text": styled(vec![bold("head"), plain("\nbody "), bold("end")]),
+    }));
+    let RichBlock::Collapsible {
+        header,
+        header_entities,
+        body,
+        body_entities,
+        ..
+    } = block
+    else {
+        panic!("an expandable quote is collapsible");
+    };
+    assert_eq!((header.as_str(), body.as_str()), ("head", "body end"));
+    assert_eq!(bold_part(&header, &header_entities), ["head"]);
+    assert_eq!(bold_part(&body, &body_entities), ["end"]);
+}
+
+#[test]
+fn details_keep_their_formatting_through_the_editor() {
+    let received = parse_page_block(&json!({
+        "@type": "pageBlockDetails",
+        "header": styled(vec![plain("see "), bold("this")]),
+        "blocks": [paragraph(styled(vec![plain("the "), bold("body")]))],
+        "is_open": true,
+    }));
+    let RichBlock::Collapsible {
+        header,
+        header_entities,
+        body,
+        body_entities,
+        ..
+    } = &received
+    else {
+        panic!("details are collapsible");
+    };
+    assert_eq!(bold_part(header, header_entities), ["this"]);
+    assert_eq!(bold_part(body, body_entities), ["body"]);
+
+    let Some(draft) = RichDraft::from_message(std::slice::from_ref(&received)) else {
+        panic!("the block shows");
+    };
+    let shown = draft.preview_blocks();
+    assert_eq!(shown.first(), Some(&received), "edits as it was received");
+    let input = draft.input().expect("details have an input form");
+    let block = &input["source"]["blocks"][0];
+    assert_eq!(block["header"]["texts"][1]["@type"], "richTextBold");
+    assert_eq!(block["blocks"][0]["text"]["texts"][1]["@type"], "richTextBold");
+}
+
 #[test]
 fn a_task_list_keeps_its_checkboxes_through_the_editor() {
     let draft = server_draft(json!([{"@type": "pageBlockList", "items": [

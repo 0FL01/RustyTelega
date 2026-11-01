@@ -66,7 +66,9 @@ pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
             }
             blocks.push(RichBlock::Collapsible {
                 header: header.trim().to_string(),
+                header_entities: Vec::new(),
                 body: body.join("\n").trim().to_string(),
+                body_entities: Vec::new(),
                 open: false,
             });
         } else if trimmed.is_empty() {
@@ -316,11 +318,22 @@ pub fn preview_block(block: RichBlock) -> RichBlock {
                 })
                 .collect(),
         },
-        RichBlock::Collapsible { header, body, open } => RichBlock::Collapsible {
-            header: markup_preview_text(&header).0,
-            body: markup_preview_text(&body).0,
+        RichBlock::Collapsible {
+            header,
+            body,
             open,
-        },
+            ..
+        } => {
+            let (header, header_entities) = markup_preview_text(&header);
+            let (body, body_entities) = markup_preview_text(&body);
+            RichBlock::Collapsible {
+                header,
+                header_entities,
+                body,
+                body_entities,
+                open,
+            }
+        }
         other => other,
     }
 }
@@ -465,8 +478,7 @@ mod tests {
     #[test]
     fn preview_blocks_resolves_markup_to_entities() {
         // M2: the editor preview shows clean text + entity spans for
-        // paragraphs/headings/list items (no raw `**` markers); collapsible
-        // text is marker-stripped, matching how Quill renders it everywhere.
+        // every text block (no raw `**` markers).
         let blocks = preview_blocks(
             "# **Club** night\n\nPick **one**:\n\n- **a**\n\n>> **More**\n**body**\n",
         );
@@ -487,11 +499,20 @@ mod tests {
         assert_eq!(items[0].text, "a");
         assert_eq!(items[0].entities.len(), 1);
         assert!(matches!(items[0].entities[0].kind, TextEntityKind::Bold));
-        let RichBlock::Collapsible { header, body, .. } = &blocks[3] else {
+        let RichBlock::Collapsible {
+            header,
+            header_entities,
+            body,
+            body_entities,
+            ..
+        } = &blocks[3]
+        else {
             panic!("expected collapsible, got {:?}", blocks[3]);
         };
         assert_eq!(header, "More");
         assert_eq!(body, "body");
+        assert!(matches!(header_entities[0].kind, TextEntityKind::Bold));
+        assert!(matches!(body_entities[0].kind, TextEntityKind::Bold));
     }
 
     #[test]

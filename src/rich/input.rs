@@ -137,7 +137,9 @@ pub fn input_page_block_json(block: &RichBlock) -> Option<Value> {
                 .collect();
             Some(json!({ "@type": "inputPageBlockList", "items": inputs }))
         }
-        RichBlock::Collapsible { header, body, open } => Some(json!({
+        RichBlock::Collapsible {
+            header, body, open, ..
+        } => Some(json!({
             "@type": "inputPageBlockDetails",
             "header": block_rich_text(header),
             "blocks": [{ "@type": "inputPageBlockParagraph", "text": block_rich_text(body) }],
@@ -424,7 +426,9 @@ mod tests {
             },
             RichBlock::Collapsible {
                 header: "f".into(),
+                header_entities: Vec::new(),
                 body: "g".into(),
+                body_entities: Vec::new(),
                 open: true,
             },
             RichBlock::Document {

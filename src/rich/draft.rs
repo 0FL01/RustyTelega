@@ -5,8 +5,7 @@
 //! place of the message field (`HistoryView::Controls::RichDraftPreview`).
 use super::*;
 
-/// A rich draft, held as editor blocks: paragraph, heading, list and
-/// details text is composer markup, the form the rich editor writes and
+/// A rich draft, held as editor blocks: its text is composer markup, the form the rich editor writes and
 /// [`input_page_block_json`] reads. One built from TDLib's blocks has its
 /// inline entities written back as markup, so it edits, sends and saves
 /// like one typed in the editor.
@@ -171,8 +170,8 @@ fn summary_lines(block: &RichBlock, lines: &mut Vec<String>) {
     }
 }
 
-/// A parsed `pageBlock*` as the editor holds it: paragraph, heading and
-/// list text with its entities written as markup. Details text is plain.
+/// A parsed `pageBlock*` as the editor holds it: its text with its entities
+/// written as markup.
 fn editor_block(block: &RichBlock) -> RichBlock {
     match block {
         RichBlock::Paragraph {
@@ -204,6 +203,19 @@ fn editor_block(block: &RichBlock) -> RichBlock {
                     checked: item.checked,
                 })
                 .collect(),
+        },
+        RichBlock::Collapsible {
+            header,
+            header_entities,
+            body,
+            body_entities,
+            open,
+        } => RichBlock::Collapsible {
+            header: crate::composer::entities_to_markup(header, header_entities),
+            header_entities: Vec::new(),
+            body: crate::composer::entities_to_markup(body, body_entities),
+            body_entities: Vec::new(),
+            open: *open,
         },
         other => other.clone(),
     }
