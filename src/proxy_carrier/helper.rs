@@ -123,6 +123,13 @@ fn loader_failure(status: ExitStatus) -> bool {
     }
 }
 
+/// Test builds count the helper's keep-alives and wake on each, so a live
+/// test can give up on a page that never relays after a bounded number of
+/// them, with no clock.
+#[cfg(test)]
+pub(super) static KEEP_ALIVES_HEARD: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 /// What the threads of one carrier share.
 struct Shared {
     started: Instant,
@@ -641,7 +648,14 @@ fn read_events(
                 shared.ready.store(true, Ordering::Release);
                 continue;
             }
-            CarrierEvent::Alive => continue,
+            CarrierEvent::Alive => {
+                #[cfg(test)]
+                {
+                    KEEP_ALIVES_HEARD.fetch_add(1, Ordering::AcqRel);
+                    crate::wake::UPDATES.poke();
+                }
+                continue;
+            }
             CarrierEvent::Binary { data } => CarrierMessage::Binary(data),
             CarrierEvent::Text { text } => CarrierMessage::Text(text),
             CarrierEvent::Failed { failure } => {
