@@ -266,9 +266,40 @@ fn load_library(path: &Path) -> Result<libloading::Library, libloading::Error> {
     }
 }
 
+/// Why no candidate loaded. A stale shim is the reason that matters: the
+/// candidates after it (a missing file, a broken library) must not hide
+/// it, or the decoder tests skip silently again.
+struct LoadFailure {
+    last: String,
+    stale: Option<String>,
+}
+
+impl LoadFailure {
+    fn new() -> Self {
+        Self {
+            last: format!("{} not found", library_name()),
+            stale: None,
+        }
+    }
+
+    fn failed(&mut self, reason: String) {
+        self.last = reason;
+    }
+
+    fn stale(&mut self, reason: String) {
+        if self.stale.is_none() {
+            self.stale = Some(reason);
+        }
+    }
+
+    fn reason(self) -> String {
+        self.stale.unwrap_or(self.last)
+    }
+}
+
 impl Api {
     fn load() -> Result<Self, String> {
-        let mut last = format!("{} not found", library_name());
+        let mut failure = LoadFailure::new();
         for path in candidates() {
             if !path.is_file() {
                 continue;
@@ -276,7 +307,7 @@ impl Api {
             let library = match load_library(&path) {
                 Ok(library) => library,
                 Err(err) => {
-                    last = format!("{}: {err}", path.display());
+                    failure.failed(format!("{}: {err}", path.display()));
                     continue;
                 }
             };
@@ -285,18 +316,18 @@ impl Api {
             unsafe {
                 let Ok(version) = library.get::<unsafe extern "C" fn() -> i32>(b"qv_abi_version\0")
                 else {
-                    last = format!("{}: not a quillvideo library", path.display());
+                    failure.failed(format!("{}: not a quillvideo library", path.display()));
                     continue;
                 };
                 // A shim built from older sources (a development build under
                 // vendor/ffmpeg/prefix) must not hide a current one later in
                 // the list.
                 if version() != ABI_VERSION {
-                    last = format!(
+                    failure.stale(format!(
                         "{}: quillvideo ABI {} (expected {ABI_VERSION}), {STALE_HINT}",
                         path.display(),
                         version()
-                    );
+                    ));
                     continue;
                 }
                 let incompatible = |_| "incompatible quillvideo library".to_string();
@@ -320,7 +351,7 @@ impl Api {
                 });
             }
         }
-        Err(last)
+        Err(failure.reason())
     }
 }
 
@@ -664,5 +695,26 @@ impl Drop for FfiDemuxer {
     fn drop(&mut self) {
         // SAFETY: closes the context exactly once.
         unsafe { (self.api.close)(self.ctx) };
+    }
+}
+
+#[cfg(test)]
+mod load_tests {
+    use super::{LoadFailure, STALE_HINT};
+
+    #[test]
+    fn a_stale_shim_stays_the_reason_after_later_failures() {
+        let mut failure = LoadFailure::new();
+        failure.stale(format!("vendor/ffmpeg/prefix/lib/x: ABI 3, {STALE_HINT}"));
+        failure.failed("bin/x: cannot open shared object".into());
+        assert!(failure.reason().contains(STALE_HINT));
+    }
+
+    #[test]
+    fn without_a_stale_shim_the_last_failure_is_the_reason() {
+        let mut failure = LoadFailure::new();
+        failure.failed("a: broken".into());
+        failure.failed("b: broken".into());
+        assert_eq!(failure.reason(), "b: broken");
     }
 }
