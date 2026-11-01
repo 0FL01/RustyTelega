@@ -889,3 +889,8 @@ crate::ui::shell::register_dialogs! {
         QuillApp::build_folder_new_chats_dialog,
     ),
 }
+
+#[cfg(test)]
+#[cfg(feature = "demo-capture")]
+#[path = "folder_extras_tests.rs"]
+mod tests;
