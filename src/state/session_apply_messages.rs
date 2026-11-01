@@ -477,11 +477,7 @@ impl Session {
                     .contains_key(&(chat_id.0, topic_id))
             {
                 let row = history_message(message, false);
-                if let Some(topic_history) =
-                    self.threads.topic_histories.get_mut(&(chat_id.0, topic_id))
-                {
-                    topic_history.note_live(row);
-                }
+                self.note_live_topic_message(chat_id, topic_id, row);
             }
         }
         self.trim_live_windows(chat_id, topic_id);

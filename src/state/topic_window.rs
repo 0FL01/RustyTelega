@@ -110,20 +110,25 @@ impl TopicHistory {
     /// A message for this topic arrived outside a page (an update or an
     /// own send). While the window stops short of the latest, a message
     /// past its end waits outside it, and an own send replaces the window
-    /// so the latest page shows it (tdesktop `showAtEnd`).
-    pub(crate) fn note_live(&mut self, row: HistoryMessage) {
+    /// so the latest page shows it (tdesktop `showAtEnd`). Returns whether
+    /// the window was replaced.
+    #[must_use]
+    fn note_live(&mut self, row: HistoryMessage) -> bool {
+        let mut replaced = false;
         if self.has_newer {
             if is_local(&row) {
                 self.reset_window();
+                replaced = true;
             } else if self
                 .newest_loaded_id()
                 .is_none_or(|newest| row.id.0 > newest.0)
             {
                 self.latest_seen = self.latest_seen.max(row.id.0);
-                return;
+                return false;
             }
         }
         self.upsert(row);
+        replaced
     }
 
     /// A newer page landed: `added` rows past the old newest end. An empty
@@ -177,7 +182,9 @@ impl Session {
             self.clear_topic_load_failed(chat_id, topic);
         }
         let entry = self.topic_history_entry(chat_id, topic);
-        if entry.stale_pages.remove(&pending.id.0) {
+        // A newer page for a window that already reaches the latest was
+        // asked for from one that has gone.
+        if entry.stale_pages.remove(&pending.id.0) || newer && !entry.has_newer {
             return;
         }
         let before = entry.newest_loaded_id().map_or(0, |id| id.0);
@@ -256,6 +263,23 @@ impl Session {
             .collect()
     }
 
+    /// A message for a loaded topic arrived outside a page
+    /// ([`TopicHistory::note_live`]). Pages asked for from a window it
+    /// replaced would land across a gap: they are dropped.
+    pub(crate) fn note_live_topic_message(
+        &mut self,
+        chat_id: ChatId,
+        topic: i32,
+        row: HistoryMessage,
+    ) {
+        let Some(history) = self.threads.topic_histories.get_mut(&(chat_id.0, topic)) else {
+            return;
+        };
+        if history.note_live(row) {
+            self.drop_topic_pages_past(chat_id, topic, &[WindowEnd::Oldest, WindowEnd::Newest]);
+        }
+    }
+
     /// The cap after a live message landed in a loaded topic.
     pub(crate) fn trim_live_topic(&mut self, chat_id: ChatId, topic: i32) {
         let Some(history) = self.threads.topic_histories.get_mut(&(chat_id.0, topic)) else {
@@ -283,7 +307,12 @@ impl Session {
 
     /// Mark the topic's page requests in flight for `ends` stale: they were
     /// asked for from an end that has moved since.
-    fn drop_topic_pages_past(&mut self, chat_id: ChatId, topic: i32, ends: &[WindowEnd]) {
+    pub(crate) fn drop_topic_pages_past(
+        &mut self,
+        chat_id: ChatId,
+        topic: i32,
+        ends: &[WindowEnd],
+    ) {
         let stale = self.topic_page_ids(chat_id, topic, ends);
         if let Some(history) = self.threads.topic_histories.get_mut(&(chat_id.0, topic)) {
             history.stale_pages.extend(stale);

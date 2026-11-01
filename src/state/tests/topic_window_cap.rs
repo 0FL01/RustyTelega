@@ -270,3 +270,54 @@ fn closing_a_topic_short_of_the_latest_forgets_its_window() {
     assert!(!history.has_newer);
     assert_eq!(history.next_from_message_id, MessageId(0));
 }
+
+/// A pending own send in `TOPIC` (id 200 000).
+fn own_send(session: &mut Session, seq: &AtomicU64, sink: &Arc<MemorySink>, state: &str) {
+    let send = session.request(RequestPurpose::SendMessage, Some(ChatId(CHAT)));
+    apply_json(
+        session,
+        seq,
+        sink,
+        &format!(
+            r#"{{"@type":"message","@extra":"{}","id":200000,"chat_id":{CHAT},"is_outgoing":true,"sending_state":{{"@type":"{state}"}},"topic_id":{{"@type":"messageTopicForum","forum_topic_id":{TOPIC}}},"content":{{"@type":"messageText","text":{{"@type":"formattedText","text":"hi","entities":[]}}}}}}"#,
+            send.0
+        ),
+    );
+}
+
+#[test]
+fn own_send_reset_drops_older_page_in_flight() {
+    let (mut session, sink, seq) = read_back(100_000 - 2 * CAP);
+    let older = page_request(&mut session, RequestPurpose::GetTopicHistory);
+    own_send(&mut session, &seq, &sink, "messageSendingStatePending");
+    assert_eq!(topic(&session).messages.len(), 1, "only the send");
+    // The page asked for at the old window's top lands late.
+    let ids: Vec<i64> = (96_900..=96_999).rev().collect();
+    answer(&mut session, &seq, &sink, older, &ids, 96_900);
+    let history = topic(&session);
+    assert_eq!(history.messages.len(), 1, "no rows across the gap");
+    assert!(!history.has_newer);
+    assert!(
+        !session.topic_page_in_flight(ChatId(CHAT), TOPIC, WindowEnd::Oldest),
+        "the latest page can go out"
+    );
+}
+
+#[test]
+fn closing_short_topic_drops_newer_page_in_flight() {
+    let (mut session, sink, seq) = read_back(100_000 - 2 * CAP);
+    assert!(topic(&session).has_newer);
+    let newer = page_request(&mut session, RequestPurpose::GetTopicHistoryNewer);
+    session.select_topic(ChatId(CHAT), TOPIC + 1);
+    session.release_topic_history(ChatId(CHAT), TOPIC);
+    session.settle_history_releases();
+    assert!(topic(&session).messages.is_empty(), "the window went");
+    let (from, to) = ids(&session);
+    assert_eq!((from, to), (0, 0));
+    let ids: Vec<i64> = (98_001..=98_100).rev().collect();
+    answer(&mut session, &seq, &sink, newer, &ids, 0);
+    assert!(
+        topic(&session).messages.is_empty(),
+        "reopened, the topic opens at its latest page, not a middle chunk"
+    );
+}

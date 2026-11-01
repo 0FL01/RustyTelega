@@ -395,8 +395,13 @@ impl Session {
             return;
         }
         if let Some(history) = self.threads.topic_histories.get_mut(&(chat_id.0, topic)) {
-            history.trim_to_tail(CLOSED_TAIL_KEEP);
+            let moved = history.has_newer | (history.trim_to_tail(CLOSED_TAIL_KEEP) > 0);
             self.history_pruning.touch_topic((chat_id.0, topic));
+            // Pages asked for from the window that went would land across
+            // a gap.
+            if moved {
+                self.drop_topic_pages_past(chat_id, topic, &[WindowEnd::Oldest, WindowEnd::Newest]);
+            }
         }
         self.enforce_closed_bounds(None);
     }
