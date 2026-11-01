@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn ids_gpui_does_not_use_are_not_gpui_messages() {
-        for raw in [WM_USER, WM_USER + 8, WM_USER + 9, WM_USER + 13] {
+        for raw in [WM_USER, WM_USER + 8, WM_USER + 9, WM_USER + 14] {
             assert_eq!(GpuiMessageId::from_raw(raw), None);
         }
     }

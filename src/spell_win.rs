@@ -73,13 +73,13 @@ fn candidate_tags() -> Vec<String> {
 }
 
 /// The factory, a checker per language in use, and the languages it offers.
-type Checkers = (
+type Opened = (
     ISpellCheckerFactory,
     Vec<(String, ISpellChecker)>,
     Vec<String>,
 );
 
-fn init(wanted_locales: &[String], chosen: &[String]) -> Option<Checkers> {
+fn init(wanted_locales: &[String], chosen: &[String]) -> Option<Opened> {
     // SAFETY: standard COM activation on this thread's own apartment.
     let factory: ISpellCheckerFactory = unsafe {
         CoCreateInstance(
