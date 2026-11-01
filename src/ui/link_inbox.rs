@@ -8,7 +8,6 @@ pub fn install_link_inbox(
     cx: &mut gpui_kit::App,
     view: &gpui_kit::Entity<super::QuillApp>,
 ) {
-    note_main_window(window, cx);
     let activated = view.downgrade();
     cx.on_app_lifecycle(move |phase, cx| {
         if phase == gpui_kit::AppLifecyclePhase::Active {
@@ -96,6 +95,41 @@ struct MainWindow {
 }
 
 impl gpui_kit::Global for MainWindow {}
+
+/// Bind this OS window to the app: what belongs to the window and not to
+/// what it shows, so a replacement after a lost GPU runs it again.
+pub fn attach_main_window(
+    window: &mut gpui_kit::Window,
+    cx: &mut gpui_kit::App,
+    view: &gpui_kit::Entity<super::QuillApp>,
+) {
+    note_main_window(window, cx);
+    #[cfg(any(test, target_os = "windows"))]
+    window.keep_when_closed();
+    #[cfg(windows)]
+    {
+        // The taskbar overlay badge targets this window's taskbar button.
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        if let Ok(handle) = HasWindowHandle::window_handle(window)
+            && let RawWindowHandle::Win32(handle) = handle.as_raw()
+        {
+            quill::icon_badge::set_native_window(handle.hwnd.get());
+        }
+    }
+    view.update(cx, |this, _| {
+        // "Show taskbar icon" off: the window starts out of the taskbar.
+        this.apply_taskbar_icon(window);
+        this.frame.window_title_shown.borrow_mut().clear();
+    });
+    // The title-bar close button (`QuillApp::close_main_window`).
+    window.on_window_should_close(cx, {
+        let view = view.downgrade();
+        move |window, cx| {
+            view.update(cx, |this, cx| this.close_main_window(window, cx))
+                .unwrap_or(true)
+        }
+    });
+}
 
 /// Note the main window for [`reopen_main_window`].
 pub fn note_main_window(window: &gpui_kit::Window, cx: &mut gpui_kit::App) {

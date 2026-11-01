@@ -6,7 +6,8 @@
 //!
 //! A GPU that stops working mid-session on Linux ends the app through a
 //! normal quit instead, and the alert follows once the quit has finished.
-//! On Windows Quill first tries once to draw again ([`device_loss`]).
+//! On Windows Quill first tries once to draw again, keeping the app
+//! ([`device_loss`]).
 #![deny(clippy::indexing_slicing)]
 
 #[cfg(any(test, target_os = "windows"))]
@@ -17,7 +18,7 @@ mod device_loss;
 mod vulkan;
 
 #[cfg(target_os = "windows")]
-pub(crate) use device_loss::recover_after_gpu_loss;
+pub(crate) use device_loss::{recover_after_gpu_loss, reopen_main_window};
 
 #[cfg(target_os = "linux")]
 use gpui_kit::ForegroundExecutor;

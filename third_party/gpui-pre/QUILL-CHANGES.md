@@ -550,3 +550,17 @@ B7, `docs/decisions/video-nv12-linux.md`):
   the image's frames when the image is dropped. Images made without one drop
   their frames as before. Tested from Quill
   (`a_picture_hands_its_buffer_back_once_its_image_goes`).
+
+The Quill project changed it in 2026 so a window lost to a dead renderer can
+be replaced without rebuilding what it showed
+(`src/ui/startup_failure/device_loss.rs` in Quill):
+
+- `src/window.rs`: `Window::keep_when_closed`, `KeptWindow` (the root view,
+  focus, next-frame callbacks and every `SubscriberSet` a window owns) and
+  `Window::take_over`, which moves them into a new window.
+- `src/app.rs`: `App::take_kept_window`, and `update_window_erased` follows a
+  replaced window's id to its replacement, so handles and async window
+  contexts made for the old window reach the new one.
+
+`subscribe_in` and `observe_in` need no change: they run in the subscriber's
+current window, which is the new one from its first frame.

@@ -1285,11 +1285,40 @@ enum InputModality {
     Touch,
 }
 
+/// Quill: what a closed window marked with [`Window::keep_when_closed`]
+/// leaves behind, for the window that replaces it ([`Window::take_over`]).
+/// Everything else in a window belongs to the platform surface or one frame.
+pub struct KeptWindow {
+    id: WindowId,
+    root: Option<AnyView>,
+    focus: Option<FocusId>,
+    next_frame_callbacks: Vec<FrameCallback>,
+    display_observers: SubscriberSet<(), AnyObserver>,
+    focus_listeners: SubscriberSet<(), AnyWindowFocusListener>,
+    focus_lost_listeners: SubscriberSet<(), AnyObserver>,
+    bounds_observers: SubscriberSet<(), AnyObserver>,
+    appearance_observers: SubscriberSet<(), AnyObserver>,
+    button_layout_observers: SubscriberSet<(), AnyObserver>,
+    visibility_observers:
+        SubscriberSet<(), Box<dyn FnMut(WindowVisibility, &mut Window, &mut App) -> bool>>,
+    activation_observers: SubscriberSet<(), AnyObserver>,
+    pending_input_observers: SubscriberSet<(), AnyObserver>,
+}
+
+impl KeptWindow {
+    /// The closed window's root view.
+    pub fn root(&self) -> Option<&AnyView> {
+        self.root.as_ref()
+    }
+}
+
 /// Holds the state for a specific window.
 pub struct Window {
     pub(crate) handle: AnyWindowHandle,
     pub(crate) invalidator: WindowInvalidator,
     pub(crate) removed: bool,
+    /// Quill: see [`Window::keep_when_closed`].
+    pub(crate) keep_when_closed: bool,
     pub(crate) platform_window: Box<dyn PlatformWindow>,
     pub(crate) display_id: Option<DisplayId>,
     pub(crate) display_observers: SubscriberSet<(), AnyObserver>,
@@ -2179,6 +2208,7 @@ impl Window {
             handle,
             invalidator,
             removed: false,
+            keep_when_closed: false,
             platform_window,
             display_id,
             display_observers: SubscriberSet::new(),
@@ -2483,6 +2513,85 @@ impl Window {
     /// Close this window.
     pub fn remove_window(&mut self) {
         self.removed = true;
+    }
+
+    /// Quill: when this window closes, keep its root view and everything
+    /// registered on the window, for [`App::take_kept_window`].
+    pub fn keep_when_closed(&mut self) {
+        self.keep_when_closed = true;
+    }
+
+    /// Quill: what is left of this window, once it is closing.
+    pub(crate) fn into_kept(mut self: Box<Self>) -> KeptWindow {
+        KeptWindow {
+            id: self.handle.id,
+            root: self.root.take(),
+            focus: self.focus,
+            next_frame_callbacks: self.next_frame_callbacks.take(),
+            display_observers: mem::replace(&mut self.display_observers, SubscriberSet::new()),
+            focus_listeners: mem::replace(&mut self.focus_listeners, SubscriberSet::new()),
+            focus_lost_listeners: mem::replace(
+                &mut self.focus_lost_listeners,
+                SubscriberSet::new(),
+            ),
+            bounds_observers: mem::replace(&mut self.bounds_observers, SubscriberSet::new()),
+            appearance_observers: mem::replace(
+                &mut self.appearance_observers,
+                SubscriberSet::new(),
+            ),
+            button_layout_observers: mem::replace(
+                &mut self.button_layout_observers,
+                SubscriberSet::new(),
+            ),
+            visibility_observers: mem::replace(
+                &mut self.visibility_observers,
+                SubscriberSet::new(),
+            ),
+            activation_observers: mem::replace(
+                &mut self.activation_observers,
+                SubscriberSet::new(),
+            ),
+            pending_input_observers: mem::replace(
+                &mut self.pending_input_observers,
+                SubscriberSet::new(),
+            ),
+        }
+    }
+
+    /// Quill: become the window `kept` came from. Its subscriptions fire here
+    /// and its handles reach this window, so no entity needs to know it moved.
+    /// Call this first, from the build closure of the window that replaces it;
+    /// the closure then returns the kept root view.
+    pub fn take_over(&mut self, kept: KeptWindow, cx: &mut App) {
+        let KeptWindow {
+            id,
+            root: _,
+            focus,
+            next_frame_callbacks,
+            display_observers,
+            focus_listeners,
+            focus_lost_listeners,
+            bounds_observers,
+            appearance_observers,
+            button_layout_observers,
+            visibility_observers,
+            activation_observers,
+            pending_input_observers,
+        } = kept;
+        self.focus = focus;
+        self.next_frame_callbacks
+            .borrow_mut()
+            .extend(next_frame_callbacks);
+        self.display_observers = display_observers;
+        self.focus_listeners = focus_listeners;
+        self.focus_lost_listeners = focus_lost_listeners;
+        self.bounds_observers = bounds_observers;
+        self.appearance_observers = appearance_observers;
+        self.button_layout_observers = button_layout_observers;
+        self.visibility_observers = visibility_observers;
+        self.activation_observers = activation_observers;
+        self.pending_input_observers = pending_input_observers;
+        cx.note_window_replaced(id, self.handle.id);
     }
 
     /// Obtain the currently focused [`FocusHandle`]. If no elements are focused, returns `None`.

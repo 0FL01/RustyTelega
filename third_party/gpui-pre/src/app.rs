@@ -48,7 +48,8 @@ use crate::{
     AnyWindowHandle, AppContext, AppLifecyclePhase, Arena, ArenaBox, Asset, AssetSource,
     BackgroundExecutor, Bounds, ClipboardItem, ClipboardReadError, CursorStyle, DispatchPhase,
     DisplayChanges, DisplayEvent, DisplayId, EventEmitter, ExternalDragPayload, FocusHandle,
-    FocusMap, ForegroundExecutor, Global, KeyBinding, KeyContext, Keymap, Keystroke, LayoutId,
+    FocusMap, ForegroundExecutor, Global, KeptWindow, KeyBinding, KeyContext, Keymap, Keystroke,
+    LayoutId,
     Menu, MenuItem, MissingGlyph, OwnedMenu, PathPromptOptions, Pixels, Platform, PlatformDisplay,
     PlatformKeyboardLayout, PlatformKeyboardMapper, Point, Priority, PromptBuilder, PromptButton,
     PromptHandle, PromptLevel, Render, RenderImage, RenderablePromptHandle, Reservation,
@@ -893,6 +894,10 @@ pub struct App {
     pub(crate) quit_observers: SubscriberSet<(), QuitHandler>,
     pub(crate) restart_observers: SubscriberSet<(), Handler>,
     pub(crate) window_closed_observers: SubscriberSet<(), WindowClosedHandler>,
+    /// Quill: closed windows kept for a replacement ([`Window::keep_when_closed`]).
+    kept_windows: FxHashMap<WindowId, KeptWindow>,
+    /// Quill: closed windows and the windows that took them over.
+    replaced_windows: FxHashMap<WindowId, WindowId>,
 
     /// Per-App element arena. This isolates element allocations between different
     /// App instances (important for tests where multiple Apps run concurrently).
@@ -1035,6 +1040,8 @@ impl App {
                 restart_path: None,
                 restart_arguments: Vec::new(),
                 window_closed_observers: SubscriberSet::new(),
+                kept_windows: FxHashMap::default(),
+                replaced_windows: FxHashMap::default(),
                 layout_id_buffer: Default::default(),
                 propagate_event: true,
                 prompt_builder: Some(PromptBuilder::Default),
@@ -2469,6 +2476,22 @@ impl App {
         result.context("window not found")
     }
 
+    /// Quill: what a closed window left, for [`Window::take_over`]. It holds
+    /// the root view alive until taken and dropped, so an `on_window_closed`
+    /// observer takes it whether or not it will reopen the window.
+    pub fn take_kept_window(&mut self, id: WindowId) -> Option<KeptWindow> {
+        self.kept_windows.remove(&id)
+    }
+
+    pub(crate) fn note_window_replaced(&mut self, old: WindowId, new: WindowId) {
+        for target in self.replaced_windows.values_mut() {
+            if *target == old {
+                *target = new;
+            }
+        }
+        self.replaced_windows.insert(old, new);
+    }
+
     /// Creates an `AsyncApp`, which can be cloned and has a static lifetime
     /// so it can be held across `await` points.
     pub fn to_async(&self) -> AsyncApp {
@@ -3398,6 +3421,11 @@ impl App {
         update: &mut dyn FnMut(Option<(AnyView, &mut Window, &mut App)>),
     ) {
         self.update(|cx| {
+            let window_id = cx
+                .replaced_windows
+                .get(&window_id)
+                .copied()
+                .unwrap_or(window_id);
             let Some(mut window) = cx.windows.get_mut(window_id).and_then(Option::take) else {
                 update(None);
                 return;
@@ -3425,6 +3453,10 @@ impl App {
                                 cx.current_window_by_entity.remove(&entity_id);
                             }
                         }
+                    }
+
+                    if window.keep_when_closed {
+                        cx.kept_windows.insert(window_id, window.into_kept());
                     }
 
                     cx.window_closed_observers.clone().retain(&(), |callback| {

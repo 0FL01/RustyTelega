@@ -267,17 +267,7 @@ fn ui_main(args: &[String]) {
             start_in_tray,
         };
         #[cfg(windows)]
-        ui::startup_failure::recover_after_gpu_loss(cx, {
-            let credentials = launch.credentials.clone();
-            move |cx, pending_deep_link| {
-                let launch = MainWindowLaunch {
-                    credentials: credentials.clone(),
-                    pending_deep_link,
-                    start_in_tray: false,
-                };
-                open_main_window(cx, launch)
-            }
-        });
+        ui::startup_failure::recover_after_gpu_loss(cx, reopen_main_window);
         cx.spawn(async move |cx| {
             open_main_window(cx, launch)
                 .unwrap_or_else(|error| ui::startup_failure::window_failed(&error));
@@ -287,10 +277,8 @@ fn ui_main(args: &[String]) {
     log::logger().flush();
 }
 
-/// What opening the main window needs, kept so Windows can open it again
-/// after the GPU was lost (`ui::startup_failure::recover_after_gpu_loss`).
+/// What opening the main window needs.
 #[cfg(feature = "ui")]
-#[derive(Clone)]
 struct MainWindowLaunch {
     credentials: Option<quill::credentials::TelegramCredentials>,
     pending_deep_link: Option<String>,
@@ -298,77 +286,92 @@ struct MainWindowLaunch {
 }
 
 #[cfg(feature = "ui")]
-fn open_main_window(cx: &mut gpui_kit::AsyncApp, launch: MainWindowLaunch) -> gpui_kit::Result<()> {
-    use gpui_kit::*;
+fn main_window_options(
+    cx: &mut gpui_kit::AsyncApp,
+    start_in_tray: bool,
+) -> gpui_kit::WindowOptions {
     let window_bounds =
         cx.update(|cx| restored_window_bounds(quill::settings::load_window_state(), cx));
-    let start_in_tray = launch.start_in_tray;
-    cx.open_window(
-        WindowOptions {
-            window_bounds: Some(window_bounds),
-            app_id: Some("org.shinycake.quill".into()),
-            show: !start_in_tray,
-            focus: !start_in_tray,
-            ..ui::window_frame::window_options("Quill")
-        },
-        move |window, cx| {
-            quill::startup_trace::mark("window_open");
-            ui::early_connect::open_if_ready();
-            ui::crash_notice::install(window, cx);
-            let view = cx.new(|cx| {
-                let mut app = ui::QuillApp::new(window, cx, launch.credentials.clone());
-                app.pending_deep_link = launch.pending_deep_link.clone();
-                app
-            });
-            quill::startup_trace::mark("app_new");
-            install_main_window_tray(window, cx, &view);
-            install_link_inbox(window, cx, &view);
-            if window.focused(cx).is_none() {
-                window.focus(&view.focus_handle(cx), cx);
-            }
-            if launch.start_in_tray {
-                // No tray host must never leave the only window
-                // inaccessible. Registration runs off-thread; poll its
-                // outcome without blocking launch.
-                let watch = view.downgrade();
-                let handle = window.window_handle();
-                cx.spawn(async move |cx| {
-                    let mut waited = 0u64;
-                    loop {
-                        let state = watch.update(cx, |this, _| {
-                            quill::tray::sync_tray(this.session());
-                            quill::tray::tray_startup_reveal(
-                                quill::tray::tray_available(),
-                                quill::tray::tray_registering(),
-                                waited,
-                            )
-                        });
-                        match state {
-                            Ok(None) => {}
-                            Ok(Some(true)) => {
-                                let _ = handle.update(cx, |_, window, cx| {
-                                    cx.activate(true);
-                                    window.activate_window();
-                                });
-                                break;
-                            }
-                            _ => break,
+    gpui_kit::WindowOptions {
+        window_bounds: Some(window_bounds),
+        app_id: Some("org.shinycake.quill".into()),
+        show: !start_in_tray,
+        focus: !start_in_tray,
+        ..ui::window_frame::window_options("Quill")
+    }
+}
+
+/// The main window again after the GPU was lost, around the app it showed.
+#[cfg(windows)]
+fn reopen_main_window(
+    cx: &mut gpui_kit::AsyncApp,
+    kept: gpui_kit::KeptWindow,
+) -> gpui_kit::Result<()> {
+    let options = main_window_options(cx, false);
+    ui::startup_failure::reopen_main_window(options, kept, cx)
+}
+
+#[cfg(feature = "ui")]
+fn open_main_window(cx: &mut gpui_kit::AsyncApp, launch: MainWindowLaunch) -> gpui_kit::Result<()> {
+    use gpui_kit::*;
+    let options = main_window_options(cx, launch.start_in_tray);
+    cx.open_window(options, move |window, cx| {
+        quill::startup_trace::mark("window_open");
+        ui::early_connect::open_if_ready();
+        ui::crash_notice::install(window, cx);
+        let view = cx.new(|cx| {
+            let mut app = ui::QuillApp::new(window, cx, launch.credentials);
+            app.pending_deep_link = launch.pending_deep_link;
+            app
+        });
+        quill::startup_trace::mark("app_new");
+        install_main_window_tray(window, cx, &view);
+        install_link_inbox(window, cx, &view);
+        if window.focused(cx).is_none() {
+            window.focus(&view.focus_handle(cx), cx);
+        }
+        if launch.start_in_tray {
+            // No tray host must never leave the only window
+            // inaccessible. Registration runs off-thread; poll its
+            // outcome without blocking launch.
+            let watch = view.downgrade();
+            let handle = window.window_handle();
+            cx.spawn(async move |cx| {
+                let mut waited = 0u64;
+                loop {
+                    let state = watch.update(cx, |this, _| {
+                        quill::tray::sync_tray(this.session());
+                        quill::tray::tray_startup_reveal(
+                            quill::tray::tray_available(),
+                            quill::tray::tray_registering(),
+                            waited,
+                        )
+                    });
+                    match state {
+                        Ok(None) => {}
+                        Ok(Some(true)) => {
+                            let _ = handle.update(cx, |_, window, cx| {
+                                cx.activate(true);
+                                window.activate_window();
+                            });
+                            break;
                         }
-                        cx.background_executor()
-                            .timer(std::time::Duration::from_millis(100))
-                            .await;
-                        waited += 100;
+                        _ => break,
                     }
-                })
-                .detach();
-            }
-            view.update(cx, |app, cx| app.poll_before_first_frame(cx));
-            // The shell adds Quill's dialog hit-test barrier; Root
-            // hosts the kit dialog and notification layers.
-            let shell = cx.new(|_cx| ui::QuillShell::new(view));
-            cx.new(|cx| gpui_kit::component::Root::new(shell, window, cx))
-        },
-    )?;
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(100))
+                        .await;
+                    waited += 100;
+                }
+            })
+            .detach();
+        }
+        view.update(cx, |app, cx| app.poll_before_first_frame(cx));
+        // The shell adds Quill's dialog hit-test barrier; Root
+        // hosts the kit dialog and notification layers.
+        let shell = cx.new(|_cx| ui::QuillShell::new(view));
+        cx.new(|cx| gpui_kit::component::Root::new(shell, window, cx))
+    })?;
     Ok(())
 }
 
@@ -395,27 +398,8 @@ fn install_main_window_tray(
     cx: &mut gpui_kit::App,
     view: &gpui_kit::Entity<ui::QuillApp>,
 ) {
-    #[cfg(windows)]
-    {
-        // The taskbar overlay badge targets this window's taskbar button.
-        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-        if let Ok(handle) = HasWindowHandle::window_handle(window)
-            && let RawWindowHandle::Win32(handle) = handle.as_raw()
-        {
-            quill::icon_badge::set_native_window(handle.hwnd.get());
-        }
-    }
+    ui::link_inbox::attach_main_window(window, cx, view);
     quill::notify_focus::warm();
-    // "Show taskbar icon" off: the window starts out of the taskbar.
-    view.update(cx, |this, _| this.apply_taskbar_icon(window));
-    // The title-bar close button (`QuillApp::close_main_window`).
-    window.on_window_should_close(cx, {
-        let view = view.downgrade();
-        move |window, cx| {
-            view.update(cx, |this, cx| this.close_main_window(window, cx))
-                .unwrap_or(true)
-        }
-    });
     // parity:platform-tray-icon — system tray icon with
     // unread count, synced when `wake::CHROME` is poked. The
     // tray module no-ops when the count is unchanged or

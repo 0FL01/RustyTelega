@@ -2,7 +2,10 @@
 //! once it cannot recreate the device (or its vsync thread panicked) and
 //! reports itself headless. Quill then tries once to attach a new device and
 //! reopen the main window; when that fails, or the device goes a second
-//! time, it quits and says why ([`super::report_gpu_gone`]).
+//! time, it quits and says why ([`super::report_gpu_gone`]). The app is not
+//! rebuilt: the new window takes over from the old one
+//! ([`gpui_kit::Window::take_over`]), so the open chat, the dialogs and the
+//! TDLib clients carry on.
 //!
 //! The platform can also give up on one window's renderer while the device
 //! still works. When that window is the main one, Quill reopens it the same
@@ -12,9 +15,14 @@
 //! any of this, so Quill quits explicitly instead, and does so itself when
 //! the last window closes for any other reason.
 
-use gpui_kit::{App, AsyncApp, GraphicalEnvironment, QuitMode, WindowingRequest};
+use crate::ui::{QuillApp, QuillShell};
+use gpui_kit::component::Root;
+use gpui_kit::{
+    App, AsyncApp, Entity, Focusable as _, GraphicalEnvironment, KeptWindow, QuitMode,
+    WindowOptions, WindowingRequest,
+};
 use quill::lang::{keys, tr};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 /// A window has closed.
@@ -60,26 +68,72 @@ fn after_window_closed(closed: Closed) -> Step {
     }
 }
 
-/// Watch for the GPU going away. `reopen` opens the main window again,
-/// with the link the old one had not opened yet.
+/// The kept root and the app under it, or `None` if it holds something else.
+fn kept_app(kept: &KeptWindow, cx: &App) -> Option<(Entity<Root>, Entity<QuillApp>)> {
+    let root = kept.root()?.clone().downcast::<Root>().ok()?;
+    let shell = root.read(cx).view().clone().downcast::<QuillShell>().ok()?;
+    let app = shell.read(cx).app.clone();
+    Some((root, app))
+}
+
+/// Open a window around the app `kept` holds.
+pub(crate) fn reopen_main_window(
+    options: WindowOptions,
+    kept: KeptWindow,
+    cx: &mut AsyncApp,
+) -> gpui_kit::Result<()> {
+    let (root, app) = cx
+        .update(|cx| kept_app(&kept, cx))
+        .ok_or_else(|| std::io::Error::other("the closed main window kept no app"))?;
+    cx.open_window(options, move |window, cx| {
+        window.take_over(kept, cx);
+        crate::ui::link_inbox::attach_main_window(window, cx, &app);
+        if window.focused(cx).is_none() {
+            window.focus(&app.focus_handle(cx), cx);
+        }
+        root
+    })?;
+    Ok(())
+}
+
+/// Watch for the GPU going away. `reopen` opens the main window again around
+/// what the old one kept.
 pub(crate) fn recover_after_gpu_loss(
     cx: &mut App,
-    reopen: impl Fn(&mut AsyncApp, Option<String>) -> gpui_kit::Result<()> + 'static,
+    reopen: impl Fn(&mut AsyncApp, KeptWindow) -> gpui_kit::Result<()> + 'static,
+) {
+    // Quill never asks the platform to go headless, so headless here means
+    // the platform dropped a device it could not recreate.
+    watch_closed_windows(|cx| cx.graphical_environment().is_none(), reopen, cx);
+}
+
+fn watch_closed_windows(
+    gpu_gone: impl Fn(&App) -> bool + 'static,
+    reopen: impl Fn(&mut AsyncApp, KeptWindow) -> gpui_kit::Result<()> + 'static,
+    cx: &mut App,
 ) {
     cx.set_quit_mode(QuitMode::Explicit);
     let reopen = Rc::new(reopen);
     let recovered = Rc::new(Cell::new(false));
+    let kept = RefCell::new(None);
     cx.on_window_closed(move |cx, window_id| {
-        // Quill never asks the platform to go headless, so headless here
-        // means the platform dropped a device it could not recreate.
+        // Taken even when it will not be used: until dropped it holds the
+        // app, and a quit must drop the app as it always did.
+        if let Some(left) = cx.take_kept_window(window_id) {
+            *kept.borrow_mut() = Some(left);
+        }
         let closed = Closed {
             windows_left: cx.windows().len(),
-            gpu_gone: cx.graphical_environment().is_none(),
+            gpu_gone: gpu_gone(cx),
             main_lost: crate::ui::link_inbox::main_window_id(cx) == Some(window_id)
                 && !super::quit_asked(),
             recovered_before: recovered.get(),
         };
-        match after_window_closed(closed) {
+        let step = after_window_closed(closed);
+        if !matches!(step, Step::CloseTheRest | Step::Recover | Step::Reopen) {
+            kept.borrow_mut().take();
+        }
+        match step {
             Step::Nothing => {}
             Step::Quit => cx.quit(),
             Step::CloseTheRest => {
@@ -89,6 +143,10 @@ pub(crate) fn recover_after_gpu_loss(
             }
             step @ (Step::Recover | Step::Reopen) => {
                 recovered.set(true);
+                let Some(left) = kept.borrow_mut().take() else {
+                    give_up(tr(keys::Q_MISC_GPU_STOPPED_WORKING_AGAIN), cx);
+                    return;
+                };
                 let reopen = reopen.clone();
                 cx.spawn(async move |cx| {
                     let attached = if step == Step::Recover {
@@ -101,9 +159,7 @@ pub(crate) fn recover_after_gpu_loss(
                     } else {
                         Ok(())
                     };
-                    let reopened = attached.and_then(|()| {
-                        reopen(cx, crate::ui::deep_links::take_left_by_dropped_app())
-                    });
+                    let reopened = attached.and_then(|()| reopen(cx, left));
                     if let Err(error) = reopened {
                         log::error!("could not draw again after the GPU was lost: {error:#}");
                         cx.update(|cx| give_up(&format!("{error:#}"), cx));
@@ -122,6 +178,11 @@ fn give_up(detail: &str, cx: &mut App) {
     let _ = super::remember_gpu_gone(detail);
     cx.quit();
 }
+
+#[cfg(test)]
+#[cfg(feature = "demo-capture")]
+#[path = "device_loss_tests.rs"]
+mod reset_tests;
 
 #[cfg(test)]
 mod tests {
