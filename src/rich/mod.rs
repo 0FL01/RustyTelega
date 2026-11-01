@@ -22,7 +22,7 @@ pub use draft::{RichDraft, text_has_markdown_structure};
 pub use input::*;
 pub use markup::*;
 pub use parse::*;
-pub use preview::PreviewBlocks;
+pub use preview::{MarkupBlocks, PreviewBlocks};
 pub use quote::{
     QuoteRichText, QuoteStyle, join_quote_texts, quote_rich_texts_display, rich_message_quote_texts,
 };

@@ -43,6 +43,8 @@ pub(in crate::ui) struct RichDraftUi {
     preview_scroll: ScrollHandle,
     paste: paste::PasteNotice,
     pub(in crate::ui) preview: preview::RichPreview,
+    /// The editor's text as blocks, for the preview and the draft.
+    pub(in crate::ui) parsed: std::cell::RefCell<quill::rich::MarkupBlocks>,
 }
 
 /// tdesktop `historyComposeField.heightMax` (the preview's height cap is

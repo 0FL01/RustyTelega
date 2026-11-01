@@ -7,7 +7,7 @@ use super::super::bg_canvas;
 use super::super::message_text::rich_block_element;
 use gpui_kit::*;
 use quill::ids::{ChatId, MessageId};
-use quill::rich::{PreviewBlocks, RichBlock};
+use quill::rich::{MarkupBlocks, PreviewBlocks, RichBlock};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -44,11 +44,16 @@ impl Default for RichPreview {
 }
 
 impl RichPreview {
-    fn blocks(&self, revision: u64, text: &str) -> Rc<Vec<Rc<RichBlock>>> {
+    fn blocks(
+        &self,
+        revision: u64,
+        text: &str,
+        editor: &RefCell<MarkupBlocks>,
+    ) -> Rc<Vec<Rc<RichBlock>>> {
         let changed = {
             let mut parsed = self.parsed.borrow_mut();
             (parsed.revision != Some(revision)).then(|| {
-                let change = parsed.source.update(text);
+                let change = parsed.source.update(editor.borrow_mut().parse(text));
                 parsed.blocks = Rc::new(parsed.source.shown().to_vec());
                 parsed.revision = Some(revision);
                 change
@@ -80,8 +85,9 @@ impl QuillApp {
         let composer = self.composer.read(cx);
         let revision = composer.document_revision();
         let text = composer.value().to_string();
-        let preview = &self.composer_ui.rich_draft.preview;
-        let blocks = preview.blocks(revision, &text);
+        let draft = &self.composer_ui.rich_draft;
+        let preview = &draft.preview;
+        let blocks = preview.blocks(revision, &text, &draft.parsed);
         let shows = |block: &Rc<RichBlock>| {
             !matches!(**block, RichBlock::Empty | RichBlock::Unsupported { .. })
         };
