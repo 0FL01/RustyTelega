@@ -26,6 +26,14 @@ impl Session {
             MediaPayload::UpdateFileAddedToDownloads(download) => {
                 self.apply_download_added(*download)
             }
+            MediaPayload::FoundFileDownloads(found) => {
+                if pending.is_some_and(|pending| {
+                    pending.purpose
+                        == RequestPurpose::Media(MediaPurpose::SearchDiskPausedDownloads)
+                }) {
+                    self.apply_disk_paused_found(found);
+                }
+            }
             MediaPayload::UpdateFileRemovedFromDownloads { file_id } => {
                 self.apply_download_removed(file_id)
             }

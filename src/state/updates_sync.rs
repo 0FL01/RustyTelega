@@ -284,8 +284,12 @@ impl Session {
         if let Some(name) = download.name {
             self.sync.download_names.insert(id, name);
         }
-        if let Some(chat_id) = download.chat_id {
-            self.media.downloads.note_chat(id, chat_id);
+        match (download.chat_id, download.message_id) {
+            (Some(chat_id), Some(message_id)) => {
+                self.media.downloads.note_origin(id, chat_id, message_id);
+            }
+            (Some(chat_id), None) => self.media.downloads.note_chat(id, chat_id),
+            _ => {}
         }
         if download.complete_date != 0 {
             self.media.downloads.record_finished(id);
@@ -293,6 +297,27 @@ impl Session {
         } else {
             self.media.downloads.adopt(id, download.is_paused);
         }
+    }
+
+    /// The answer to the search for downloads a low or full disk paused
+    /// before this TDLib instance: the ones still paused whose message was
+    /// saved come back as tracked downloads, due for a resume
+    /// (`ConnectDriver::resume_disk_paused_found`). Saved messages the list
+    /// no longer has are dropped.
+    pub(crate) fn apply_disk_paused_found(&mut self, found: Vec<ParsedFileDownload>) {
+        let saved = std::mem::take(&mut self.settings.data_storage.disk_paused);
+        for download in found {
+            let key = download.chat_id.zip(download.message_id);
+            let due = download.is_paused
+                && download.complete_date == 0
+                && key.is_some_and(|(chat, message)| saved.contains(&(chat.0, message)));
+            if due {
+                let id = download.file_id;
+                self.apply_download_added(download);
+                self.media.disk_resume_due.push(id);
+            }
+        }
+        self.media.disk_paused_saved_changed = true;
     }
 
     /// The download left the list (removed here or on another device).

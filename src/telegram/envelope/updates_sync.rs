@@ -36,6 +36,8 @@ pub struct ParsedFileDownload {
     pub files: Vec<ParsedFile>,
     /// The chat of the message the file is in, when TDLib sent it.
     pub chat_id: Option<ChatId>,
+    /// That message's id, when TDLib sent it.
+    pub message_id: Option<i64>,
 }
 
 /// `updateFreezeState` (schema line 11347).
@@ -66,7 +68,24 @@ impl SpeechTrialUpdate {
 }
 
 pub(crate) fn parse_file_download(value: &Value) -> Option<ParsedFileDownload> {
-    let download = value.get("file_download")?;
+    parse_file_download_object(value.get("file_download")?)
+}
+
+/// `foundFileDownloads` (schema line 3779): the downloads it lists.
+pub(crate) fn parse_found_file_downloads(value: &Value) -> Vec<ParsedFileDownload> {
+    value
+        .get("files")
+        .and_then(Value::as_array)
+        .map(|files| {
+            files
+                .iter()
+                .filter_map(parse_file_download_object)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_file_download_object(download: &Value) -> Option<ParsedFileDownload> {
     let file_id = json_i32(download.get("file_id"), 0);
     if file_id == 0 {
         return None;
@@ -85,6 +104,7 @@ pub(crate) fn parse_file_download(value: &Value) -> Option<ParsedFileDownload> {
         is_paused: json_bool(download.get("is_paused"), false),
         name,
         chat_id: message.as_ref().map(|message| message.chat_id),
+        message_id: message.as_ref().map(|message| message.id.0),
         files: message.map(|message| message.files).unwrap_or_default(),
     })
 }

@@ -13,6 +13,13 @@ pub struct MediaState {
     pub disk_room: Option<u64>,
     /// Listed downloads the low disk paused, resumed when it is healthy.
     pub disk_paused: HashSet<i32>,
+    /// The search for downloads paused by the disk before this TDLib
+    /// instance went out (once per session).
+    pub disk_resume_searched: bool,
+    /// Downloads that search found, waiting for their resume.
+    pub disk_resume_due: Vec<i32>,
+    /// `settings.data_storage.disk_paused` changed and needs saving.
+    pub disk_paused_saved_changed: bool,
     /// What was asked to download and how each request ended; the status
     /// rows show is `downloads.status(id, &files)`.
     pub downloads: DownloadIntents,
@@ -63,6 +70,9 @@ impl MediaState {
             disk_holds_auto_downloads: false,
             disk_room: None,
             disk_paused: HashSet::new(),
+            disk_resume_searched: false,
+            disk_resume_due: Vec::new(),
+            disk_paused_saved_changed: false,
             downloads: DownloadIntents::default(),
             open_chat_media_downloads: HashSet::new(),
             avatar_file_refs: HashMap::new(),

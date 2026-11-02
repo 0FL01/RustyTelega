@@ -342,7 +342,10 @@ impl<S: JsonSender> ConnectDriver<S> {
         let extra = self.session.request_download(file_id);
         let request = if let Some((chat_id, message_id)) = origin {
             self.session.begin_user_download(file_id);
-            self.session.media.downloads.note_chat(file_id.0, chat_id);
+            self.session
+                .media
+                .downloads
+                .note_origin(file_id.0, chat_id, message_id);
             add_file_to_downloads_request(
                 extra,
                 file_id,
@@ -398,10 +401,14 @@ impl<S: JsonSender> ConnectDriver<S> {
         if state == DiskState::Healthy {
             let paused: Vec<i32> = self.session.media.disk_paused.drain().collect();
             for id in paused {
+                self.forget_disk_pause(id);
                 if self.session.media.downloads.is_paused(id) {
                     self.resume_download(FileId(id))?;
                 }
             }
+            let searched = self.search_disk_paused_elsewhere();
+            self.save_disk_pauses_if_changed();
+            searched?;
             return Ok(0);
         }
         let Some(room) = room else {
@@ -424,8 +431,10 @@ impl<S: JsonSender> ConnectDriver<S> {
             if !self.session.media.disk_paused.insert(id) {
                 repaused += 1;
             }
+            self.save_disk_pause(id);
             self.pause_download(FileId(id))?;
         }
+        self.save_disk_pauses_if_changed();
         Ok(repaused)
     }
 

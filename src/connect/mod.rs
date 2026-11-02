@@ -28,6 +28,7 @@ mod connect_flow;
 mod contacts;
 mod core;
 mod deep_links;
+mod disk_paused;
 mod earn;
 mod emoji_interaction;
 mod emoji_sets;
