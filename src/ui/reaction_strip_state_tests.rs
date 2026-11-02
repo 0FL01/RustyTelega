@@ -298,3 +298,118 @@ fn driver_request_in_flight_renders_the_skeleton(cx: &mut TestAppContext) {
 fn driver_answer_renders_the_strip(cx: &mut TestAppContext) {
     assert_eq!(show_driver_state(cx, true), (false, true));
 }
+
+const OUTGOING: MessageId = MessageId(102);
+
+fn make_secret(app: &Entity<QuillApp>, cx: &mut VisualTestContext) {
+    cx.update(|_, cx| {
+        app.update(cx, |app, _| {
+            if let Some(chat) = app
+                .demo_session
+                .as_mut()
+                .and_then(|session| session.chats.get_mut(&CHAT.0))
+            {
+                chat.kind = quill::telegram::envelope::ChatKind::Secret {
+                    secret_chat_id: 9,
+                    user_id: quill::ids::UserId(CHAT.0),
+                };
+            }
+        });
+    });
+}
+
+fn open_menu(app: &Entity<QuillApp>, cx: &mut VisualTestContext, message_id: MessageId) {
+    cx.update(|window, cx| {
+        app.update(cx, |app, cx| {
+            app.open_message_menu(
+                MessageMenuState {
+                    chat_id: CHAT,
+                    message_id,
+                    position: point(px(420.), px(300.)),
+                },
+                window,
+                cx,
+            );
+        });
+    });
+    frames(cx);
+}
+
+#[gpui_kit::test]
+fn a_secret_chat_menu_opens_with_only_what_works_there(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    make_secret(&app, vcx);
+    open_menu(&app, vcx, OUTGOING);
+    for row in ["menu-reply", "menu-copy", "menu-delete", "menu-select"] {
+        assert!(has(vcx, row), "{row} is offered");
+    }
+    for row in [
+        "menu-forward",
+        "menu-edit",
+        "menu-toggle-pin",
+        "reaction-strip",
+        "reaction-strip-loading",
+    ] {
+        assert!(!has(vcx, row), "{row} is not offered");
+    }
+}
+
+#[gpui_kit::test]
+fn a_secret_chat_menu_has_no_report_row(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    make_secret(&app, vcx);
+    open_menu(&app, vcx, MESSAGE);
+    assert!(has(vcx, "menu-reply"));
+    assert!(!has(vcx, "menu-report"));
+}
+
+#[gpui_kit::test]
+fn a_secret_chat_selection_offers_no_forward(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    make_secret(&app, vcx);
+    select_message(&app, vcx);
+    assert!(has(vcx, "selection-delete"));
+    assert!(has(vcx, "selection-copy"));
+    assert!(!has(vcx, "selection-forward"));
+    assert!(!has(vcx, "selection-report"));
+}
+
+fn select_message(app: &Entity<QuillApp>, cx: &mut VisualTestContext) {
+    cx.update(|_, cx| {
+        app.update(cx, |app, cx| {
+            app.close_message_menu();
+            app.toggle_forward_select(CHAT, MESSAGE, false, cx);
+        });
+    });
+    frames(cx);
+    cx.run_until_parked();
+    frames(cx);
+}
+
+#[gpui_kit::test]
+fn a_secret_chat_ignores_the_quick_reaction(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    make_secret(&app, vcx);
+    let chips = |app: &QuillApp| {
+        let session = app.demo_session.as_ref().expect("demo session");
+        session.histories[&CHAT.0].messages[&OUTGOING.0]
+            .interaction_info
+            .clone()
+    };
+    vcx.update(|_, cx| {
+        app.update(cx, |app, cx| {
+            let before = chips(app);
+            if let Some(session) = app.demo_session.as_mut() {
+                session.stickers.default_reaction =
+                    Some(quill::state::ReactionChoice::Emoji("👍".to_string()));
+            }
+            app.quick_react(CHAT, OUTGOING, cx);
+            assert_eq!(chips(app), before);
+            assert!(app.history.reaction_fly.is_none());
+        });
+    });
+}

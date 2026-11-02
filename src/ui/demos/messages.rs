@@ -12,7 +12,9 @@ use crate::ui::status_note::StatusNote;
 use crate::ui::*;
 use gpui_kit::*;
 use quill::composer::{ComposerEdit, ComposerReplyTo, DeleteConfirm, ForwardDraft};
-use quill::ids::{ChatId, MessageId};
+use quill::ids::{ChatId, MessageId, UserId};
+use quill::state::MessageReactionsState;
+use quill::telegram::envelope::ChatKind;
 use std::sync::atomic::Ordering;
 
 register_demos![
@@ -46,6 +48,13 @@ register_demos![
         "screenshot demo — emoji reactions (injected interaction_info)"
     )
     .setup(QuillApp::demo_ready_reactions),
+    // The message menu of a secret chat, as it opens: no strip, and only what
+    // a secret chat allows.
+    DemoSpec::chats(
+        "ready-secret-chat-menu",
+        "screenshot demo — message menu in a secret chat"
+    )
+    .setup(QuillApp::demo_ready_secret_chat_menu),
     // Reply-to-message: composer quote + history quote strip.
     DemoSpec::chats(
         "ready-reply",
@@ -154,6 +163,28 @@ impl QuillApp {
         self.connection.set_note(StatusNote::silent(
             "screenshot demo — react · unreact · chips",
         ));
+    }
+
+    fn demo_ready_secret_chat_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.demo_ready_reactions(window, cx);
+        self.message_ui.reactions_expanded = false;
+        if let Some(session) = self.demo_session.as_mut() {
+            if let Some(chat) = session.chats.get_mut(&11) {
+                chat.kind = ChatKind::Secret {
+                    secret_chat_id: 9,
+                    user_id: UserId(11),
+                };
+            }
+            session.stickers.message_reaction_options = MessageReactionsState::Loading {
+                chat_id: ChatId(11),
+                message_id: MessageId(102),
+            };
+        }
+        self.message_ui.menu = Some(MessageMenuState {
+            chat_id: ChatId(11),
+            message_id: MessageId(102),
+            position: point(px(420.), px(200.)),
+        });
     }
 
     fn demo_ready_reply(&mut self, window: &mut Window, cx: &mut Context<Self>) {
