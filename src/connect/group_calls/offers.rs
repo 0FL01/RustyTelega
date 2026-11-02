@@ -109,7 +109,12 @@ impl<S: JsonSender> ConnectDriver<S> {
         let calls = &self.session.calls;
         match send {
             OfferSend::Join => {
+                let story = calls
+                    .story_stream
+                    .as_ref()
+                    .is_some_and(|call| call.id == id);
                 calls.left_group_call != Some(id)
+                    && (story || calls.active_call.is_none())
                     && calls.group_call(id).is_some_and(|call| !call.is_joined)
             }
             OfferSend::Rejoin { .. } => {

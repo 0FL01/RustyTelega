@@ -521,6 +521,9 @@ impl<S: JsonSender> ConnectDriver<S> {
         // channels, and a conference uses 0 the same way. With no engine
         // the offer fails, as a join without media would show you in a
         // call you can't hear.
+        if chat_id.is_none() {
+            self.note_group_call_without_chat(group_call_id);
+        }
         let started = match self.call_engine.as_deref_mut() {
             Some(engine) if engine.is_available() => {
                 engine.create_group_call(group_call_id, chat_id.unwrap_or(0), role)

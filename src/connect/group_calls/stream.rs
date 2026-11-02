@@ -42,6 +42,9 @@ pub(crate) struct GroupCallStreams {
     quality: HashMap<i64, StreamQualityTracker>,
     sound_watch: HashMap<i32, PlaybackWatch>,
     volume: f32,
+    /// A call whose instance was made in no known chat, waiting for its
+    /// chat to load.
+    no_chat: Option<i32>,
     /// The server's clock minus this machine's, in ms, from TDLib's
     /// `unix_time` option (0 until it comes).
     server_offset_ms: i64,
@@ -57,6 +60,7 @@ impl Default for GroupCallStreams {
             quality: HashMap::new(),
             sound_watch: HashMap::new(),
             volume: 1.0,
+            no_chat: None,
             server_offset_ms: 0,
         }
     }
@@ -283,6 +287,34 @@ impl<S: JsonSender> ConnectDriver<S> {
         };
         if let Some(engine) = self.call_engine.as_deref_mut() {
             engine.set_stream_quality(chat_id, quality);
+        }
+    }
+
+    pub(super) fn note_group_call_without_chat(&mut self, group_call_id: i32) {
+        self.group_call_streams.no_chat = Some(group_call_id);
+    }
+
+    /// A call made before its chat loaded moves to that chat's key once it
+    /// has, with the feeder its connect could not start.
+    pub(crate) fn key_group_call_by_chat(&mut self) {
+        let Some(group_call_id) = self.group_call_streams.no_chat else {
+            return;
+        };
+        if self.session.calls.group_call(group_call_id).is_none() {
+            self.group_call_streams.no_chat = None;
+            return;
+        }
+        let Some(chat_id) = self.group_call_chat_id(group_call_id) else {
+            return;
+        };
+        let Some(engine) = self.call_engine.as_deref_mut() else {
+            return;
+        };
+        if engine.move_group_call_to_chat(group_call_id, chat_id) {
+            self.group_call_streams.no_chat = None;
+            if engine.group_call_mode(chat_id).is_some() {
+                self.start_stream_feeder(group_call_id);
+            }
         }
     }
 

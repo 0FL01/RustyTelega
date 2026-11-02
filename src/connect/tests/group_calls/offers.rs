@@ -90,6 +90,22 @@ fn leaving_during_the_wait_sends_no_join_and_leaves_no_instance() {
 }
 
 #[test]
+fn a_call_answered_during_the_wait_stops_the_join() {
+    let (dir, mut driver, recorder, handle, sink, seq) = ready_group_call_driver();
+    handle.hold_group_offers();
+    driver.join_video_chat(555).expect("join tracked call");
+    let call = r#"{"@type":"updateCall","call":{"@type":"call","id":77,"unique_id":"99","user_id":41,"is_outgoing":false,"is_video":false,"state":{"@type":"callStatePending","is_created":true,"is_received":false}}}"#;
+    driver
+        .ingest(copy_and_parse(call, &seq, &sink).unwrap())
+        .unwrap();
+    assert!(driver.session.calls.active_call.is_some());
+    land(&mut driver, &handle);
+    assert_eq!(sent_count(&recorder, "joinVideoChat"), 0);
+    assert!(handle.group_leaves().contains(&555));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn an_offer_that_lands_after_the_call_ended_ends_its_instance() {
     let (dir, mut driver, recorder, handle, _sink, _seq) = ready_group_call_driver();
     handle.hold_group_offers();
@@ -218,9 +234,11 @@ fn a_failed_share_payload_clears_the_pending_share() {
 #[test]
 fn a_voice_chat_in_no_known_chat_joins_with_an_instance_and_its_payload() {
     let (dir, mut driver, recorder, handle, _sink, _seq) = ready_group_call_driver();
-    if let Some(chat) = driver.session.chats.get_mut(&51) {
-        chat.video_chat = None;
-    }
+    let video_chat = driver
+        .session
+        .chats
+        .get_mut(&51)
+        .and_then(|chat| chat.video_chat.take());
     assert_eq!(
         driver.group_call_chat_id(555),
         None,
@@ -235,5 +253,16 @@ fn a_voice_chat_in_no_known_chat_joins_with_an_instance_and_its_payload() {
     );
     let join = sent_request(&recorder, "joinVideoChat");
     assert_eq!(join["join_parameters"]["payload"], "mock-group-offer-555");
+    assert!(handle.group_rekeys().is_empty());
+    if let Some(chat) = driver.session.chats.get_mut(&51) {
+        chat.video_chat = video_chat;
+    }
+    driver.pump_call_media(Instant::now());
+    driver.pump_call_media(Instant::now());
+    assert_eq!(
+        handle.group_rekeys(),
+        [(555, 51)],
+        "once, when the chat loads"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

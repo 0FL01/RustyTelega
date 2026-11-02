@@ -45,6 +45,7 @@ struct MockInner {
     device_selections: Vec<(i32, Option<String>, Option<String>)>,
     /// Phase C2g: group transport recording for driver tests.
     group_offers: Vec<(i32, i64)>,
+    group_rekeys: Vec<(i32, i64)>,
     group_roles: Vec<(i32, GroupCallRole)>,
     group_connects: Vec<(i32, String, Option<String>)>,
     group_video_syncs: Vec<(i32, Vec<GroupVideoSource>)>,
@@ -181,6 +182,10 @@ impl MockEngine {
 
     pub fn group_offers(&self) -> Vec<(i32, i64)> {
         self.inner.lock_or_recover().group_offers.clone()
+    }
+
+    pub fn group_rekeys(&self) -> Vec<(i32, i64)> {
+        self.inner.lock_or_recover().group_rekeys.clone()
     }
 
     pub fn group_roles(&self) -> Vec<(i32, GroupCallRole)> {
@@ -703,6 +708,12 @@ impl CallEngine for MockEngine {
             .lock_or_recover()
             .stream_qualities
             .push((chat_id, quality));
+    }
+
+    fn move_group_call_to_chat(&mut self, group_call_id: i32, chat_id: i64) -> bool {
+        let mut inner = self.inner.lock_or_recover();
+        inner.group_rekeys.push((group_call_id, chat_id));
+        true
     }
 
     fn stream_quality(&self, chat_id: i64) -> Option<StreamQuality> {

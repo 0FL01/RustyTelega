@@ -256,6 +256,12 @@ pub trait CallEngine {
         let _ = (chat_id, quality);
     }
 
+    /// A call made in no known chat (joined from a link) learned its chat:
+    /// its streams move to that key. False when it has no instance yet.
+    fn move_group_call_to_chat(&mut self, _group_call_id: i32, _chat_id: i64) -> bool {
+        true
+    }
+
     /// The last quality set with `set_stream_quality`.
     fn stream_quality(&self, chat_id: i64) -> Option<StreamQuality> {
         let _ = chat_id;

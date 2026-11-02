@@ -350,6 +350,7 @@ impl TgcallsEngine {
     /// sound plays on, off this thread.
     fn open_group_sound(&mut self, group_call_id: i32) -> Result<(), EngineError> {
         let stream_volume = self.stream_volume;
+        let hold = self.reaper.hold();
         let call = self.group_mut(group_call_id)?;
         let name = devices::speaker_name(call.speaker.as_deref());
         // A stream plays at the media viewer's volume, as in tdesktop.
@@ -363,7 +364,7 @@ impl TgcallsEngine {
         call.sound = Some(
             call.context
                 .sound
-                .open(label, name, volume, call.playback_muted),
+                .open(label, name, volume, call.playback_muted, hold),
         );
         Ok(())
     }
@@ -689,6 +690,15 @@ impl TgcallsEngine {
 
     /// The stream tile's quality; an RTMP stream asks for its unified
     /// video again at once when the least quality it needs changed.
+    pub(super) fn move_group_to_chat(&mut self, group_call_id: i32, chat_id: i64) -> bool {
+        let Ok(call) = self.group_mut(group_call_id) else {
+            return false;
+        };
+        call.chat_id = chat_id;
+        call.context.set_chat(chat_id);
+        true
+    }
+
     pub(super) fn set_group_stream_quality(&mut self, chat_id: i64, quality: StreamQuality) {
         let Some((&group_call_id, call)) = self
             .groups

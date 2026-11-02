@@ -161,13 +161,14 @@ impl TgcallsEngine {
     /// Opens (or reopens, for another speaker) the output the call's sound
     /// plays on, off this thread.
     fn open_sound(&mut self, call_id: i32) -> Result<(), EngineError> {
+        let hold = self.reaper.hold();
         let call = self.call_mut(call_id)?;
         let name = devices::speaker_name(call.media.speaker.as_deref());
         call.sound = None;
         call.sound = Some(
             call.context
                 .sound
-                .open(call_id.to_string(), name, 1.0, false),
+                .open(call_id.to_string(), name, 1.0, false, hold),
         );
         Ok(())
     }

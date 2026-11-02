@@ -17,7 +17,7 @@ use quill_calls_sys::{
 };
 use std::collections::HashMap;
 use std::ffi::{CStr, c_char, c_void};
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Numbers every instance, so an answer meant for a replaced one (a
@@ -31,8 +31,8 @@ pub(super) struct GroupContext {
     /// join answer names the call created under a provisional key.
     group_call_id: AtomicI32,
     /// The chat the call is in: stream requests and pictures are keyed
-    /// by it.
-    pub(super) chat_id: i64,
+    /// by it. 0 until a call joined from a link learns its chat.
+    chat_id: AtomicI64,
     /// This instance's number in its broadcast request ids.
     pub(super) instance: u64,
     pub(super) presentation: bool,
@@ -56,7 +56,7 @@ impl GroupContext {
     ) -> Self {
         Self {
             group_call_id: AtomicI32::new(group_call_id),
-            chat_id,
+            chat_id: AtomicI64::new(chat_id),
             instance: NEXT_INSTANCE.fetch_add(1, Ordering::Relaxed),
             presentation,
             shared: Arc::clone(shared),
@@ -64,6 +64,21 @@ impl GroupContext {
             endpoints: Mutex::new(HashMap::new()),
             conference: None,
             retired: AtomicBool::new(false),
+        }
+    }
+
+    pub(super) fn chat(&self) -> i64 {
+        self.chat_id.load(Ordering::Acquire)
+    }
+
+    /// The call's chat became known: move what is keyed by it.
+    pub(super) fn set_chat(&self, chat_id: i64) {
+        self.chat_id.store(chat_id, Ordering::Release);
+        let mut endpoints = self.endpoints.lock_or_recover();
+        for key in endpoints.values_mut() {
+            if matches!(key, LiveKey::Stream { .. }) {
+                *key = LiveKey::Stream { chat_id };
+            }
         }
     }
 
@@ -188,7 +203,7 @@ unsafe extern "C" fn on_current_time(user: *mut c_void, request_id: u64) {
             return;
         };
         call.emit(EngineEvent::BroadcastTimeRequested {
-            chat_id: call.chat_id,
+            chat_id: call.chat(),
             request: call.request(request_id),
         });
     });
@@ -211,7 +226,7 @@ unsafe extern "C" fn on_broadcast_part(
             return;
         };
         call.emit(EngineEvent::BroadcastPartRequested {
-            chat_id: call.chat_id,
+            chat_id: call.chat(),
             request: call.request(request_id),
             part: part_request(part),
         });
@@ -233,7 +248,7 @@ unsafe extern "C" fn on_request_cancelled(user: *mut c_void, request_id: u64) {
             return;
         }
         call.emit(EngineEvent::BroadcastRequestCancelled {
-            chat_id: call.chat_id,
+            chat_id: call.chat(),
             request: call.request(request_id),
         });
     });

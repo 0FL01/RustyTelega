@@ -2,6 +2,7 @@
 //! sound through its own output, which is opened, held and closed on a thread
 //! of its own: a device open takes about 100 ms and much longer on Bluetooth,
 //! and the engine runs on the UI thread. Frames are dropped until it opens.
+use super::reaper::ReaperHold;
 use crate::calls::capture::CaptureError;
 use crate::calls::capture::device_thread::DeviceThread;
 use crate::calls::stream_audio::{StreamAudio, StreamPlayer};
@@ -66,16 +67,18 @@ impl SoundSlot {
     }
 
     /// Opens the output named `device` in place of the current one. Dropping
-    /// the answer closes the device on its thread. A failed open leaves the
-    /// call silent and logs why, under `label`.
+    /// the answer closes the device on its thread, which `hold` keeps quit
+    /// waiting for. A failed open leaves the call silent and logs why, under
+    /// `label`.
     pub(super) fn open(
         self: &Arc<Self>,
         label: String,
         device: Option<String>,
         volume: f32,
         muted: bool,
+        hold: ReaperHold,
     ) -> DeviceThread {
-        self.open_with(label, volume, muted, move |volume, muted| {
+        self.open_with(label, volume, muted, hold, move |volume, muted| {
             let player = StreamPlayer::open(device.as_deref(), volume, muted)?;
             let audio = player.audio().clone();
             Ok((player, audio))
@@ -87,6 +90,7 @@ impl SoundSlot {
         label: String,
         volume: f32,
         muted: bool,
+        hold: ReaperHold,
         open: impl FnOnce(f32, bool) -> Result<(D, Arc<StreamAudio>), String> + Send + 'static,
     ) -> DeviceThread {
         let generation = {
@@ -113,7 +117,10 @@ impl SoundSlot {
                     Err(CaptureError::Device(err))
                 }
             },
-            drop,
+            move |device| {
+                drop(device);
+                drop(hold);
+            },
         )
     }
 
@@ -130,6 +137,7 @@ impl SoundSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::calls::engine::tgcalls::reaper::Reaper;
     use std::sync::mpsc::{Receiver, Sender, channel};
 
     /// A device whose drop says it closed.
@@ -146,6 +154,7 @@ mod tests {
         answer: DeviceThread,
         closed: Receiver<()>,
         audio: Arc<StreamAudio>,
+        reaper: Reaper,
     }
 
     /// An open that blocks until released.
@@ -154,7 +163,9 @@ mod tests {
         let (closes, closed) = channel();
         let audio = Arc::new(StreamAudio::new(48_000, 1.0, false));
         let opened = audio.clone();
-        let answer = slot.open_with("test".into(), volume, muted, move |_, _| {
+        let reaper = Reaper::start();
+        let hold = reaper.hold();
+        let answer = slot.open_with("test".into(), volume, muted, hold, move |_, _| {
             let _ = released.recv();
             Ok((Device(closes), opened))
         });
@@ -163,6 +174,7 @@ mod tests {
             answer,
             closed,
             audio,
+            reaper,
         }
     }
 
@@ -230,9 +242,30 @@ mod tests {
     #[test]
     fn a_failed_open_leaves_the_call_silent() {
         let slot = Arc::new(SoundSlot::default());
-        let answer =
-            slot.open_with::<Device>("test".into(), 1.0, false, |_, _| Err("no device".into()));
+        let reaper = Reaper::start();
+        let hold = reaper.hold();
+        let answer = slot.open_with::<Device>("test".into(), 1.0, false, hold, |_, _| {
+            Err("no device".into())
+        });
         assert!(wait_opened(&answer).is_err());
         assert!(slot.audio().is_none());
+        drop(answer);
+        reaper.wait_drained();
+    }
+
+    #[test]
+    fn quit_waits_for_a_closing_output() {
+        let slot = Arc::new(SoundSlot::default());
+        let open = blocked_open(&slot, 1.0, false);
+        assert!(
+            !open.reaper.is_drained(),
+            "an open still running holds quit"
+        );
+        let _ = open.release.send(());
+        assert!(wait_opened(&open.answer).is_ok());
+        assert!(!open.reaper.is_drained(), "an open device holds quit");
+        drop(open.answer);
+        open.reaper.wait_drained();
+        assert_eq!(open.closed.try_recv(), Ok(()), "closed before quit goes on");
     }
 }

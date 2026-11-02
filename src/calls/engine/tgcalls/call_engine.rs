@@ -332,6 +332,10 @@ impl CallEngine for TgcallsEngine {
         self.set_group_stream_quality(chat_id, quality);
     }
 
+    fn move_group_call_to_chat(&mut self, group_call_id: i32, chat_id: i64) -> bool {
+        self.move_group_to_chat(group_call_id, chat_id)
+    }
+
     fn stream_quality(&self, chat_id: i64) -> Option<StreamQuality> {
         self.group_stream_quality(chat_id)
     }
@@ -401,7 +405,9 @@ impl CallEngine for TgcallsEngine {
 
     fn list_media_devices(&self, answer: std::sync::mpsc::Sender<Vec<MediaDevice>>) {
         let api = self.api;
+        let hold = self.reaper.hold();
         let _ = crate::thread_guard::spawn_guarded("quill-call-devices", move || {
+            let _hold = hold;
             let mut devices = devices::sound_devices();
             devices.extend(devices::cameras(api));
             let _ = answer.send(devices);
