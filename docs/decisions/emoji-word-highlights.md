@@ -57,9 +57,11 @@ matches lights up, and the user turns off the ones they do not want.
   drops (most one- and two-letter words; "ok" stays). A decomposed accent
   ("cafe" plus U+0301) stays part of its word.
 - **A whole emoji keyword.** Prefix matches ("pizz") do not light.
-- **Every match.** There is no density limit and no common-word list. A
-  message of one word gets none, because the bar above the field already
-  covers it.
+- **Every match.** There is no density limit and no common-word list. The
+  first word counts too: it lights as soon as a space finishes it. An early
+  rule skipped one-word drafts on the idea that the bar above the field
+  covered them, but that bar leaves with the space, so "dog " showed nothing
+  (Idan, 2026-11-02).
 - **The user decides.** The word's right-click menu has "Suggest Emoji"
   (opens the bar for any word, lit or not, with `:word`'s prefix matches),
   "Don't Suggest Emoji for This Word" (the word joins a list in Settings,
@@ -122,8 +124,8 @@ just above the field and as wide as it.
 ## Tests
 
 - `emoji_words` unit tests cover candidates (caret, short words, tags,
-  mentions, paths, scripts), skipped spans, every match lighting, a lone
-  word, pending answers and the scan limit.
+  mentions, paths, scripts), skipped spans, every match lighting, the
+  first word, pending answers and the scan limit.
 - `emoji_bar` unit tests cover the custom emoji that follow the standard
   ones and their cap. `emoji_words_ui` unit tests cover the band between a
   word and its bar.

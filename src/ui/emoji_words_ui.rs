@@ -183,10 +183,10 @@ impl QuillApp {
         let skip: Vec<Range<usize>> = skip.map(|span| span.range()).collect();
         let rope = composer.text().clone();
         let text = rope.to_string();
-        let (mut found, words) = if on {
+        let mut found = if on {
             candidates(&text, selection.clone(), &skip)
         } else {
-            (Vec::new(), 0)
+            Vec::new()
         };
         let blocked = &self.chat_prefs.emoji_word_blocklist;
         found.retain(|c| !ui.ignored.contains(&c.normalized) && !blocked.contains(&c.normalized));
@@ -198,7 +198,7 @@ impl QuillApp {
         let highlights = match self.session() {
             Some(session) => {
                 let lookups = &session.stickers.emoji.keyword_lookups;
-                pick(&found, words, |q| lookups.answer(q))
+                pick(&found, |q| lookups.answer(q))
             }
             None => Vec::new(),
         };

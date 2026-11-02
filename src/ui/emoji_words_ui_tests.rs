@@ -268,6 +268,18 @@ fn escape_stops_highlighting_that_word(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn the_first_word_lights_after_a_space(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    vcx.simulate_input("pizza");
+    frame(vcx);
+    assert!(lit(&app, vcx).is_empty());
+    vcx.simulate_input(" ");
+    frame(vcx);
+    assert_eq!(lit(&app, vcx), ["pizza"]);
+}
+
+#[gpui_kit::test]
 fn the_setting_turns_the_highlights_off(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
     let vcx = &mut vcx;
