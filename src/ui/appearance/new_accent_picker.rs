@@ -62,11 +62,15 @@ impl QuillApp {
                 move |this, cx| this.set_appearance(cx, |a| a.interface_scale_pct = pct),
             ));
         }
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.interface_scale"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_PREFS_INTERFACE_SCALE),
+                tr(keys::Q_PREFS_SCALES_THE_WHOLE_INTERFACE_APPLIED),
+                row.into_any_element(),
+            ),
             cx,
-            tr(keys::Q_PREFS_INTERFACE_SCALE),
-            tr(keys::Q_PREFS_SCALES_THE_WHOLE_INTERFACE_APPLIED),
-            row.into_any_element(),
         )
     }
 
@@ -106,11 +110,15 @@ impl QuillApp {
                 },
             ));
         }
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.wallpaper"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_PREFS_CHAT_WALLPAPER),
+                tr(keys::Q_PREFS_SOLID_COLOR_BEHIND_THE_MESSAGE),
+                row.into_any_element(),
+            ),
             cx,
-            tr(keys::Q_PREFS_CHAT_WALLPAPER),
-            tr(keys::Q_PREFS_SOLID_COLOR_BEHIND_THE_MESSAGE),
-            row.into_any_element(),
         )
     }
 
@@ -139,11 +147,15 @@ impl QuillApp {
                     .ghost()
                     .on_click(cx.listener(|this, _, _, cx| this.bump_font_size(cx, 1))),
             );
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.text_size"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_PREFS_MESSAGE_TEXT_SIZE),
+                tr(keys::Q_PREFS_CHAT_MESSAGE_TEXT_12_20),
+                control.into_any_element(),
+            ),
             cx,
-            tr(keys::Q_PREFS_MESSAGE_TEXT_SIZE),
-            tr(keys::Q_PREFS_CHAT_MESSAGE_TEXT_12_20),
-            control.into_any_element(),
         )
     }
 
@@ -159,11 +171,15 @@ impl QuillApp {
             .on_click(cx.listener(|this, &ix, _, cx| {
                 this.set_appearance(cx, |a| a.bubbles = ix == 0);
             }));
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.chat_style"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_PREFS_CHAT_STYLE),
+                tr(keys::Q_PREFS_BUBBLES_OR_PLAIN_ROWS_WITHOUT),
+                control.into_any_element(),
+            ),
             cx,
-            tr(keys::Q_PREFS_CHAT_STYLE),
-            tr(keys::Q_PREFS_BUBBLES_OR_PLAIN_ROWS_WITHOUT),
-            control.into_any_element(),
         )
     }
 
@@ -225,31 +241,39 @@ impl QuillApp {
                     a.preview_lines = if ix == 0 { 2 } else { 3 };
                 });
             }));
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(self.appearance_section(
+        let mut body = div().flex().flex_col().gap_2().child(self.setting_spot(
+            &["appearance.chat_list_rows"],
+            self.appearance_section(
                 cx,
                 tr(keys::Q_PREFS_CHAT_LIST_ROWS),
                 tr(keys::Q_PREFS_TWO_LINES_SHOWS_THE_TITLE),
                 control.into_any_element(),
-            ));
-        body = body.child(self.appearance_switch_row(
+            ),
             cx,
-            "appearance-chat-list-media-icons",
-            tr(keys::Q_PREFS_MEDIA_ICONS),
-            tr(keys::Q_PREFS_SHOW_A_PHOTO_VIDEO_OR),
-            self.appearance.chat_list_media_icons,
-            |a, on| a.chat_list_media_icons = on,
         ));
-        body = body.child(self.appearance_switch_row(
+        body = body.child(self.setting_spot(
+            &["appearance.media_icons"],
+            self.appearance_switch_row(
+                cx,
+                "appearance-chat-list-media-icons",
+                tr(keys::Q_PREFS_MEDIA_ICONS),
+                tr(keys::Q_PREFS_SHOW_A_PHOTO_VIDEO_OR),
+                self.appearance.chat_list_media_icons,
+                |a, on| a.chat_list_media_icons = on,
+            ),
             cx,
-            "appearance-chat-list-rich-preview",
-            tr(keys::Q_PREFS_FORMATTED_PREVIEW_TEXT),
-            tr(keys::Q_PREFS_SHOW_BOLD_ITALIC_AND_OTHER),
-            self.appearance.chat_list_rich_preview,
-            |a, on| a.chat_list_rich_preview = on,
+        ));
+        body = body.child(self.setting_spot(
+            &["appearance.rich_preview"],
+            self.appearance_switch_row(
+                cx,
+                "appearance-chat-list-rich-preview",
+                tr(keys::Q_PREFS_FORMATTED_PREVIEW_TEXT),
+                tr(keys::Q_PREFS_SHOW_BOLD_ITALIC_AND_OTHER),
+                self.appearance.chat_list_rich_preview,
+                |a, on| a.chat_list_rich_preview = on,
+            ),
+            cx,
         ));
         body = body.child(self.appearance_swipe_action_section(cx));
         body.into_any_element()
@@ -272,11 +296,15 @@ impl QuillApp {
                     this.set_appearance(cx, |a| a.swipe_action = action);
                 }
             }));
-        self.appearance_section(
+        self.setting_spot(
+            &["chats.chat_list_action"],
+            self.appearance_section(
+                cx,
+                tr(keys::SETTINGS_QUICK_DIALOG_ACTION_TITLE),
+                tr(keys::Q_PREFS_MIDDLE_CLICK_A_CHAT_OR),
+                control.into_any_element(),
+            ),
             cx,
-            tr(keys::SETTINGS_QUICK_DIALOG_ACTION_TITLE),
-            tr(keys::Q_PREFS_MIDDLE_CLICK_A_CHAT_OR),
-            control.into_any_element(),
         )
     }
 

@@ -134,16 +134,20 @@ impl QuillApp {
         } else {
             tr(keys::Q_MISC_THE_FONT_FOR_THE_WHOLE).to_string()
         };
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.font_family"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_MISC_FONT_FAMILY),
+                &hint,
+                Select::new(&self.settings.font_picker)
+                    .search_placeholder(tr(keys::Q_MISC_SEARCH_FONTS))
+                    .accessibility_label(tr(keys::Q_MISC_INTERFACE_FONT_FAMILY))
+                    .menu_max_h(px(280.))
+                    .w(px(260.))
+                    .into_any_element(),
+            ),
             cx,
-            tr(keys::Q_MISC_FONT_FAMILY),
-            &hint,
-            Select::new(&self.settings.font_picker)
-                .search_placeholder(tr(keys::Q_MISC_SEARCH_FONTS))
-                .accessibility_label(tr(keys::Q_MISC_INTERFACE_FONT_FAMILY))
-                .menu_max_h(px(280.))
-                .w(px(260.))
-                .into_any_element(),
         )
     }
 

@@ -585,16 +585,16 @@ impl QuillApp {
                     this.set_appearance(cx, |a| a.auto_night = mode);
                 }
             }));
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(self.appearance_section(
+        let mut body = div().flex().flex_col().gap_2().child(self.setting_spot(
+            &["appearance.auto_night", "appearance.night_mode"],
+            self.appearance_section(
                 cx,
                 tr(keys::Q_PREFS_AUTO_NIGHT),
                 tr(keys::Q_PREFS_AUTOMATICALLY_SWITCH_TO_THE_DARK),
                 control.into_any_element(),
-            ));
+            ),
+            cx,
+        ));
         if current == AutoNight::Scheduled {
             body = body.child(
                 div()
