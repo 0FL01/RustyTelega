@@ -7,7 +7,6 @@ use crate::{
     link_pace::{LinkChange, LinkPace, Step},
     ns_string, renderer,
 };
-#[cfg(any(test, feature = "test-support"))]
 use anyhow::Result;
 use block2::RcBlock;
 use dispatch2::DispatchQueue;
@@ -31,7 +30,7 @@ use ctor::ctor;
 use futures::channel::oneshot;
 use gpui_util::ResultExt;
 use objc2::{
-    AnyThread, MainThreadMarker, class, msg_send,
+    AnyThread, MainThreadMarker, Message, class, msg_send,
     rc::{Retained, autoreleasepool},
     runtime::{AnyClass, AnyObject, AnyProtocol, Bool, ClassBuilder, ProtocolObject, Sel},
     sel,
@@ -56,6 +55,7 @@ use objc2_foundation::{
     NSArray, NSInteger, NSNotFound, NSOperatingSystemVersion, NSPoint, NSProcessInfo, NSRect,
     NSSize, NSString, NSUInteger, NSURL,
 };
+use objc2_uniform_type_identifiers::{UTType, UTTypeData, UTTypeFolder};
 use parking_lot::Mutex;
 use raw_window_handle as rwh;
 use smallvec::SmallVec;
@@ -67,9 +67,9 @@ use std::{
     os::unix::ffi::OsStrExt,
     path::PathBuf,
     ptr::{self, NonNull},
-    rc::Rc,
+    rc::{Rc, Weak},
     sync::{
-        Arc, Once, Weak,
+        Arc, Once,
         atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
@@ -961,10 +961,8 @@ impl MacWindowState {
     }
 }
 
-unsafe impl Send for MacWindowState {}
-
 pub(crate) struct MacWindow(
-    Arc<Mutex<MacWindowState>>,
+    Rc<Mutex<MacWindowState>>,
     MainThreadMarker,
     // Quill: shared with the state, for `schedule_frame` without the lock.
     Arc<FrameIdle>,
@@ -994,16 +992,9 @@ impl MacWindow {
         background_executor: BackgroundExecutor,
         renderer_context: renderer::Context,
         marker: MainThreadMarker,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self> {
         autoreleasepool(|_| unsafe {
-            // Quill: before any AppKit object exists, so a renderer that can't
-            // be built leaves no half-made window behind.
-            let renderer = renderer::new_renderer(
-                renderer_context,
-                bounds.size.map(|pixels| pixels.as_f32()),
-                false,
-                use_display_p3,
-            )?;
+            let renderer = renderer::new_renderer(renderer_context, false, use_display_p3)?;
             let allows_automatic_window_tabbing = tabbing_identifier.is_some();
             if allows_automatic_window_tabbing {
                 let () = msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing: Bool::YES];
@@ -1105,7 +1096,7 @@ impl MacWindow {
             assert!(!native_view.is_null());
 
             let frame_idle = Arc::new(FrameIdle::default());
-            let state = Arc::new(Mutex::new(MacWindowState {
+            let state = Rc::new(Mutex::new(MacWindowState {
                 handle,
                 foreground_executor,
                 background_executor,
@@ -1169,14 +1160,14 @@ impl MacWindow {
                 .instance_variable(WINDOW_STATE_IVAR)
                 .expect("GPUI window state ivar")
                 .load_ptr::<*mut c_void>(&*native_window)
-                .write(Arc::into_raw(window.0.clone()).cast_mut().cast());
+                .write(Rc::into_raw(window.0.clone()).cast_mut().cast());
             let _: () = msg_send![native_window, setDelegate: native_window];
             (*native_view)
                 .class()
                 .instance_variable(WINDOW_STATE_IVAR)
                 .expect("GPUI view state ivar")
                 .load_ptr::<*mut c_void>(&*native_view)
-                .write(Arc::into_raw(window.0.clone()).cast_mut().cast());
+                .write(Rc::into_raw(window.0.clone()).cast_mut().cast());
 
             if let Some(title) = titlebar
                 .as_ref()
@@ -1403,7 +1394,7 @@ impl Drop for MacWindow {
         let mut this = self.0.lock();
         // `accesskit_macos::SubclassingAdapter::for_window` strong-retains the
         // window's content view, and that content view keeps the `GPUIView` it
-        // hosts alive. Together with the `Arc<Mutex<MacWindowState>>` parked in
+        // hosts alive. Together with the `Rc<Mutex<MacWindowState>>` parked in
         // both views' `windowState` ivar, that forms
         // `MacWindowState -> adapter -> content view -> GPUIView -> MacWindowState`,
         // a cycle the delegate/`frame_source` teardown below cannot break. Drop
@@ -1413,7 +1404,7 @@ impl Drop for MacWindow {
         this.renderer.destroy();
         let window = this.native_window;
         let sheet_parent = this.sheet_parent.take();
-        this.frame_source.take();
+        drop(this.frame_source.take());
         unsafe {
             let _: () = msg_send![this.native_window, setDelegate: ptr::null_mut::<AnyObject>()];
         }
@@ -2354,25 +2345,27 @@ impl PlatformWindow for MacWindow {
                 // recommendation for large item counts), and by file *type* rather than
                 // `iconForFile:`, which can synchronously hit LaunchServices, network
                 // mounts, or iCloud for every selected path and beachball drag startup.
-                // `iconForFileType:` is deprecated in favor of `iconForContentType:`,
-                // but the replacement requires macOS 11 and we target 10.15.
-                let file_type = if *is_directory {
-                    "public.folder".to_string()
-                } else {
-                    path.extension()
-                        .and_then(|extension| extension.to_str())
-                        .map(|extension| extension.to_string())
-                        .unwrap_or_else(|| "public.data".to_string())
-                };
+                let is_directory = *is_directory;
+                let extension = path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .map(String::from);
                 let provider = RcBlock::new(move || {
                     let component = NSDraggingImageComponent::draggingImageComponentWithKey(
                         NSDraggingImageComponentIconKey,
                     );
                     let workspace = NSWorkspace::sharedWorkspace();
-                    let file_type = NSString::from_str(&file_type);
-                    // TODO: Replace with `iconForContentType` once Zed no longer supports MacOS 10.15
-                    #[expect(deprecated, reason = "Support for MacOS 10.15")]
-                    let icon = workspace.iconForFileType(&file_type);
+                    let content_type = if is_directory {
+                        UTTypeFolder.retain()
+                    } else {
+                        extension
+                            .as_ref()
+                            .and_then(|extension| {
+                                UTType::typeWithFilenameExtension(&NSString::from_str(extension))
+                            })
+                            .unwrap_or_else(|| UTTypeData.retain())
+                    };
+                    let icon = workspace.iconForContentType(&content_type);
                     component.setContents(Some(&icon));
                     // Component frames are relative to the item's dragging frame.
                     component.setFrame(NSRect::new(NSPoint::new(0., 0.), NSSize::new(32., 32.)));
@@ -2535,14 +2528,14 @@ pub unsafe fn is_exiting_fullscreen(ns_window: *mut c_void) -> bool {
     unsafe { is_gpui_window(window) && get_window_state(&*window).lock().is_exiting_fullscreen }
 }
 
-unsafe fn get_window_state(object: &AnyObject) -> Arc<Mutex<MacWindowState>> {
+unsafe fn get_window_state(object: &AnyObject) -> Rc<Mutex<MacWindowState>> {
     unsafe {
         let raw = *object
             .class()
             .instance_variable(WINDOW_STATE_IVAR)
             .expect("GPUI window state ivar")
             .load::<*mut c_void>(object);
-        let rc1 = Arc::from_raw(raw as *mut Mutex<MacWindowState>);
+        let rc1 = Rc::from_raw(raw as *mut Mutex<MacWindowState>);
         let rc2 = rc1.clone();
         mem::forget(rc1);
         rc2
@@ -2556,7 +2549,7 @@ unsafe fn drop_window_state(object: &AnyObject) {
             .instance_variable(WINDOW_STATE_IVAR)
             .expect("GPUI window state ivar")
             .load::<*mut c_void>(object);
-        Arc::from_raw(raw as *mut Mutex<MacWindowState>);
+        Rc::from_raw(raw as *mut Mutex<MacWindowState>);
     }
 }
 
@@ -2886,7 +2879,7 @@ extern "C" fn handle_key_event(
 
 extern "C" fn handle_view_event(this: &AnyObject, _: Sel, native_event: *mut AnyObject) {
     let window_state = unsafe { get_window_state(this) };
-    let weak_window_state = Arc::downgrade(&window_state);
+    let weak_window_state = Rc::downgrade(&window_state);
     let mut lock = window_state.as_ref().lock();
     let window_height = lock.content_size().height;
     let native_event_type: NSEventType = unsafe { msg_send![native_event, type] };
@@ -3055,7 +3048,7 @@ fn visibility(state: &MacWindowState) -> WindowVisibility {
     }
 }
 
-fn report_visibility(window_state: &Arc<Mutex<MacWindowState>>) {
+fn report_visibility(window_state: &Rc<Mutex<MacWindowState>>) {
     let state = window_state.lock();
     if state.last_visibility.is_none() {
         return;
@@ -3164,7 +3157,7 @@ extern "C" fn window_did_fail_to_exit_fullscreen(this: &AnyObject, _: Sel, _: *m
 
 extern "C" fn window_did_exit_fullscreen(this: &AnyObject, _: Sel, _: *mut AnyObject) {
     // SAFETY: This method is registered only on GPUI window classes, which initialize
-    // WINDOW_STATE_IVAR with an Arc<Mutex<MacWindowState>> during window creation.
+    // WINDOW_STATE_IVAR with an Rc<Mutex<MacWindowState>> during window creation.
     let window_state = unsafe { get_window_state(this) };
     let mut lock = window_state.as_ref().lock();
     lock.is_exiting_fullscreen = false;
@@ -3199,7 +3192,7 @@ extern "C" fn window_did_move(this: &AnyObject, _: Sel, _: *mut AnyObject) {
 }
 
 // Update the window scale factor and drawable size, and call the resize callback if any.
-fn update_window_scale_factor(window_state: &Arc<Mutex<MacWindowState>>) {
+fn update_window_scale_factor(window_state: &Rc<Mutex<MacWindowState>>) {
     let mut lock = window_state.as_ref().lock();
     let scale_factor = lock.scale_factor();
     let size = lock.content_size();
@@ -3234,7 +3227,7 @@ extern "C" fn window_did_change_screen(this: &AnyObject, _: Sel, _: *mut AnyObje
     report_display_change(&window_state);
 }
 
-fn report_display_change(window_state: &Arc<Mutex<MacWindowState>>) {
+fn report_display_change(window_state: &Rc<Mutex<MacWindowState>>) {
     let executor = window_state.lock().foreground_executor.clone();
     // AppKit can post screen changes while GPUI is updating a window, e.g.
     // from `setFrame:`, so deliver after that update completes.
@@ -3458,14 +3451,14 @@ extern "C" fn step(view: *mut c_void) {
     let running = idle.running.load(Ordering::Relaxed);
 
     if let Some(mut callback) = lock.request_frame_callback.take() {
-        let (signal_at, signal_source) = lock
+        let signal = lock
             .frame_source
             .as_ref()
-            .and_then(WindowFrameSource::take_signal)
-            .map_or(
-                (None, FrameRequestSource::NativeCallback),
-                |(at, source)| (Some(at), source),
-            );
+            .and_then(|frame_source| frame_source.take_signal());
+        let (signal_at, signal_source) = signal.map_or(
+            (None, FrameRequestSource::NativeCallback),
+            |(at, source)| (Some(at), source),
+        );
         drop(lock);
         callback(RequestFrameOptions {
             signal_at,
@@ -3494,7 +3487,7 @@ extern "C" fn step(view: *mut c_void) {
 /// Quill: free the spare drawables once the window stayed idle long enough.
 /// One timer at a time, so a blinking caret does not arm one per draw.
 fn schedule_drawable_release(
-    window_state: &Arc<Mutex<MacWindowState>>,
+    window_state: &Rc<Mutex<MacWindowState>>,
     state: &mut MacWindowState,
 ) {
     if state.drawable_release_armed {
@@ -3503,10 +3496,13 @@ fn schedule_drawable_release(
     let Ok(when) = state.link_pace.drawable_release_in(Instant::now()).try_into() else {
         return;
     };
+    let Some(main_thread) = crate::main_thread_marker() else {
+        return;
+    };
     state.drawable_release_armed = true;
-    let window = Arc::downgrade(window_state);
+    let window = dispatch2::MainThreadBound::new(Rc::downgrade(window_state), main_thread);
     let _ = DispatchQueue::main().after(when, move || {
-        let Some(window) = window.upgrade() else {
+        let Some(window) = crate::main_thread_marker().and_then(|main_thread| window.get(main_thread).upgrade()) else {
             return;
         };
         let mut lock = window.lock();
@@ -3924,7 +3920,7 @@ async fn synthetic_drag(
 /// Sends the specified FileDropEvent using `PlatformInput::FileDrop` to the window
 /// state and updates the window state according to the event passed.
 fn send_file_drop_event(
-    window_state: Arc<Mutex<MacWindowState>>,
+    window_state: Rc<Mutex<MacWindowState>>,
     file_drop_event: FileDropEvent,
 ) -> bool {
     let external_files_dragged = match file_drop_event {

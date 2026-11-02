@@ -99,6 +99,7 @@ pub struct WindowsWindowState {
     initial_placement: Cell<Option<WindowOpenStatus>>,
     hwnd: HWND,
     pub(crate) a11y: RefCell<Option<A11yState>>,
+    pub mouse_position: Cell<Point<Pixels>>,
     /// Quill: something drew or presented since the last `draw_window` (see
     /// `WindowsWindowInner::frames_after_draw`).
     frame_drew: Cell<bool>,
@@ -208,6 +209,7 @@ impl WindowsWindowState {
             draw_coordinator,
             direct_manipulation,
             a11y: RefCell::new(None),
+            mouse_position: Cell::new(Point::default()),
             frame_drew: Cell::new(false),
             frame_asked: Cell::new(false),
             frame_idle: Cell::new(FrameIdle::new(Instant::now())),
@@ -1179,7 +1181,7 @@ impl PlatformWindow for WindowsWindow {
             .log_err();
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(feature = "test-support")]
     fn render_to_image(&self, scene: &Scene) -> anyhow::Result<image::RgbaImage> {
         self.state
             .renderer

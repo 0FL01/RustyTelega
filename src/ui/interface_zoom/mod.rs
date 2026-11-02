@@ -466,6 +466,12 @@ impl Platform for ZoomPlatform {
     fn prevent_idle_sleep(&self, reason: &str) -> Task<AnyResult<ActivityGuard>> {
         self.inner.prevent_idle_sleep(reason)
     }
+    fn power_mode(&self) -> gpui_kit::PowerMode {
+        self.inner.power_mode()
+    }
+    fn on_power_mode_change(&self, callback: Box<dyn FnMut()>) {
+        self.inner.on_power_mode_change(callback)
+    }
     fn set_app_identity(&self, identifier: &str, name: &str) {
         self.inner.set_app_identity(identifier, name)
     }
@@ -815,6 +821,15 @@ impl PlatformWindow for ZoomWindow {
     }
     fn request_decorations(&self, decorations: WindowDecorations) {
         self.inner.request_decorations(decorations)
+    }
+    fn set_client_corner_radii(&self, radii: gpui_kit::Corners<Pixels>) {
+        let zoom = self.zoom();
+        self.inner.set_client_corner_radii(gpui_kit::Corners {
+            top_left: radii.top_left * zoom,
+            top_right: radii.top_right * zoom,
+            bottom_right: radii.bottom_right * zoom,
+            bottom_left: radii.bottom_left * zoom,
+        })
     }
     fn show_window_menu(&self, position: Point<Pixels>) {
         self.inner

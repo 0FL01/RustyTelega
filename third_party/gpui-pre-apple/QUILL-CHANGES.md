@@ -1,15 +1,15 @@
 # Changes made by the Quill project
 
-This directory is gpui-pre-apple 0.3.10 from crates.io (Apache-2.0,
+This directory is gpui-pre-apple 0.3.11 from crates.io (Apache-2.0,
 `LICENSE-APACHE`), GPUI's Metal renderer and, since 0.3.9, its CoreText text
 system, used through `[patch.crates-io]` in Quill's `Cargo.toml`. Commit
-`6be84cd7` added the unmodified registry copy, including `vendor/gpui` (the
+`1398c875` added the unmodified registry copy, including `vendor/gpui` (the
 GPUI sources `build.rs` reads to generate the shader header; `.gitignore`
 keeps `third_party/*/vendor/`), without the registry's `.cargo-ok`,
 `.cargo_vcs_info.json`, `Cargo.toml.orig` and `Cargo.lock`, so
-`git diff 6be84cd7 -- third_party/gpui-pre-apple` shows every change. Changed
+`git diff 1398c875 -- third_party/gpui-pre-apple` shows every change. Changed
 code is marked `QUILL`. (The patch was first made on 0.3.8, vendored in
-`088b96c3`, and carried to 0.3.9 in `docs/decisions/gpui-kit-0-7-3.md`, and to 0.3.10 in `docs/decisions/gpui-kit-0-8-1.md`.)
+`088b96c3`, and carried to 0.3.9 in `docs/decisions/gpui-kit-0-7-3.md`, to 0.3.10 in `docs/decisions/gpui-kit-0-8-1.md`, and to 0.3.11 in `docs/decisions/gpui-kit-0-9-0.md`.)
 
 The Quill project changed it in 2026 to show HDR photos in the media viewer
 (`docs/decisions/hdr-viewer-macos.md`):
@@ -32,9 +32,8 @@ The Quill project changed it in 2026 to show HDR photos in the media viewer
     (`match_drawable_format`), so a layer switched to `RGBA16Float` for EDR
     draws correctly. The `BGRA8Unorm` set is kept for the way back. Path
     rasterization keeps its 8-bit intermediate.
-  - Test-support readback (`read_texture_to_image`) reads an `RGBA16Float`
-    drawable as clamped 8-bit sRGB, so screenshot captures of an HDR still
-    work.
+  - `render_to_image` draws offscreen to BGRA8, so screenshot captures of an
+    HDR still work and no drawable readback is needed.
 
 The Quill project also changed it in 2026 to remove a panic a user can hit
 (step 7 of `docs/decisions/no-crash-audit.md`; first made in gpui-pre-macos,
@@ -169,3 +168,12 @@ time:
 The Quill project also changed it in 2026 so text glyphs can be swept: the atlas
 forwards `text_glyph_count` and `remove_text_glyphs_unused_since` to its
 `AtlasState` (see gpui-pre's `QUILL-CHANGES.md`).
+
+0.3.11 note (`docs/decisions/gpui-kit-0-9-0.md`): upstream moved this crate from
+`metal` to `objc2-metal` and now returns `Result` from setup and pipeline
+building, so Quill's error handling for those is upstream's. What stays Quill's
+is ported to objc2: the HDR pipelines, `match_drawable_format`, the drawable
+trimming, `capture_scene`, `built_in_library` and the one setup retry. Upstream
+also made `render_to_image` render offscreen, so the float texture readback is
+gone: a capture is always `BGRA8Unorm`. `src/thermal.rs` became upstream's
+`process_info.rs`, whose test keeps its plain `cfg(test)`.

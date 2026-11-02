@@ -14,12 +14,12 @@ use gpui::{
     BackgroundExecutor, ClipboardItem, CursorStyle, ForegroundExecutor, GraphicalEnvironment,
     KeyContext, Keymap, Menu, MenuItem, OsMenu, OwnedMenu, PathPromptOptions, Platform,
     PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem,
-    PlatformWindow, QuitAnswer, QuitStep, Result, SystemMenuType, Task, ThermalState, WindowAppearance,
-    WindowKind, WindowParams, WindowingRequest, popup::PopupNotSupportedError,
+    PlatformWindow, PowerMode, QuitAnswer, QuitStep, Result, SystemMenuType, Task, ThermalState,
+    WindowAppearance, WindowKind, WindowParams, WindowingRequest, popup::PopupNotSupportedError,
 };
 use gpui_apple::{
     keychain,
-    thermal::{self, ThermalObserver},
+    process_info::{self, ProcessInfoObserver},
 };
 use gpui_util::{ResultExt, new_std_command};
 use itertools::Itertools;
@@ -161,7 +161,6 @@ unsafe fn build_classes() {
                 sel!(onSystemSleep:),
                 on_system_sleep as extern "C-unwind" fn(_, Sel, *mut AnyObject),
             );
-
             decl.add_method(
                 sel!(onSystemWake:),
                 on_system_wake as extern "C-unwind" fn(_, Sel, *mut AnyObject),
@@ -187,7 +186,8 @@ pub(crate) struct MacPlatformState {
     reopen: Option<Box<dyn FnMut()>>,
     app_lifecycle: Option<Box<dyn FnMut(AppLifecyclePhase)>>,
     on_keyboard_layout_change: Option<Box<dyn FnMut()>>,
-    thermal_observer: Option<ThermalObserver>,
+    thermal_observer: Option<ProcessInfoObserver>,
+    power_mode_observer: Option<ProcessInfoObserver>,
     on_displays_changed: Option<Box<dyn FnMut()>>,
     on_system_sleep: Option<Box<dyn FnMut()>>,
     on_system_wake: Option<Box<dyn FnMut()>>,
@@ -274,6 +274,7 @@ impl MacPlatform {
             dock_menu: None,
             on_keyboard_layout_change: None,
             thermal_observer: None,
+            power_mode_observer: None,
             on_displays_changed: None,
             on_system_sleep: None,
             on_system_wake: None,
@@ -1090,7 +1091,7 @@ impl Platform for MacPlatform {
     }
 
     fn on_thermal_state_change(&self, callback: Box<dyn FnMut()>) {
-        let observer = ThermalObserver::new(&self.foreground_executor(), callback);
+        let observer = process_info::observe_thermal_state(&self.foreground_executor(), callback);
         self.0.lock().thermal_observer = Some(observer);
     }
 
@@ -1099,13 +1100,18 @@ impl Platform for MacPlatform {
         self.ensure_system_power_observers();
     }
 
+    fn on_power_mode_change(&self, callback: Box<dyn FnMut()>) {
+        let observer = process_info::observe_power_mode(&self.foreground_executor(), callback);
+        self.0.lock().power_mode_observer = Some(observer);
+    }
+
     fn on_system_wake(&self, callback: Box<dyn FnMut()>) {
         self.0.lock().on_system_wake = Some(callback);
         self.ensure_system_power_observers();
     }
 
     fn thermal_state(&self) -> ThermalState {
-        thermal::thermal_state()
+        process_info::thermal_state()
     }
 
     fn prevent_idle_sleep(&self, reason: &str) -> Task<Result<ActivityGuard>> {
@@ -1113,6 +1119,10 @@ impl Platform for MacPlatform {
             reason,
             NSActivityOptions::UserInitiated,
         )))
+    }
+
+    fn power_mode(&self) -> PowerMode {
+        process_info::power_mode()
     }
 
     fn show_system_notification(&self, notification: gpui::SystemNotification) {
@@ -1350,7 +1360,6 @@ extern "C-unwind" fn did_finish_launching(this: &AnyObject, _: Sel, _: *mut AnyO
             name: ns_string("NSApplicationDidChangeScreenParametersNotification"),
             object: ptr::null_mut::<AnyObject>()
         ];
-
         let platform = get_mac_platform(this);
         let callback = {
             let mut state = platform.0.lock();

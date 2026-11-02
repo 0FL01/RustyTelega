@@ -1,13 +1,13 @@
 # Changes made by the Quill project
 
-This directory is gpui-pre 0.3.10 from crates.io (Apache-2.0,
+This directory is gpui-pre 0.3.11 from crates.io (Apache-2.0,
 `LICENSE-APACHE`), GPUI's core, used through `[patch.crates-io]` in Quill's
-`Cargo.toml`. Commit `6be84cd7` added the registry copy without its
+`Cargo.toml`. Commit `1398c875` added the registry copy without its
 `examples/` directory and their `[[example]]` tables (and without the
 registry's `.cargo-ok`, `.cargo_vcs_info.json`, `Cargo.toml.orig` and
-`Cargo.lock`), so `git diff 6be84cd7 -- third_party/gpui-pre` shows every
+`Cargo.lock`), so `git diff 1398c875 -- third_party/gpui-pre` shows every
 later change. (The patch was first made on 0.3.8, vendored in `f55b3086`,
-and carried to 0.3.9 in `docs/decisions/gpui-kit-0-7-3.md`, and to 0.3.10 in `docs/decisions/gpui-kit-0-8-1.md`.)
+and carried to 0.3.9 in `docs/decisions/gpui-kit-0-7-3.md`, to 0.3.10 in `docs/decisions/gpui-kit-0-8-1.md`, and to 0.3.11 in `docs/decisions/gpui-kit-0-9-0.md`.)
 
 The Quill project changed it in 2026 so the `surface` element can carry CPU
 pixels where CoreVideo doesn't exist, for HDR stills on Windows
@@ -572,3 +572,7 @@ rendering its view (sweep item X04):
 - `src/elements/list.rs`: `ListState::scroll` notifies only when the anchor or
   the follow state changed. The scroll handler still runs on every wheel
   event.
+
+The Quill project also changed it in 2026 so low power mode doesn't cap video
+(`docs/decisions/gpui-kit-0-9-0.md`): `src/platform.rs`'s `WindowOptions` default
+has `low_power_frame_interval: None`, where upstream has 30 fps.

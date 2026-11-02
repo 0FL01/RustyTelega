@@ -1,7 +1,12 @@
 // Modified by the Quill project (2026) from gpui-pre-macos 0.3.9 (Apache-2.0):
 // the display link stops while the window is idle, and the latest output (present) time per
 // display is kept for video pacing. See third_party/gpui-pre-macos/QUILL-CHANGES.md.
-//! Frame pacing for macOS windows, built on `CVDisplayLink`.
+//! Frame pacing for macOS windows.
+//!
+//! Quill paces every window through the shared `CVDisplayLink` registry
+//! described below ([`WindowFrameSource`]), on every macOS version: upstream's
+//! per-window `CAMetalDisplayLink` path is not wired up
+//! (docs/decisions/gpui-kit-0-9-0.md).
 //!
 //! CVDisplayLink has no safe teardown: `CVDisplayLinkStop` merely flags the
 //! link's io thread to exit "soon" and returns immediately, and there is no
@@ -609,6 +614,29 @@ mod sys {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_apple::display_link::MetalFrameSource;
+    use objc2::AnyThread;
+    use objc2_quartz_core::CAMetalDisplayLink;
+
+    #[test]
+    fn a_renderer_draws_normally_after_its_display_link_is_invalidated() {
+        if !MetalFrameSource::is_available() {
+            return;
+        }
+        let mut renderer =
+            crate::renderer::MetalRenderer::new(Default::default(), false, false).unwrap();
+        renderer.update_drawable_size(gpui::size(gpui::DevicePixels(64), gpui::DevicePixels(64)));
+        let layer = renderer.layer().expect("window renderer has a layer");
+        // The link is never added to a run loop: attaching it to the layer is
+        // the state under test.
+        let link = CAMetalDisplayLink::initWithMetalLayer(CAMetalDisplayLink::alloc(), layer);
+        renderer.set_display_link_attached(true);
+        renderer.draw(&gpui::Scene::default());
+
+        link.invalidate();
+        renderer.set_display_link_attached(false);
+        renderer.draw(&gpui::Scene::default());
+    }
 
     #[test]
     fn host_timestamp_preserves_request_age_at_different_clock_rates() {

@@ -1,8 +1,8 @@
 # Changes made by the Quill project
 
-This directory is gpui-base 0.8.1 from crates.io (Apache-2.0, `LICENSE-APACHE`),
-used through `[patch.crates-io]` in Quill's `Cargo.toml`. Commit `6be84cd7`
-added the unmodified registry copy, so `git diff 6be84cd7 -- third_party/gpui-base`
+This directory is gpui-base 0.9.0 from crates.io (Apache-2.0, `LICENSE-APACHE`),
+used through `[patch.crates-io]` in Quill's `Cargo.toml`. Commit `1398c875`
+added the unmodified registry copy, so `git diff 1398c875 -- third_party/gpui-base`
 shows every change. (The patch was first made on 0.7.0, vendored in `eb465597`,
 carried to 0.7.1 in `docs/decisions/codex-gpui-kit-0.7.1.md`, to 0.7.3 in
 `docs/decisions/gpui-kit-0-7-3.md` and to 0.8.0 in
@@ -228,3 +228,9 @@ copied the rope (sweep item X02).
 - `src/input/base/state.rs`: `value()` keeps its string in `value_memo` until
   the next edit takes it. Every write to `text` clears it, and a debug assert in
   `value()` compares the two.
+
+0.9.0 note (`docs/decisions/gpui-kit-0-9-0.md`): `text_wrapper.rs` stays on
+Quill's `row_wrap.rs`. Upstream's width-range cache for live resize
+(`text_wrapper/measurements.rs`, `wrap_width.rs`) solves the same problem on the
+algorithm Quill replaced, so those files are removed. `BlinkCursor::is_blinking`
+reads upstream's `last_activity` where it read `epoch`.

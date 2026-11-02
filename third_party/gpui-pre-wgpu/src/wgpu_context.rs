@@ -1,4 +1,6 @@
-// Modified for gpui-pre (snapshot of zed@08cbb88): adapt device queues and sRGB detection to wgpu 30.0.1.
+// Modified for gpui-pre (snapshot of zed@f816e1f): adapt device queues and sRGB detection to wgpu 30.0.1.
+#[cfg(not(target_family = "wasm"))]
+use crate::{WgpuRenderer, WgpuSurfaceConfig};
 #[cfg(not(target_family = "wasm"))]
 use anyhow::Context as _;
 #[cfg(not(target_family = "wasm"))]
@@ -140,9 +142,10 @@ impl WgpuContext {
     pub fn new(
         instance: wgpu::Instance,
         surface: &wgpu::Surface<'_>,
+        config: &WgpuSurfaceConfig,
         compositor_gpu: Option<CompositorGpuHint>,
     ) -> anyhow::Result<Self> {
-        Self::new_on(instance, surface, compositor_gpu, Adapters::Any)
+        Self::new_on(instance, surface, config, compositor_gpu, Adapters::Any)
     }
 
     /// Quill: a context on the first adapter of the kinds `adapters` admits.
@@ -150,6 +153,7 @@ impl WgpuContext {
     pub(crate) fn new_on(
         instance: wgpu::Instance,
         surface: &wgpu::Surface<'_>,
+        config: &WgpuSurfaceConfig,
         compositor_gpu: Option<CompositorGpuHint>,
         adapters: Adapters,
     ) -> anyhow::Result<Self> {
@@ -162,6 +166,7 @@ impl WgpuContext {
                 &instance,
                 device_id_filter,
                 surface,
+                config,
                 compositor_gpu.as_ref(),
                 adapters,
             ))?;
@@ -506,6 +511,7 @@ impl WgpuContext {
         instance: &wgpu::Instance,
         device_id_filter: Option<u32>,
         surface: &wgpu::Surface<'_>,
+        config: &WgpuSurfaceConfig,
         compositor_gpu: Option<&CompositorGpuHint>,
         admitted: Adapters,
     ) -> anyhow::Result<(
@@ -557,7 +563,7 @@ impl WgpuContext {
 
             log::info!("Testing adapter: {} ({:?})...", info.name, info.backend);
 
-            match Self::try_adapter_with_surface(&adapter, surface).await {
+            match Self::try_adapter_with_surface(&adapter, surface, config).await {
                 Ok((device, queue, dual_source_blending, color_atlas_texture_format)) => {
                     log::info!(
                         "Selected GPU (passed configuration test): {} ({:?})",
@@ -645,6 +651,7 @@ impl WgpuContext {
     async fn try_adapter_with_surface(
         adapter: &wgpu::Adapter,
         surface: &wgpu::Surface<'_>,
+        config: &WgpuSurfaceConfig,
     ) -> anyhow::Result<(wgpu::Device, wgpu::Queue, bool, TextureFormat)> {
         let caps = surface.get_capabilities(adapter);
         if caps.formats.is_empty() {
@@ -656,21 +663,13 @@ impl WgpuContext {
 
         let (device, queue, dual_source_blending, color_atlas_texture_format) =
             Self::create_device(adapter).await?;
+        // Test with the configuration the renderer will use, so that it doesn't need to
+        // configure the surface a second time.
+        let (surface_config, _, _) =
+            WgpuRenderer::surface_configuration(surface, adapter, &device, config)?;
         let error_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
 
-        let test_config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: caps.formats[0],
-            color_space: wgpu::SurfaceColorSpace::Auto,
-            width: 64,
-            height: 64,
-            present_mode: wgpu::PresentMode::Fifo,
-            desired_maximum_frame_latency: 2,
-            alpha_mode: caps.alpha_modes[0],
-            view_formats: vec![],
-        };
-
-        surface.configure(&device, &test_config);
+        surface.configure(&device, &surface_config);
 
         let error = error_scope.pop().await;
         if let Some(e) = error {
