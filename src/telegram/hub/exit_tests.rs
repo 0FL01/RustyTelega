@@ -59,10 +59,6 @@ extern "C" fn teardown() {
     unsafe { libc::_exit(TEARDOWN_RAN) }
 }
 
-#[expect(
-    clippy::exit,
-    reason = "the re-executed child test process is the exit under test"
-)]
 fn fake_child_main(mode: &str) -> ! {
     // SAFETY: `teardown` is a plain `extern "C" fn()` that never unwinds.
     unsafe { libc::atexit(teardown) };
@@ -72,7 +68,10 @@ fn fake_child_main(mode: &str) -> ! {
         note_received(&closed(1));
     }
     set_exit_status(QUIT_STATUS);
-    std::process::exit(QUIT_STATUS)
+    // The C runtime's `exit`, as a return from `main` makes: on Windows
+    // `process::exit` is `ExitProcess`, which runs no `atexit` hook.
+    // SAFETY: the child's only other work has ended, and `exit` never returns.
+    unsafe { libc::exit(QUIT_STATUS) }
 }
 
 fn run_child(test: &str, mode: &str) -> std::process::ExitStatus {

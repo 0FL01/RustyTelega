@@ -143,7 +143,9 @@ fn read_available(path: &Path) -> Volume {
 fn read_available(path: &Path) -> Volume {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
-    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    // The call takes folders only, where `statvfs` takes any path.
+    let folder = path.parent().filter(|_| path.is_file()).unwrap_or(path);
+    let wide: Vec<u16> = folder.as_os_str().encode_wide().chain(Some(0)).collect();
     let mut available = 0u64;
     let mut total = 0u64;
     // SAFETY: `wide` is NUL-terminated and outlives the call, both out

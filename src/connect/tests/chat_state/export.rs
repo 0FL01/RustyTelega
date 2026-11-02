@@ -432,7 +432,8 @@ fn an_export_leaves_a_file_the_open_chat_shows_until_the_chat_closes() {
     let dir = crate::scratch::unique_dir("quill-export-finished");
     let photo = dir.join("photo.jpg");
     std::fs::write(&photo, b"jpeg").unwrap();
-    let photo = photo.to_string_lossy();
+    // Goes into the JSON text of a file, where a Windows `\` needs escaping.
+    let photo = photo.to_string_lossy().replace('\\', "\\\\");
     let one_download = Sent {
         deletes: 0,
         downloads: 1,
