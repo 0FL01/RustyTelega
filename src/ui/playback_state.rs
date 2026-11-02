@@ -86,9 +86,8 @@ pub(crate) struct PlaybackUi {
     /// with the history row (and its animation layer) that draws it.
     pub(super) gif: Option<std::sync::Arc<super::gif_clip::GifClip>>,
     pub(super) gif_started_at: Option<Instant>,
-    /// The GIF decodes running, by message, and their cancel flags (set
-    /// when playback stops; one decode per GIF at a time).
-    pub(super) gif_decodes: HashMap<MessageId, std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// The GIF decodes running, by message (one per GIF at a time).
+    pub(super) gif_decodes: HashMap<MessageId, GifDecode>,
     /// A linked `?t=` media timestamp waiting for its message to load
     /// (chat, message, seconds, when to give up).
     pub(super) pending_media_seek: Option<(ChatId, quill::ids::MessageId, i32, std::time::Instant)>,
@@ -197,6 +196,15 @@ impl PlaybackUi {
             error: None,
         }
     }
+}
+
+/// A GIF decode running for a message.
+pub(crate) struct GifDecode {
+    /// Set when playback stops; the decode then ends before its next frame.
+    pub(super) cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// The clip, once its first picture is in: a replay while the rest
+    /// still decodes plays it at once.
+    pub(super) first: Option<std::sync::Arc<super::gif_clip::GifClip>>,
 }
 
 #[cfg(test)]

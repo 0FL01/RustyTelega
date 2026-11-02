@@ -20,12 +20,14 @@
 #![deny(clippy::indexing_slicing)]
 
 mod bgra;
+mod clock;
 mod decode_loop;
 mod ffi;
 mod nv12;
 mod present;
 
-pub use bgra::{BgraPool, rotate_bgra};
+pub use bgra::{BGRA_KEPT, BgraPool, rotate_bgra};
+pub use clock::Clock;
 pub use nv12::{PixelOutput, Pixels, YuvColor, YuvMatrix, nv12_len, nv12_to_bgra, pack_nv12};
 
 use std::collections::VecDeque;
@@ -50,6 +52,10 @@ pub const SYNC_TOLERANCE: f64 = 0.04;
 /// A gap in the sound's timestamps longer than this plays as silence, so
 /// the sound after it plays at its time (shorter ones are rounding).
 const SOUND_GAP_MIN: f64 = 0.005;
+/// A gap longer than this is a broken timestamp, not silence: the sound
+/// after it plays at once instead of after hours of silence that would
+/// fill the sound queue and stall the pictures.
+const SOUND_GAP_MAX: f64 = 5.0;
 /// A picture is due this much before its time (half a 60 Hz refresh), so
 /// it isn't held a whole refresh for rounding.
 const DUE_SLACK: f64 = 0.008;
@@ -300,95 +306,6 @@ pub trait Demuxer: Send {
     fn set_output(&mut self, _output: PixelOutput) {}
 }
 
-/// A wall clock that can be paused, seeked and sped up. It holds still
-/// (`held`) after a seek until the first picture is shown, so decoding the
-/// first frame doesn't eat into playback.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Clock {
-    base: f64,
-    anchor: Option<Instant>,
-    rate: f64,
-    playing: bool,
-    held: bool,
-}
-
-impl Clock {
-    pub fn new() -> Self {
-        Self {
-            base: 0.0,
-            anchor: None,
-            rate: 1.0,
-            playing: false,
-            held: true,
-        }
-    }
-
-    pub fn position(&self, now: Instant) -> f64 {
-        match self.anchor {
-            Some(anchor) if self.playing && !self.held => {
-                self.base + now.saturating_duration_since(anchor).as_secs_f64() * self.rate
-            }
-            _ => self.base,
-        }
-    }
-
-    fn rebase(&mut self, now: Instant) {
-        self.base = self.position(now);
-        self.anchor = Some(now);
-    }
-
-    pub fn play(&mut self, now: Instant) {
-        self.rebase(now);
-        self.playing = true;
-    }
-
-    pub fn pause(&mut self, now: Instant) {
-        self.rebase(now);
-        self.playing = false;
-    }
-
-    pub fn is_playing(&self) -> bool {
-        self.playing
-    }
-
-    /// Jump to `secs` and hold there until [`Clock::release`].
-    pub fn seek(&mut self, secs: f64, now: Instant) {
-        self.base = secs.max(0.0);
-        self.anchor = Some(now);
-        self.held = true;
-    }
-
-    /// Follow an external clock (the sound): jump without holding.
-    pub fn follow(&mut self, secs: f64, now: Instant) {
-        self.base = secs.max(0.0);
-        self.anchor = Some(now);
-        self.held = false;
-    }
-
-    /// The first picture after a seek is up: time starts running.
-    pub fn release(&mut self, now: Instant) {
-        if self.held {
-            self.anchor = Some(now);
-            self.held = false;
-        }
-    }
-
-    pub fn set_rate(&mut self, rate: f64, now: Instant) {
-        self.rebase(now);
-        self.rate = if rate.is_finite() && rate > 0.0 {
-            rate
-        } else {
-            1.0
-        };
-    }
-}
-
-impl Default for Clock {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Pop every picture due at `position` from the front of `queue` and
 /// return the newest of them (older due ones are dropped: they're late).
 /// With `first`, the front picture is taken even if it isn't due yet.
@@ -423,6 +340,9 @@ struct AudioShared {
     queue: Mutex<AudioQueue>,
     /// Bumped by every seek: the output drops what it held.
     generation: AtomicU64,
+    /// Where the sound of the current generation starts (f64 bits): the
+    /// seek target, 0 at open. Stored before `generation` is bumped.
+    origin: AtomicU64,
     /// Seqlock-style: the position of the next sample the output will
     /// play (f64 bits), tagged with the generation it belongs to.
     played: AtomicU64,
@@ -458,6 +378,7 @@ impl AudioShared {
         let mut queue = lock(&self.queue);
         queue.chunks.clear();
         queue.buffered = 0;
+        self.origin.store(secs.to_bits(), Ordering::Release);
         let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
         self.played.store(secs.to_bits(), Ordering::Release);
         self.played_generation.store(generation, Ordering::Release);
@@ -498,7 +419,10 @@ pub struct AudioTap {
     at: usize,
     chunk_pts: f64,
     /// Where the sound played so far ends, since the last seek.
-    end_pts: Option<f64>,
+    end_pts: f64,
+    /// Taken off the chunks' timestamps since a broken one, so the sound
+    /// stays on the pictures' clock.
+    pts_shift: f64,
     /// Silent samples owed before `chunk`, for a gap in the sound.
     gap: usize,
     gap_at: usize,
@@ -528,7 +452,9 @@ impl AudioTap {
             self.generation = generation;
             self.chunk.clear();
             self.at = 0;
-            self.end_pts = None;
+            let origin = f64::from_bits(self.shared.origin.load(Ordering::Acquire));
+            self.end_pts = origin;
+            self.pts_shift = 0.0;
             self.gap = 0;
         }
         if self.gap_at < self.gap {
@@ -584,16 +510,25 @@ impl AudioTap {
     fn start_chunk(&mut self, chunk: AudioChunk) {
         let channels = usize::from(self.channels());
         let rate = f64::from(self.sample_rate());
-        let gap = self.end_pts.map_or(0.0, |end| chunk.pts - end);
-        self.gap = if gap > SOUND_GAP_MIN {
-            (gap * rate).round() as usize * channels
+        let mut pts = chunk.pts - self.pts_shift;
+        let gap = pts - self.end_pts;
+        if !gap.is_finite() || gap.abs() > SOUND_GAP_MAX {
+            // A broken timestamp: the sound goes on where it was, and so do
+            // the chunks stamped after it.
+            if chunk.pts.is_finite() {
+                self.pts_shift = chunk.pts - self.end_pts;
+            }
+            pts = self.end_pts;
+        }
+        self.gap = if gap > SOUND_GAP_MIN && gap <= SOUND_GAP_MAX {
+            ((gap * rate).round() as usize).saturating_mul(channels)
         } else {
             0
         };
         self.gap_at = 0;
         let frames = chunk.samples.len() / channels;
-        self.end_pts = Some(chunk.pts + frames as f64 / rate);
-        self.chunk_pts = chunk.pts;
+        self.end_pts = pts + frames as f64 / rate;
+        self.chunk_pts = pts;
         self.chunk = chunk.samples;
         self.at = 0;
     }
@@ -631,6 +566,9 @@ impl Drop for AudioTap {
     fn drop(&mut self) {
         self.shared.detached.store(true, Ordering::Relaxed);
         lock(&self.shared.queue).chunks.clear();
+        // Through the state lock, as in `next_sample`: a decode thread that
+        // saw the sound attached is then already waiting, and gets the wake.
+        drop(lock(&self.wake.state));
         self.wake.wake.notify_one();
     }
 }
@@ -940,10 +878,22 @@ impl Player {
         }
         // A clip nobody paints keeps its last picture queued; once the
         // clock has passed it, it would only be shown late.
+        // Held for a first picture after a seek that nobody paints, while
+        // the sound plays on past it: the decode thread already paces the
+        // pictures on the sound (`paint_floor`), so the clock follows it.
+        let clock = self.clock();
+        if clock.held
+            && clock.is_playing()
+            && let Some(heard) = self.heard().filter(|&heard| heard > clock.position(now))
+        {
+            self.with_clock(|clock| clock.follow(heard, now));
+        }
         let position = self.position_at(now);
+        // Running without a picture shown since the seek: released above.
+        let running = !self.first || !self.clock().held;
         let drained = {
             let state = lock(&self.shared.state);
-            let passed = |last: &VideoFrame| !self.first && last.pts <= position + DUE_SLACK;
+            let passed = |last: &VideoFrame| running && last.pts <= position + DUE_SLACK;
             state.eof && state.video.back().is_none_or(passed)
         };
         if !drained {

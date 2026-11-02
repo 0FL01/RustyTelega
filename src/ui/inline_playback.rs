@@ -9,6 +9,7 @@ use super::inline_players::Demand;
 use super::inline_video::InlineTile;
 use super::message_media::MediaFrameKind;
 use super::play_intent::{PlayKind, PlayTarget};
+use super::playback_state::GifDecode;
 use crate::ui::status_note::StatusNote;
 use gpui_kit::*;
 use quill::ids::{FileId, MessageId};
@@ -90,8 +91,8 @@ impl QuillApp {
 
     pub(super) fn stop_animation_playback(&mut self) {
         // A decode still running stops before its next frame.
-        for cancel in self.playback.gif_decodes.values() {
-            cancel.store(true, Ordering::Relaxed);
+        for decode in self.playback.gif_decodes.values() {
+            decode.cancel.store(true, Ordering::Relaxed);
         }
         self.playback.playing_animation = None;
         // The clip hands its pictures to the atlas sweeper when it drops.
@@ -180,19 +181,29 @@ impl QuillApp {
     /// Decode the GIF off the UI thread. One decode per GIF: one still
     /// running (stopped, then started again before it saw the stop) is
     /// taken back instead of starting a second.
-    fn spawn_gif_decode(
+    pub(super) fn spawn_gif_decode(
         &mut self,
         message_id: MessageId,
         file_id: FileId,
         path: PathBuf,
         cx: &mut Context<Self>,
     ) {
-        if let Some(cancel) = self.playback.gif_decodes.get(&message_id) {
-            cancel.store(false, Ordering::Relaxed);
+        if let Some(decode) = self.playback.gif_decodes.get(&message_id) {
+            decode.cancel.store(false, Ordering::Relaxed);
+            // Its first picture already came: play from it again now.
+            if let Some(clip) = decode.first.clone() {
+                self.gif_started(message_id, clip, cx);
+            }
             return;
         }
         let cancel = Arc::new(AtomicBool::new(false));
-        self.playback.gif_decodes.insert(message_id, cancel.clone());
+        self.playback.gif_decodes.insert(
+            message_id,
+            GifDecode {
+                cancel: cancel.clone(),
+                first: None,
+            },
+        );
         let max_edge = self.gif_decode_edge(message_id, cx);
         Self::spawn_main(cx, async move |this, cx| {
             let (first, first_in) = futures_channel::oneshot::channel();
@@ -203,7 +214,12 @@ impl QuillApp {
             });
             // The first picture plays while the rest decode.
             if let Ok(clip) = first_in.await {
-                let _ = this.update(cx, |this, cx| this.gif_started(message_id, clip, cx));
+                let _ = this.update(cx, |this, cx| {
+                    if let Some(decode) = this.playback.gif_decodes.get_mut(&message_id) {
+                        decode.first = Some(clip.clone());
+                    }
+                    this.gif_started(message_id, clip, cx);
+                });
             }
             let decoded = decode.await;
             let _ = this.update(cx, |this, cx| {

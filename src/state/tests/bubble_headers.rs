@@ -442,3 +442,48 @@ fn footer_tooltip_lists_sent_edited_and_original_dates() {
         Some("@1700000000")
     );
 }
+
+/// The original of a reply, fetched with getRepliedMessage because its
+/// chat's history does not hold it, is edited: the strip follows.
+#[test]
+fn an_edited_original_fetched_for_a_reply_updates_the_strip() {
+    let (mut session, sink, seq) = seeded();
+    apply_json(
+        &mut session,
+        &seq,
+        &sink,
+        &text_message(
+            500,
+            77,
+            "about that",
+            r#","reply_to":{"@type":"messageReplyToMessage","chat_id":-1001,"message_id":3,"quote":null,"checklist_task_id":0,"poll_option_id":"","origin":null,"origin_send_date":0,"content":null}"#,
+        ),
+    );
+    let extra = session.request(
+        RequestPurpose::GetRepliedMessage {
+            chat_id: ChatId(GROUP),
+            message_id: MessageId(500),
+        },
+        Some(ChatId(GROUP)),
+    );
+    apply_json(
+        &mut session,
+        &seq,
+        &sink,
+        &format!(
+            r#"{{"@type":"message","@extra":"{}","id":3,"chat_id":-1001,"sender_id":{{"@type":"messageSenderUser","user_id":31}},"is_outgoing":false,"date":1699990000,"content":{{"@type":"messageText","text":{{"@type":"formattedText","text":"the old question","entities":[]}}}}}}"#,
+            extra.0
+        ),
+    );
+    assert!(!session.histories[&GROUP].messages.contains_key(&3));
+    assert!(session.reply_thumb_file_ids().is_empty());
+    apply_json(
+        &mut session,
+        &seq,
+        &sink,
+        r#"{"@type":"updateMessageContent","chat_id":-1001,"message_id":3,"new_content":{"@type":"messagePhoto","photo":{"@type":"photo","has_stickers":false,"sizes":[{"@type":"photoSize","type":"m","photo":{"@type":"file","id":5,"size":10,"expected_size":10,"local":{"@type":"localFile","path":"","can_be_downloaded":true,"can_be_deleted":false,"is_downloading_active":false,"is_downloading_completed":false,"download_offset":0,"downloaded_prefix_size":0,"downloaded_size":0},"remote":{"@type":"remoteFile","id":"r5","unique_id":"u5","is_uploading_active":false,"is_uploading_completed":true,"uploaded_size":10}},"width":320,"height":240,"progressive_sizes":[]}]},"caption":{"@type":"formattedText","text":"now a photo","entities":[]},"has_spoiler":false,"is_secret":false}}"#,
+    );
+    let header = session.reply_header(&message(&session, 500)).unwrap();
+    assert_ne!(header.text, "the old question");
+    assert_eq!(session.reply_thumb_file_ids(), vec![FileId(5)]);
+}

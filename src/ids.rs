@@ -45,7 +45,7 @@ impl ChatId {
     /// The chat TDLib gives a supergroup or channel
     /// (`DialogId(ChannelId)`: `-1000000000000 - channel_id`).
     pub fn from_supergroup(supergroup_id: i64) -> Self {
-        Self(-1_000_000_000_000_i64.saturating_sub(supergroup_id))
+        Self((-1_000_000_000_000_i64).saturating_sub(supergroup_id))
     }
 }
 
@@ -147,6 +147,15 @@ impl AccountGeneration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_supergroup_chat_id_follows_tdlib() {
+        assert_eq!(
+            ChatId::from_supergroup(1_234_567_890),
+            ChatId(-1_001_234_567_890)
+        );
+        assert_eq!(ChatId::from_supergroup(1), ChatId(-1_000_000_000_001));
+    }
 
     #[test]
     fn message_id_from_server_id_scales() {

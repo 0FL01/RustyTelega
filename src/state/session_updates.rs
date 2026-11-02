@@ -227,11 +227,8 @@ impl Session {
         // in that topic's history when the topic is loaded (the topic view
         // reads `topic_histories`, never the chat's main history). Missing
         // entries are left alone so the paging cursor stays fetch-owned.
-        if let Some(topic_id) = topic_id
-            && let Some(topic_history) =
-                self.threads.topic_histories.get_mut(&(chat_id.0, topic_id))
-        {
-            topic_history.note_live(row);
+        if let Some(topic_id) = topic_id {
+            self.note_live_topic_message(chat_id, topic_id, row);
         }
     }
 
@@ -290,6 +287,16 @@ impl Session {
             {
                 edit(message);
                 found = true;
+            }
+        }
+        // A reply's original fetched with getRepliedMessage, kept beside the
+        // histories: its strip shows the edit too. Not counted as loaded.
+        for target in self.messages.reply_targets.values_mut() {
+            if let ReplyTarget::Loaded(message) = target
+                && message.chat_id == chat_id
+                && message.id == message_id
+            {
+                edit(message);
             }
         }
         found
