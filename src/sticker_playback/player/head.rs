@@ -136,6 +136,9 @@ impl PlayHead {
         display_hz: f64,
     ) -> Option<Pick> {
         if self.started {
+            // A paint can read an earlier time than the last one: time
+            // counted once must not be counted again.
+            let now = self.last.map_or(now, |last| last.max(now));
             if let Some(last) = self.last {
                 let gap = now.saturating_duration_since(last);
                 if gap <= PAUSE_GAP {

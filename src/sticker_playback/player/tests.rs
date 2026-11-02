@@ -968,3 +968,20 @@ fn video_stickers_open_when_no_opener_thread_starts() {
     );
     assert!(engine.info(&key).is_some(), "{:?}", engine.state(&key));
 }
+
+#[test]
+fn a_head_never_counts_time_twice_when_a_paint_reads_earlier() {
+    let tl = timeline(60, 60.0, 1);
+    let t0 = Instant::now();
+    let ms_f = |n: f64| Duration::from_secs_f64(n / 1000.0);
+    let mut head = PlayHead::default();
+    head.start(t0);
+    head.advance(t0 + ms_f(16.7), PlayMode::Loop, tl, false, 120.0);
+    head.advance(t0, PlayMode::Loop, tl, false, 120.0);
+    head.advance(t0 + ms_f(33.3), PlayMode::Loop, tl, false, 120.0);
+    assert!(
+        head.pos() <= ms_f(33.4),
+        "played {:?} in 33.3 ms",
+        head.pos()
+    );
+}
