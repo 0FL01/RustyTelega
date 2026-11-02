@@ -75,7 +75,7 @@ impl QuillApp {
                     }),
             );
         let section = section.child(self.setting_spot(&["data.download_folder"], folder, cx));
-        let section = section.child(
+        section.child(
             self.setting_spot(
                 &["data.ask_where_to_save"],
                 div()
@@ -110,8 +110,7 @@ impl QuillApp {
                     ),
                 cx,
             ),
-        );
-        section
+        )
     }
 
     /// The folder picker (the native directory dialog on macOS, Windows
