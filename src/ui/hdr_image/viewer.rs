@@ -62,7 +62,8 @@ pub(crate) struct HdrViewer {
     slot: Slot,
     /// The window's layer is in extended-range mode.
     edr_on: bool,
-    /// The renderer could not draw in extended range and left it, for good.
+    /// The renderer could not draw in extended range and left it. For good
+    /// on macOS; on Windows the failure goes when HDR output is released.
     edr_lost: bool,
     /// The headroom last attached to the frame.
     headroom: f32,
@@ -292,6 +293,9 @@ impl QuillApp {
         if want != hdr.edr_on {
             super::set_window_edr(window, want);
             hdr.edr_on = want;
+            if !want && cfg!(windows) {
+                hdr.edr_lost = false;
+            }
         }
     }
 }
