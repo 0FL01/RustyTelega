@@ -38,6 +38,9 @@ fn new_app(cx: &mut TestAppContext) -> (Entity<QuillApp>, VisualTestContext) {
         }
     });
     vcx.run_until_parked();
+    app.update(&mut vcx, |app, _| {
+        app.chat_prefs.highlight_emoji_words = true
+    });
     vcx.update(|window, cx| {
         app.update(cx, |app, cx| {
             app.composer.update(cx, |input, cx| input.focus(window, cx));
@@ -262,6 +265,18 @@ fn escape_stops_highlighting_that_word(cx: &mut TestAppContext) {
     let now = lit(&app, vcx);
     assert!(!now.contains(&"pizza".to_string()));
     assert!(now.contains(&"cake".to_string()));
+}
+
+#[gpui_kit::test]
+fn the_first_word_lights_after_a_space(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    vcx.simulate_input("pizza");
+    frame(vcx);
+    assert!(lit(&app, vcx).is_empty());
+    vcx.simulate_input(" ");
+    frame(vcx);
+    assert_eq!(lit(&app, vcx), ["pizza"]);
 }
 
 #[gpui_kit::test]

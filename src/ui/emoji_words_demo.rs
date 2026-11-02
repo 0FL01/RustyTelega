@@ -62,6 +62,7 @@ fn sticker(id: i64) -> StickerItem {
 
 register_demos![
     DemoSpec::chat_list("ready-emoji-word-bar").setup(|app, window, cx| {
+        app.chat_prefs.highlight_emoji_words = true;
         answer_keywords(app);
         draft(
             app,

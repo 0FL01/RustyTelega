@@ -50,20 +50,14 @@ pub const MAX_CANDIDATES: usize = 48;
 /// not dropped by [`skip_exact_keyword`], not touching `selection`, not overlapping
 /// `skip` (code, links, mentions), not part of a tag, mention, command,
 /// `:query`, link or path. At most [`MAX_CANDIDATES`], the nearest to the
-/// selection. Also the total word count, for the density limit.
-pub fn candidates(
-    text: &str,
-    selection: Range<usize>,
-    skip: &[Range<usize>],
-) -> (Vec<Candidate>, usize) {
+/// selection.
+pub fn candidates(text: &str, selection: Range<usize>, skip: &[Range<usize>]) -> Vec<Candidate> {
     let scan = floor_boundary(text, SCAN_BYTES);
     let head = text.get(..scan).unwrap_or_default();
     let tokens = tokens(head);
     let mut token = tokens.iter().peekable();
     let mut out = Vec::new();
-    let mut words = 0;
     for range in word_ranges(head) {
-        words += 1;
         while token.next_if(|t| t.range.end < range.end).is_some() {}
         let marked = token.peek().is_some_and(|t| t.marked);
         let Some(word) = head.get(range.clone()) else {
@@ -97,21 +91,16 @@ pub fn candidates(
         out.truncate(MAX_CANDIDATES);
         out.sort_by_key(|c| c.range.start);
     }
-    (out, words)
+    out
 }
 
 /// The highlights among `candidates`, given the keyword answers TDLib has
 /// sent (`answer` is `None` while one is on its way): every word that is a
-/// whole keyword. A lone word gets none: the composer already offers its
-/// emoji above the field.
+/// whole keyword.
 pub fn pick<'a>(
     candidates: &[Candidate],
-    words: usize,
     answer: impl Fn(&str) -> Option<&'a [EmojiKeyword]>,
 ) -> Vec<Highlight> {
-    if words < 2 {
-        return Vec::new();
-    }
     candidates
         .iter()
         .filter_map(|c| {
@@ -226,7 +215,6 @@ mod tests {
 
     fn words(text: &str, caret: usize) -> Vec<&str> {
         candidates(text, caret..caret, &[])
-            .0
             .iter()
             .map(|c| &text[c.range.clone()])
             .collect()
@@ -257,7 +245,7 @@ mod tests {
             ["cafe\u{301}", "time"]
         );
         // A selection covers every word it touches, not only its end.
-        let (found, _) = candidates("pizza and cake ", 0..9, &[]);
+        let found = candidates("pizza and cake ", 0..9, &[]);
         let picked: Vec<&str> = found.iter().map(|c| c.normalized.as_str()).collect();
         assert_eq!(picked, ["cake"]);
     }
@@ -266,8 +254,7 @@ mod tests {
     fn a_long_draft_looks_only_near_the_caret() {
         let text = "pizza ".repeat(200);
         let caret = text.len();
-        let (found, count) = candidates(&text, caret..caret, &[]);
-        assert_eq!(count, 200);
+        let found = candidates(&text, caret..caret, &[]);
         assert_eq!(found.len(), MAX_CANDIDATES);
         assert!(
             found
@@ -279,9 +266,8 @@ mod tests {
     #[test]
     fn skipped_spans_hold_no_candidates() {
         let text = "see `pizza` here at pizza.com";
-        let (found, count) = candidates(text, 0..0, &[4..11]);
+        let found = candidates(text, 0..0, &[4..11]);
         assert!(found.iter().all(|c| &text[c.range.clone()] != "pizza"));
-        assert_eq!(count, 6);
     }
 
     #[test]
@@ -302,32 +288,31 @@ mod tests {
             _ => Some(&[][..]),
         };
         let text = "ok that pizza was funny ";
-        let (found, count) = candidates(text, text.len()..text.len(), &[]);
-        let lit: Vec<&str> = pick(&found, count, lookup)
+        let found = candidates(text, text.len()..text.len(), &[]);
+        let lit: Vec<&str> = pick(&found, lookup)
             .iter()
             .map(|h| &text[h.range.clone()])
             .collect();
         assert_eq!(lit, ["ok", "pizza", "funny"]);
         // A word twice lights twice.
         let text = "pizza or pizza ";
-        let (found, count) = candidates(text, text.len()..text.len(), &[]);
-        assert_eq!(pick(&found, count, lookup).len(), 2);
+        let found = candidates(text, text.len()..text.len(), &[]);
+        assert_eq!(pick(&found, lookup).len(), 2);
     }
 
     #[test]
-    fn a_lone_word_or_a_pending_answer_shows_nothing() {
+    fn the_first_word_lights_once_finished_and_a_pending_answer_shows_nothing() {
         let one = [kw("🍕", "pizza")];
-        let (found, count) = candidates("pizza ", 6..6, &[]);
-        assert!(pick(&found, count, |_| Some(&one[..])).is_empty());
-        let (found, count) = candidates("hot pizza ", 10..10, &[]);
-        assert!(pick(&found, count, |_| None).is_empty());
-        assert_eq!(pick(&found, count, |_| Some(&one[..])).len(), 1);
+        assert!(candidates("pizza", 5..5, &[]).is_empty());
+        let found = candidates("pizza ", 6..6, &[]);
+        assert!(pick(&found, |_| None).is_empty());
+        assert_eq!(pick(&found, |_| Some(&one[..])).len(), 1);
     }
 
     #[test]
     fn a_huge_draft_is_scanned_only_at_its_head() {
         let text = "é".repeat(SCAN_BYTES) + " pizza";
-        let (found, _) = candidates(&text, 0..0, &[]);
+        let found = candidates(&text, 0..0, &[]);
         assert!(found.iter().all(|c| c.normalized != "pizza"));
     }
 }

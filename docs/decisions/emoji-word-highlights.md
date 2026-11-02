@@ -3,8 +3,15 @@
 Idan asked for this on 2026-10-29. The composer gives a soft highlight to
 every finished word that has an emoji. Pointing at one shows the bar `:word`
 would show, and a click swaps the word for the emoji. Settings, Chat, Emoji
-has a toggle, "Highlight words with emoji". It is on by default, and it only
+has a toggle, "Highlight words with emoji". It is off by default, and it only
 works while "Suggest emoji replacements" is on.
+
+It shipped on by default, and Idan changed that to off on 2026-11-02. Chat
+prefs are saved whole, so the old `highlight_emoji_words` key held `true` for
+anyone who had changed any chat setting, and a stored `true` could not be told
+from a choice. The setting now lives under `emoji_word_highlights` and the old
+key is ignored, so everyone starts from off once. A person who turned it off
+and back on before this also starts from off.
 
 Telegram Desktop has nothing like it. Quill does not invent features that
 tdesktop lacks unless Idan asks for them, and he asked for this one.
@@ -50,9 +57,11 @@ matches lights up, and the user turns off the ones they do not want.
   drops (most one- and two-letter words; "ok" stays). A decomposed accent
   ("cafe" plus U+0301) stays part of its word.
 - **A whole emoji keyword.** Prefix matches ("pizz") do not light.
-- **Every match.** There is no density limit and no common-word list. A
-  message of one word gets none, because the bar above the field already
-  covers it.
+- **Every match.** There is no density limit and no common-word list. The
+  first word counts too: it lights as soon as a space finishes it. An early
+  rule skipped one-word drafts on the idea that the bar above the field
+  covered them, but that bar leaves with the space, so "dog " showed nothing
+  (Idan, 2026-11-02).
 - **The user decides.** The word's right-click menu has "Suggest Emoji"
   (opens the bar for any word, lit or not, with `:word`'s prefix matches),
   "Don't Suggest Emoji for This Word" (the word joins a list in Settings,
@@ -115,8 +124,8 @@ just above the field and as wide as it.
 ## Tests
 
 - `emoji_words` unit tests cover candidates (caret, short words, tags,
-  mentions, paths, scripts), skipped spans, every match lighting, a lone
-  word, pending answers and the scan limit.
+  mentions, paths, scripts), skipped spans, every match lighting, the
+  first word, pending answers and the scan limit.
 - `emoji_bar` unit tests cover the custom emoji that follow the standard
   ones and their cap. `emoji_words_ui` unit tests cover the band between a
   word and its bar.

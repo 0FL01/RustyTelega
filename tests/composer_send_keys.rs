@@ -128,3 +128,32 @@ fn chat_prefs_roundtrip_and_missing_file() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn emoji_word_highlights_start_off_and_a_later_choice_sticks() {
+    assert!(!ChatPrefs::default().highlight_emoji_words);
+
+    let dir = std::env::temp_dir().join(format!(
+        "quill-emoji-highlight-prefs-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let paths = AccountPaths::for_root(&dir, &AccountKey::primary());
+    std::fs::create_dir_all(&paths.root).unwrap();
+
+    // A file from when it was on by default: every save wrote `true`.
+    std::fs::write(
+        paths.root.join("chat_prefs.json"),
+        r#"{"highlight_emoji_words":true,"suggest_emoji":false}"#,
+    )
+    .unwrap();
+    let mut prefs = load_chat_prefs(&paths);
+    assert!(!prefs.highlight_emoji_words);
+    assert!(!prefs.suggest_emoji, "the other prefs stay as saved");
+
+    prefs.highlight_emoji_words = true;
+    save_chat_prefs(&paths, &prefs);
+    assert!(load_chat_prefs(&paths).highlight_emoji_words);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
