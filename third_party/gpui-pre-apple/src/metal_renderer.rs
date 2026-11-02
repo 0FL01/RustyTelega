@@ -1798,8 +1798,7 @@ impl MetalRenderer {
 /// That code only touches the layer when the viewer's state changes, so the
 /// layer stays 8-bit after this.
 fn leave_extended_range(layer: &CAMetalLayer) {
-    // SAFETY: BGRA8Unorm is a valid layer format.
-    unsafe { layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm) };
+    layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
     layer.setWantsExtendedDynamicRangeContent(false);
     layer.setColorspace(None);
 }
@@ -2540,7 +2539,7 @@ mod tests {
         let layer = renderer.layer().unwrap();
         layer.setDrawableSize(CGSize::new(16.0, 16.0));
         layer.setFramebufferOnly(false);
-        unsafe { layer.setPixelFormat(MTLPixelFormat::RGBA16Float) };
+        layer.setPixelFormat(MTLPixelFormat::RGBA16Float);
         layer.setWantsExtendedDynamicRangeContent(true);
         renderer
     }
@@ -2579,7 +2578,7 @@ mod tests {
         // A rebuild would work now, and would keep the layer on float.
         renderer.library = library;
         let layer = renderer.layer().unwrap();
-        unsafe { layer.setPixelFormat(MTLPixelFormat::RGBA16Float) };
+        layer.setPixelFormat(MTLPixelFormat::RGBA16Float);
         renderer.draw(&empty_scene());
 
         assert_eq!(

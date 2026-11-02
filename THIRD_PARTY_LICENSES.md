@@ -12,9 +12,9 @@ compiled into it (ThorVG with RapidJSON) and bundled data files are listed in
 
 ## Overview
 
-- MIT License: 680
+- MIT License: 678
 - Apache License 2.0: 42
-- Unicode License v3: 24
+- Unicode License v3: 26
 - ISC License: 22
 - BSD 3-Clause "New" or "Revised" License: 16
 - Mozilla Public License 2.0: 16
@@ -1439,8 +1439,8 @@ Apache License
 
 Used by:
 - [dunce 1.0.5](https://gitlab.com/kornelski/dunce)
-- [gpui-kit-assets 0.8.1](https://github.com/longbridge/gpui-kit)
-- [gpui-kit 0.8.1](https://github.com/longbridge/gpui-kit)
+- [gpui-kit-assets 0.9.0](https://github.com/longbridge/gpui-kit)
+- [gpui-kit 0.9.0](https://github.com/longbridge/gpui-kit)
 - [interprocess 2.4.7](https://github.com/kotauskas/interprocess)
 - [ryu 1.0.23](https://github.com/dtolnay/ryu)
 - [spirv 0.4.0+sdk-1.4.341.0](https://github.com/gfx-rs/rspirv)
@@ -1525,24 +1525,24 @@ limitations under the License.
 ### Apache License 2.0
 
 Used by:
-- [gpui-pre 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-apple 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-linux 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-macos 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-wgpu 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-windows 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-collections 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-derive-refineable 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-http-client 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-macros 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-platform 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-refineable 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-scheduler 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-shared-string 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-sum-tree 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-util 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-ztracing-macro 0.3.10](https://github.com/zed-industries/zed)
-- [gpui-pre-ztracing 0.3.10](https://github.com/zed-industries/zed)
+- [gpui-pre 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-apple 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-linux 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-macos 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-wgpu 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-windows 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-collections 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-derive-refineable 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-http-client 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-macros 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-platform 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-refineable 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-scheduler 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-shared-string 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-sum-tree 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-util 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-ztracing-macro 0.3.11](https://github.com/zed-industries/zed)
+- [gpui-pre-ztracing 0.3.11](https://github.com/zed-industries/zed)
 
 ````text
 Copyright 2022 - 2025 Zed Industries, Inc.
@@ -1773,9 +1773,9 @@ Apache License
 ### Apache License 2.0
 
 Used by:
-- [gpui-base 0.8.1](https://github.com/longbridge/gpui-kit)
-- [gpui-component 0.8.1](https://github.com/longbridge/gpui-kit)
-- [gpui-component-macros 0.8.1](https://crates.io/crates/gpui-component-macros)
+- [gpui-base 0.9.0](https://github.com/longbridge/gpui-kit)
+- [gpui-component 0.9.0](https://github.com/longbridge/gpui-kit)
+- [gpui-component-macros 0.9.0](https://crates.io/crates/gpui-component-macros)
 
 ````text
 Copyright 2024 - 2026 Longbridge <https://longbridge.com>
@@ -2065,7 +2065,7 @@ https://datatracker.ietf.org/ipr/1526/
 ### BSD 3-Clause "New" or "Revised" License
 
 Used by:
-- [encoding_rs 0.8.42](https://github.com/hsivonen/encoding_rs)
+- [encoding_rs 0.8.44](https://github.com/hsivonen/encoding_rs)
 
 ````text
 // Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
@@ -2363,7 +2363,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 ### BSD 3-Clause "New" or "Revised" License
 
 Used by:
-- [encoding_rs 0.8.42](https://github.com/hsivonen/encoding_rs)
+- [encoding_rs 0.8.44](https://github.com/hsivonen/encoding_rs)
 
 ````text
 Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
@@ -4972,7 +4972,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- [metal 0.33.0](https://github.com/gfx-rs/metal-rs)
 - [rayon-core 1.13.0](https://github.com/rayon-rs/rayon)
 - [rayon 1.12.0](https://github.com/rayon-rs/rayon)
 
@@ -5348,7 +5347,7 @@ Used by:
 - [bitflags 1.3.2](https://github.com/bitflags/bitflags)
 - [bitflags 2.13.2](https://github.com/bitflags/bitflags)
 - [glob 0.3.4](https://github.com/rust-lang/glob)
-- [log 0.4.34](https://github.com/rust-lang/log)
+- [log 0.4.35](https://github.com/rust-lang/log)
 - [num-bigint-dig 0.9.1](https://github.com/dignifiedquire/num-bigint)
 - [num-bigint 0.4.8](https://github.com/rust-num/num-bigint)
 - [num-complex 0.4.6](https://github.com/rust-num/num-complex)
@@ -7674,7 +7673,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- [aes 0.9.3](https://github.com/RustCrypto/block-ciphers)
+- [aes 0.9.4](https://github.com/RustCrypto/block-ciphers)
 
 ````text
 Copyright (c) 2018-2024 The RustCrypto Project Developers
@@ -8466,7 +8465,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- [yazi 0.2.1](https://github.com/dfrg/yazi)
+- [yazi 0.2.2](https://github.com/dfrg/yazi)
 
 ````text
 Copyright (c) 2020 Chad Brokaw
@@ -9469,7 +9468,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- [ctutils 0.4.6](https://github.com/RustCrypto/utils)
+- [ctutils 0.4.8](https://github.com/RustCrypto/utils)
 
 ````text
 Copyright (c) 2025-2026 The RustCrypto Project Developers
@@ -9572,7 +9571,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- [zcheapstr 1.1.0](https://github.com/z-galaxy/zcheapstr/)
+- [zcheapstr 1.2.0](https://github.com/z-galaxy/zcheapstr/)
 
 ````text
 Copyright (c) 2026 Zeeshan Ali Khan & zcheapstr contributors
@@ -10103,7 +10102,7 @@ SOFTWARE.
 ### MIT License
 
 Used by:
-- [ureq-proto 0.6.5](https://github.com/algesten/ureq-proto)
+- [ureq-proto 0.7.1](https://github.com/algesten/ureq-proto)
 
 ````text
 Copyright 2022 Martin Algesten
@@ -10155,9 +10154,10 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- [encoding_rs 0.8.42](https://github.com/hsivonen/encoding_rs)
+- [encoding_rs 0.8.44](https://github.com/hsivonen/encoding_rs)
 - [multiversion_no_op 1.0.0](https://github.com/hsivonen/multiversion_no_op)
-- [utf8_iter 1.0.4](https://github.com/hsivonen/utf8_iter)
+- [utf8_iter 1.1.0](https://github.com/hsivonen/utf8_iter)
+- [utf_types 1.0.0](https://github.com/hsivonen/utf_types)
 
 ````text
 Copyright Mozilla Foundation
@@ -10486,7 +10486,7 @@ SOFTWARE.
 ### MIT License
 
 Used by:
-- [crc32fast 1.5.3](https://github.com/srijs/rust-crc32fast)
+- [crc32fast 1.5.4](https://github.com/srijs/rust-crc32fast)
 
 ````text
 MIT License
@@ -10692,7 +10692,7 @@ DEALINGS IN THE SOFTWARE.
 ### MIT License
 
 Used by:
-- [ureq 3.5.0](https://github.com/algesten/ureq)
+- [ureq 3.5.1](https://github.com/algesten/ureq)
 
 ````text
 MIT License
@@ -11554,7 +11554,6 @@ Used by:
 - [accesskit_windows 0.34.0](https://github.com/AccessKit/accesskit)
 - [anymap3 1.1.0](https://github.com/reivilibre/anymap3)
 - [block2 0.6.2](https://github.com/madsmtm/objc2)
-- [block 0.1.6](http://github.com/SSheldon/rust-block)
 - [brotli-decompressor 5.0.3](https://github.com/dropbox/rust-brotli-decompressor)
 - [chrono 0.4.45](https://github.com/chronotope/chrono)
 - [dasp_sample 0.11.0](https://github.com/rustaudio/sample.git)
@@ -11570,7 +11569,6 @@ Used by:
 - [lyon_tessellation 1.0.23](https://github.com/nical/lyon)
 - [mac-notification-sys 0.6.15](https://github.com/h4llow3En/mac-notification-sys)
 - [mac 0.1.1](https://github.com/reem/rust-mac.git)
-- [malloc_buf 0.0.6](https://github.com/SSheldon/malloc_buf)
 - [objc-sys 0.3.5](https://github.com/madsmtm/objc2)
 - [objc2-app-kit 0.2.2](https://github.com/madsmtm/objc2)
 - [objc2-app-kit 0.3.2](https://github.com/madsmtm/objc2)
@@ -11598,6 +11596,7 @@ Used by:
 - [objc2-quartz-core 0.3.2](https://github.com/madsmtm/objc2)
 - [objc2-screen-capture-kit 0.3.2](https://github.com/madsmtm/objc2)
 - [objc2-security 0.3.2](https://github.com/madsmtm/objc2)
+- [objc2-uniform-type-identifiers 0.3.2](https://github.com/madsmtm/objc2)
 - [objc2-user-notifications 0.3.2](https://github.com/madsmtm/objc2)
 - [objc2 0.5.3](https://github.com/madsmtm/objc2)
 - [objc2 0.6.5](https://github.com/madsmtm/objc2)
@@ -11664,36 +11663,6 @@ LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE A
 EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-````
-
-### MIT License
-
-Used by:
-- [objc 0.2.7](http://github.com/SSheldon/rust-objc)
-
-````text
-MIT License
-
-Copyright (c) Steven Sheldon
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 
 ````
 
@@ -11955,7 +11924,7 @@ SOFTWARE.
 ### MIT License
 
 Used by:
-- [unicode-script 0.5.8](https://github.com/unicode-rs/unicode-script)
+- [unicode-script 0.5.9](https://github.com/unicode-rs/unicode-script)
 
 ````text
 MIT License
@@ -12115,10 +12084,10 @@ Used by:
 - [adler2 2.0.1](https://github.com/oyvindln/adler2)
 - [anyhow 1.0.104](https://github.com/dtolnay/anyhow)
 - [async-channel 2.5.0](https://github.com/smol-rs/async-channel)
-- [async-executor 1.14.0](https://github.com/smol-rs/async-executor)
+- [async-executor 1.14.1](https://github.com/smol-rs/async-executor)
 - [async-fs 2.2.0](https://github.com/smol-rs/async-fs)
 - [async-io 2.6.0](https://github.com/smol-rs/async-io)
-- [async-lock 3.4.2](https://github.com/smol-rs/async-lock)
+- [async-lock 3.5.0](https://github.com/smol-rs/async-lock)
 - [async-net 2.0.0](https://github.com/smol-rs/async-net)
 - [async-process 2.5.0](https://github.com/smol-rs/async-process)
 - [async-signal 0.2.14](https://github.com/smol-rs/async-signal)
@@ -12438,7 +12407,7 @@ SOFTWARE.
 
 Used by:
 - [tracing-core 0.1.36](https://github.com/tokio-rs/tracing)
-- [zip 9.1.3](https://github.com/zip-rs/zip2)
+- [zip 9.2.2](https://github.com/zip-rs/zip2)
 
 ````text
 The MIT License (MIT)
@@ -14519,6 +14488,8 @@ Used by:
 - [icu_properties 2.4.0](https://github.com/unicode-org/icu4x)
 - [icu_properties_data 2.4.0](https://github.com/unicode-org/icu4x)
 - [icu_provider 2.4.0](https://github.com/unicode-org/icu4x)
+- [icu_segmenter 2.4.0](https://github.com/unicode-org/icu4x)
+- [icu_segmenter_data 2.4.0](https://github.com/unicode-org/icu4x)
 - [litemap 0.8.3](https://github.com/unicode-org/icu4x)
 - [potential_utf 0.1.6](https://github.com/unicode-org/icu4x)
 - [tinystr 0.8.5](https://github.com/unicode-org/icu4x)

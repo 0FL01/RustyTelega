@@ -277,15 +277,13 @@ mod tests {
             (true, 0x0d1117, 0x3b1212, 0x4c1818, 0x5f1f1f),
         ] {
             let red = hsla(if dark { 0xf87171ff } else { 0xef4444ff });
-            let mut colors = ThemeColor {
-                background: hsla((bg << 8) | 0xff),
-                danger: red,
-                button_danger_foreground: red,
-                button_danger: hsla((wash << 8) | 0xff),
-                button_danger_hover: hsla((hover << 8) | 0xff),
-                button_danger_active: hsla((active << 8) | 0xff),
-                ..ThemeColor::default()
-            };
+            let mut colors = ThemeColor::default();
+            colors.background = hsla((bg << 8) | 0xff);
+            colors.danger = red;
+            colors.button_danger_foreground = red;
+            colors.button_danger = hsla((wash << 8) | 0xff);
+            colors.button_danger_hover = hsla((hover << 8) | 0xff);
+            colors.button_danger_active = hsla((active << 8) | 0xff);
             super::ensure_danger_aa(&mut colors, dark);
             let label = hsla_to_rgb(colors.button_danger_foreground);
             for fill in [
@@ -304,13 +302,11 @@ mod tests {
     #[test]
     fn danger_colours_reach_aa() {
         for (dark, bg) in [(false, 0xffffffu32), (true, 0x0d1117)] {
-            let mut colors = ThemeColor {
-                background: hsla((bg << 8) | 0xff),
-                danger: hsla(0xef4444ff),
-                button_danger: hsla(0xef4444ff),
-                button_danger_foreground: hsla(0xffffffff),
-                ..ThemeColor::default()
-            };
+            let mut colors = ThemeColor::default();
+            colors.background = hsla((bg << 8) | 0xff);
+            colors.danger = hsla(0xef4444ff);
+            colors.button_danger = hsla(0xef4444ff);
+            colors.button_danger_foreground = hsla(0xffffffff);
             super::ensure_danger_aa(&mut colors, dark);
             let text = hsla_to_rgb(colors.danger);
             assert!(
