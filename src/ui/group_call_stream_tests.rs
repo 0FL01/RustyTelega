@@ -779,5 +779,8 @@ fn a_low_disk_shows_its_bar_in_the_voice_chat_window(cx: &mut TestAppContext) {
         app.apply_disk_reading(Some(quill::disk_guard::FLOORS.warn - 1), cx);
     });
     frames(&mut call);
-    assert!(bar(&mut call), "the warning is in the voice chat window too");
+    assert!(
+        bar(&mut call),
+        "the warning is in the voice chat window too"
+    );
 }

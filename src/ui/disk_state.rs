@@ -45,6 +45,10 @@ pub(crate) struct DiskUi {
     cache_folder: Option<PathBuf>,
     /// The on-screen account's message database, for Manage local storage.
     pub(super) database_bytes: Option<u64>,
+    /// The account on screen since the last switch: `cache_folder` and
+    /// `database_bytes` read for another one are dropped. `None` before
+    /// any switch: the reading's own account is the one on screen.
+    on_screen: Option<quill::ids::AccountKey>,
     main_window: AnyWindowHandle,
     start_refused: bool,
 }
@@ -71,6 +75,7 @@ impl DiskUi {
             full_notices: 0,
             cache_folder: None,
             database_bytes: None,
+            on_screen: None,
             main_window: window.window_handle(),
             start_refused: false,
         }
@@ -130,7 +135,7 @@ fn watch(root: PathBuf, cx: &Context<QuillApp>) {
                 .await;
             device = seen_on.or(device);
             let Ok(wait) = this.update(cx, |this, cx| {
-                (this.disk.cache_folder, this.disk.database_bytes) = account;
+                this.note_account_files(account, cx);
                 this.apply_data_reading(reading, floors, cx)
             }) else {
                 break;
@@ -141,16 +146,27 @@ fn watch(root: PathBuf, cx: &Context<QuillApp>) {
     .detach();
 }
 
+/// What [`account_files`] read, and for which account.
+pub(super) struct AccountFiles {
+    pub(super) account: quill::ids::AccountKey,
+    pub(super) cache_folder: Option<PathBuf>,
+    pub(super) database_bytes: Option<u64>,
+}
+
 /// The on-screen account's cache folder, while it exists, and the size of
 /// its message database.
-fn account_files(root: &std::path::Path) -> (Option<PathBuf>, Option<u64>) {
-    let active = quill::settings::active_account(root);
-    let paths = quill::settings::AccountPaths::for_root(root, &active);
+fn account_files(root: &std::path::Path) -> AccountFiles {
+    let account = quill::settings::active_account(root);
+    let paths = quill::settings::AccountPaths::for_root(root, &account);
     let database = paths
         .database_exists()
         .then(|| quill::disk_guard::database_size(&paths.tdlib_database));
     let files = paths.tdlib_files;
-    (files.is_dir().then_some(files), database)
+    AccountFiles {
+        account,
+        cache_folder: files.is_dir().then_some(files),
+        database_bytes: database,
+    }
 }
 
 /// `QUILL_DEMO_DISK_FREE_MB` stands in for the disk in a capture build. It
@@ -168,6 +184,52 @@ fn demo_reading() -> Option<u64> {
 }
 
 impl QuillApp {
+    /// The cache folder and database size read for an account: kept only
+    /// while that account is on screen, since a read that started before a
+    /// switch can land after it.
+    pub(super) fn note_account_files(&mut self, files: AccountFiles, cx: &mut Context<Self>) {
+        if self
+            .disk
+            .on_screen
+            .as_ref()
+            .is_some_and(|on_screen| *on_screen != files.account)
+        {
+            return;
+        }
+        self.disk.cache_folder = files.cache_folder;
+        self.disk.database_bytes = files.database_bytes;
+        cx.notify();
+    }
+
+    /// The account on screen changed to `account`: the old figures go at
+    /// once (Manage local storage must not show the previous account's
+    /// database), and the new ones are read now instead of at the next
+    /// reading, up to 30 s away.
+    pub(super) fn disk_account_switched(
+        &mut self,
+        account: quill::ids::AccountKey,
+        cx: &mut Context<Self>,
+    ) {
+        self.disk.on_screen = Some(account);
+        self.disk.cache_folder = None;
+        self.disk.database_bytes = None;
+        cx.notify();
+        if cfg!(test) {
+            return;
+        }
+        let Some(root) = quill::settings::safe_app_root() else {
+            return;
+        };
+        QuillApp::spawn_main(cx, async move |this, cx| {
+            let files = cx
+                .background_executor()
+                .spawn(async move { account_files(&root) })
+                .await;
+            let _ = this.update(cx, |this, cx| this.note_account_files(files, cx));
+        })
+        .detach();
+    }
+
     /// A reading with the floors for what the data folders hold now.
     /// Returns how long to wait for the next one.
     pub(super) fn apply_data_reading(

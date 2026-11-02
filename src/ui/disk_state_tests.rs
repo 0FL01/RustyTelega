@@ -491,3 +491,35 @@ fn manage_local_storage_shows_the_message_database_size(cx: &mut TestAppContext)
     vcx.update(|window, cx| window.render_frame(cx));
     assert!(vcx.debug_bounds("storage-database-size").is_some());
 }
+
+#[gpui_kit::test]
+fn a_switch_drops_the_previous_accounts_storage_figures(cx: &mut TestAppContext) {
+    use quill::ids::AccountKey;
+    let (app, mut vcx) = new_app(cx);
+    let files = |account: &AccountKey, bytes: u64| super::AccountFiles {
+        account: account.clone(),
+        cache_folder: None,
+        database_bytes: Some(bytes),
+    };
+    let first = AccountKey::primary();
+    let second = AccountKey("second".into());
+    let bytes = |app: &Entity<QuillApp>, vcx: &mut VisualTestContext| {
+        app.read_with(vcx, |app, _| app.disk.database_bytes)
+    };
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.note_account_files(files(&first, 7 << 20), cx)
+    });
+    assert_eq!(bytes(&app, &mut vcx), Some(7 << 20));
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.disk_account_switched(second.clone(), cx)
+    });
+    assert_eq!(bytes(&app, &mut vcx), None, "not the previous account's");
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.note_account_files(files(&first, 7 << 20), cx)
+    });
+    assert_eq!(bytes(&app, &mut vcx), None, "a read from before the switch");
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.note_account_files(files(&second, 3 << 20), cx)
+    });
+    assert_eq!(bytes(&app, &mut vcx), Some(3 << 20));
+}
