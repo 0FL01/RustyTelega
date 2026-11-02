@@ -154,6 +154,7 @@ impl QuillApp {
                 },
                 move |window, cx| {
                     window.activate_window();
+                    let gone = weak.clone();
                     window.on_window_should_close(cx, move |_, cx| {
                         let _ = weak.update(cx, |app, cx| {
                             app.group_call.window = None;
@@ -167,6 +168,16 @@ impl QuillApp {
                             cx.notify();
                         });
                         true
+                    });
+                    let from = window.window_handle();
+                    super::window_control::when_window_goes(window, cx, move |cx| {
+                        let _ = gone.update(cx, |app, cx| {
+                            if app.group_call.window == Some(from) {
+                                app.group_call.window = None;
+                                app.sync_group_call_large_tile();
+                                cx.notify();
+                            }
+                        });
                     });
                     let view = cx.new(|cx| {
                         let activation_owner = render_owner.downgrade();

@@ -397,6 +397,11 @@ pub(super) fn open_chat_window(
             let _ = weak.update(cx, |this, cx| this.closing(true, cx));
             true
         });
+        // A platform that destroys the window never asks it to close.
+        let gone = view.clone();
+        super::super::window_control::when_window_goes(window, cx, move |cx| {
+            gone.update(cx, |this, cx| this.closing(false, cx));
+        });
         window.activate_window();
         cx.new(|cx| Root::new(view, window, cx))
     });

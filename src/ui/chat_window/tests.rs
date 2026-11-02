@@ -1330,3 +1330,26 @@ fn a_low_disk_shows_its_bar_in_a_chat_window_until_space_returns(cx: &mut TestAp
     cx.run_until_parked();
     assert!(!bar(cx), "and goes once space returns");
 }
+
+#[gpui_kit::test]
+fn a_chat_window_the_platform_destroys_frees_its_chat(cx: &mut TestAppContext) {
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    // A lost renderer: the platform destroys the window without asking it to close.
+    cx.update_window(chat_window, |_, window, _| window.remove_window())
+        .unwrap();
+    cx.run_until_parked();
+    assert!(h.other_windows(cx).is_empty());
+    assert!(
+        h.app.read_with(cx, |app, _| !app.windows.has(OTHER)),
+        "stale chat window entry"
+    );
+    assert!(h.window_chats(cx).is_empty());
+    cx.update_window(h.main, |_, window, cx| {
+        h.app
+            .update(cx, |app, cx| app.open_chat_in_new_window(OTHER, window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(h.other_windows(cx).len(), 1, "asking again opens a window");
+}
