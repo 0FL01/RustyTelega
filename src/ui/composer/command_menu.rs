@@ -15,7 +15,7 @@ impl QuillApp {
         if !caret.is_empty() {
             return None;
         }
-        let text = input.value().to_string();
+        let text = input.value();
         let token = command_menu_trigger(&text, caret.start)?;
         Some((token.range, token.query.to_string()))
     }
@@ -27,7 +27,7 @@ impl QuillApp {
     /// open chat's bot has commands; closes otherwise (non-bot chat, no
     /// commands, invalid trigger, empty composer).
     pub(in crate::ui) fn sync_command_menu(&mut self, cx: &mut Context<Self>) {
-        let text = self.composer.read(cx).value().to_string();
+        let text = self.composer.read(cx).value();
         // Bots slice: the `@bot` inline trigger owns the composer start —
         // the `/` menu never competes with the inline-results dropdown.
         let inline_active = quill::composer::inline_query_trigger(&text).is_some();

@@ -376,7 +376,7 @@ impl QuillApp {
         {
             return None;
         }
-        let text = self.composer.read(cx).value().to_string();
+        let text = self.composer.read(cx).value();
         let urls = find_urls(&text);
         let first = self.chosen_of(&urls)?;
         let choice = self.preview_choice();

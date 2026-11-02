@@ -385,7 +385,7 @@ impl QuillApp {
         }
         self.set_composer_markup(&text, window, cx);
         // `set_value` emits no Change: re-check the restored draft.
-        let text = self.composer.read(cx).value().to_string();
+        let text = self.composer.read(cx).value();
         self.composer_ui.prev_text = text.clone();
         self.sync_spellcheck(&text, cx);
         self.sync_suggest_menu(false, cx);

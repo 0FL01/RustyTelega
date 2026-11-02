@@ -18,8 +18,7 @@
 #![deny(clippy::indexing_slicing)]
 
 use super::{InlineVideos, Key, Panel, Slot, State};
-use gpui_kit::{App, Window};
-use quill::bubble_layout::HistoryWidth;
+use gpui_kit::{App, Pixels, Window};
 use quill::ids::ChatId;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -145,9 +144,13 @@ impl State {
     pub(super) fn note_history_width(
         &mut self,
         window: Option<ChatId>,
-        width: HistoryWidth,
+        width: Pixels,
         number: u64,
     ) -> bool {
+        // No paint measured the history yet: the first width is no resize.
+        if width == Pixels::ZERO {
+            return false;
+        }
         let entry = self.history_widths.entry(window).or_insert((width, 0));
         if entry.0 != width {
             *entry = (width, number);
@@ -341,7 +344,7 @@ mod tests {
     use super::{
         List, Panel, Pass, RESIZE_PASSES, Seen, State, Sweep, Windows, note_sweep, survives, unseen,
     };
-    use quill::bubble_layout::HistoryWidth;
+    use gpui_kit::{Pixels, px};
     use quill::ids::ChatId;
     use std::collections::HashSet;
 
@@ -377,7 +380,7 @@ mod tests {
     #[test]
     fn a_width_change_counts_as_resizing_for_a_stretch_of_passes() {
         let mut state = State::default();
-        let (wide, narrow) = (HistoryWidth::new(500.), HistoryWidth::new(492.));
+        let (wide, narrow) = (px(500.), px(492.));
         assert!(!state.note_history_width(MAIN, wide, 1), "the first width");
         assert!(!state.note_history_width(MAIN, wide, 2));
         assert!(state.note_history_width(MAIN, narrow, 3));
@@ -386,10 +389,17 @@ mod tests {
     }
 
     #[test]
-    fn a_width_past_the_widest_layout_is_not_resizing() {
+    fn a_width_past_the_widest_layout_counts_as_resizing() {
         let mut state = State::default();
-        assert!(!state.note_history_width(MAIN, HistoryWidth::new(800.), 1));
-        assert!(!state.note_history_width(MAIN, HistoryWidth::new(792.), 2));
+        assert!(!state.note_history_width(MAIN, px(800.), 1));
+        assert!(state.note_history_width(MAIN, px(792.), 2));
+    }
+
+    #[test]
+    fn the_first_measured_width_is_not_resizing() {
+        let mut state = State::default();
+        assert!(!state.note_history_width(MAIN, Pixels::ZERO, 1));
+        assert!(!state.note_history_width(MAIN, px(800.), 2));
     }
 
     #[test]

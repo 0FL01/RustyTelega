@@ -156,6 +156,9 @@ pub(crate) struct HistoryUi {
     /// it has, `width` is seeded from the pane the history is laid out in
     /// (`seed_history_width`).
     pub(super) width_probed: std::rc::Rc<std::cell::Cell<bool>>,
+    /// The history's width at paint, before `HistoryWidth` tops it off: rows
+    /// still move in a wide window that resizes (`InlineVideos::begin_render`).
+    pub(super) pane_width: std::rc::Rc<std::cell::Cell<Pixels>>,
     /// The pull to the next unread channel (`pull_next_ui`).
     pub(super) pull: super::pull_next_ui::PullUi,
 }
@@ -226,6 +229,7 @@ impl HistoryUi {
             chat_layout: Default::default(),
             width: Default::default(),
             width_probed: Default::default(),
+            pane_width: Default::default(),
             pull: Default::default(),
         }
     }

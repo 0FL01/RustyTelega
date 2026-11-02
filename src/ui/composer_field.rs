@@ -41,16 +41,7 @@ fn token_emoji_id(token_id: &str) -> Option<i64> {
 /// What the field holds, as a document.
 pub(super) fn field_doc(state: &TextareaState) -> ComposerDoc {
     let mut doc = ComposerDoc::plain(state.value().to_string());
-    doc.spans = state
-        .spans()
-        .iter()
-        .filter_map(|span| {
-            Some(DocSpan::new(
-                span.range(),
-                ComposerTag::from_tag(span.tag())?,
-            ))
-        })
-        .collect();
+    doc.spans = field_spans(state);
     doc.emoji = state
         .tokens()
         .iter()
@@ -62,6 +53,20 @@ pub(super) fn field_doc(state: &TextareaState) -> ComposerDoc {
         })
         .collect();
     doc
+}
+
+/// The field's formatting.
+pub(super) fn field_spans(state: &TextareaState) -> Vec<DocSpan> {
+    state
+        .spans()
+        .iter()
+        .filter_map(|span| {
+            Some(DocSpan::new(
+                span.range(),
+                ComposerTag::from_tag(span.tag())?,
+            ))
+        })
+        .collect()
 }
 
 /// The field content for a document: its text, emoji tokens and spans.
@@ -418,7 +423,7 @@ impl QuillApp {
                 // Telegram Desktop `revertFormatReplace`: the typed text
                 // comes back over the replacement.
                 self.replace_composer_text(range, &original, window, cx);
-                self.composer_ui.prev_text = self.composer.read(cx).value().to_string();
+                self.composer_ui.prev_text = self.composer.read(cx).value();
             }
             None => window.dispatch_action(Box::new(gpui_kit::component::input::Undo), cx),
         }

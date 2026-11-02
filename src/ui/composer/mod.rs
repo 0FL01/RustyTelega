@@ -872,7 +872,7 @@ impl QuillApp {
         if !caret.is_empty() {
             return None;
         }
-        let text = input.value().to_string();
+        let text = input.value();
         let token = quill::composer::mention_trigger(&text, caret.start)?;
         Some((token.range, token.query.to_string()))
     }
@@ -880,7 +880,7 @@ impl QuillApp {
     /// Track the `@query` before the caret: search the open group's
     /// members for it, or drop the suggestions when there is none.
     pub(super) fn sync_mention_menu(&mut self, cx: &mut Context<Self>) {
-        let text = self.composer.read(cx).value().to_string();
+        let text = self.composer.read(cx).value();
         let query = self.mention_trigger(cx).map(|(_, query)| query);
         let Some(live) = self.live.as_mut() else {
             return;
