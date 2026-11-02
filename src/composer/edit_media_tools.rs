@@ -96,7 +96,7 @@ pub fn session_allows_cover(session: &crate::state::Session, chat_id: ChatId) ->
 /// A cover must be an image (tdesktop `FileDialog::ImagesFilter`).
 pub fn cover_send_path(candidate: &Path) -> Option<PathBuf> {
     let path = pick_send_path(candidate)?;
-    matches!(media_kind_for(&path), Some(AttachmentKind::Photo)).then_some(path)
+    matches!(direct_media_kind_for(&path), Some(AttachmentKind::Photo)).then_some(path)
 }
 
 impl ComposerEdit {

@@ -16,7 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::composer::{AttachmentKind, media_kind_for};
+use crate::composer::{AttachmentKind, is_gif_path, media_kind_for};
 
 /// What is being dragged (tdesktop `Storage::MimeDataState`, minus the
 /// states only edit boxes use).
@@ -47,7 +47,8 @@ impl DragEntry {
     pub fn probe(path: &Path) -> Self {
         Self {
             is_dir: path.is_dir(),
-            media: media_kind_for(path),
+            // A GIF goes as media too (tdesktop `DetectNameType`).
+            media: media_kind_for(path).or(is_gif_path(path).then_some(AttachmentKind::Video)),
         }
     }
 }
@@ -195,7 +196,10 @@ pub fn plan_drop(action: DropAction, paths: &[PathBuf], folder_files: &[PathBuf]
     match action {
         DropAction::AsDocuments => attach_all(paths, |_| AttachmentKind::Document),
         DropAction::AsMedia => {
-            if paths.iter().all(|path| media_kind_for(path).is_some()) {
+            if paths
+                .iter()
+                .all(|path| media_kind_for(path).is_some() || is_gif_path(path))
+            {
                 attach_all(paths, |path| {
                     media_kind_for(path).unwrap_or(AttachmentKind::Document)
                 })
@@ -304,6 +308,18 @@ mod tests {
             is_dir: true,
             media: None,
         }
+    }
+
+    #[test]
+    fn a_heic_or_a_gif_is_offered_the_quick_way() {
+        let heic = DragEntry::probe(Path::new("/a/b.HEIC"));
+        assert_eq!(classify(&[heic]), Some(DragState::PhotoFiles));
+        let gif = DragEntry::probe(Path::new("/a/b.gif"));
+        assert_eq!(classify(&[gif]), Some(DragState::MediaFiles));
+        assert!(matches!(
+            plan_drop(DropAction::AsMedia, &[PathBuf::from("/a/b.gif")], &[]),
+            DropPlan::Attach(_)
+        ));
     }
 
     #[test]

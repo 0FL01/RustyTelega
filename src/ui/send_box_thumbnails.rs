@@ -22,7 +22,7 @@ const QUALITY: u8 = 87;
 
 /// Sending waits at most this long for a thumbnail; a decoder stuck on a
 /// file must not hold the batch.
-const GIVE_UP_AFTER: Duration = Duration::from_secs(15);
+pub(super) const GIVE_UP_AFTER: Duration = Duration::from_secs(15);
 
 impl QuillApp {
     /// Start a thumbnail for each picture in the tray that goes as a file
@@ -103,6 +103,30 @@ impl super::send_box_state::SendBoxUi {
     }
 }
 
+/// Write `picture` as a JPEG of quality 87 into `dir`.
+pub(super) fn write_jpeg(picture: &image::RgbaImage, dir: &Path) -> Option<PathBuf> {
+    // JPEG has no alpha: a transparent picture goes over white.
+    let rgb = image::RgbImage::from_fn(picture.width(), picture.height(), |x, y| {
+        let [r, g, b, a] = picture.get_pixel(x, y).0;
+        let over = |c: u8| ((u16::from(c) * u16::from(a) + 255 * (255 - u16::from(a))) / 255) as u8;
+        image::Rgb([over(r), over(g), over(b)])
+    });
+    quill::local_path::secure_create_dir(dir).ok()?;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    let dest = dir.join(format!("{}-{nanos}.jpg", std::process::id()));
+    let file = std::fs::File::create(&dest).ok()?;
+    let mut encoder =
+        image::codecs::jpeg::JpegEncoder::new_with_quality(std::io::BufWriter::new(file), QUALITY);
+    if encoder.encode_image(&rgb).is_err() {
+        let _ = std::fs::remove_file(&dest);
+        return None;
+    }
+    let _ = quill::local_path::restrict_file(&dest);
+    Some(dest)
+}
+
 /// The thumbnail JPEG in `{media cache}/file-thumbs`, or `None` when the
 /// server makes its own or the picture does not decode.
 fn write_file_thumbnail(source: &Path) -> Option<FileThumbnail> {
@@ -122,26 +146,10 @@ fn write_file_thumbnail(source: &Path) -> Option<FileThumbnail> {
     let thumb_w = ((width as f32 * scale).round() as u32).max(1);
     let thumb_h = ((height as f32 * scale).round() as u32).max(1);
     let thumb = image::imageops::thumbnail(&picture, thumb_w, thumb_h);
-    // JPEG has no alpha: a transparent picture goes over white.
-    let rgb = image::RgbImage::from_fn(thumb_w, thumb_h, |x, y| {
-        let [r, g, b, a] = thumb.get_pixel(x, y).0;
-        let over = |c: u8| ((u16::from(c) * u16::from(a) + 255 * (255 - u16::from(a))) / 255) as u8;
-        image::Rgb([over(r), over(g), over(b)])
-    });
-    let dir = quill::local_path::media_cache_base().join("file-thumbs");
-    quill::local_path::secure_create_dir(&dir).ok()?;
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_nanos());
-    let dest = dir.join(format!("{}-{nanos}.jpg", std::process::id()));
-    let file = std::fs::File::create(&dest).ok()?;
-    let mut encoder =
-        image::codecs::jpeg::JpegEncoder::new_with_quality(std::io::BufWriter::new(file), QUALITY);
-    if encoder.encode_image(&rgb).is_err() {
-        let _ = std::fs::remove_file(&dest);
-        return None;
-    }
-    let _ = quill::local_path::restrict_file(&dest);
+    let dest = write_jpeg(
+        &thumb,
+        &quill::local_path::media_cache_base().join("file-thumbs"),
+    )?;
     Some(FileThumbnail {
         path: dest,
         width: i32::try_from(thumb_w).ok()?,

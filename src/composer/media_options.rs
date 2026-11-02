@@ -86,6 +86,12 @@ pub struct AttachmentExtras {
     /// The thumbnail Quill made for a picture sent as a file
     /// (`inputDocument.thumbnail`; tdesktop `FinalizeFileThumbnail`).
     pub file_thumbnail: Option<FileThumbnail>,
+    /// The JPEG made for a picture Telegram can't take as a photo
+    /// ([`photo_needs_jpeg`](super::photo_needs_jpeg)).
+    pub photo_jpeg: Option<PathBuf>,
+    /// The file can't go as a photo or video (tdesktop `PrepareDetails`:
+    /// unreadable, animated, or too narrow), so "Compress" is not offered.
+    pub file_only: bool,
     /// A photo edit is rendering into a new file for this one: the latest
     /// Done's number. Until it lands the file must not be sent.
     pub photo_render: Option<u64>,

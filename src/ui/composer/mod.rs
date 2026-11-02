@@ -118,6 +118,16 @@ impl QuillApp {
                     self.submit_forward_bar(text, window, cx);
                     return;
                 }
+                // A picture still being read, or getting its thumbnail,
+                // can't go by any route yet.
+                self.check_tray_videos(cx);
+                if self.tray_thumbnails_pending() || self.tray_media_checks_pending() {
+                    self.connection.set_note(StatusNote::silent(tr(
+                        keys::Q_CHAT_PREPARING_THE_FILE_SEND_AGAIN,
+                    )));
+                    cx.notify();
+                    return;
+                }
                 // Sending returns the reader to the latest messages: the
                 // position left behind is not where the chat reopens.
                 self.forget_scroll_on_return_to_latest();
@@ -169,14 +179,6 @@ impl QuillApp {
                     if self.tray_preparing() {
                         self.connection
                             .set_note(StatusNote::silent(tr(keys::Q_OPS_PREPARING_THE_FILES)));
-                        cx.notify();
-                        return;
-                    }
-                    // A picture sent as a file is still getting its thumbnail.
-                    if self.tray_thumbnails_pending() {
-                        self.connection.set_note(StatusNote::silent(tr(
-                            keys::Q_CHAT_PREPARING_THE_FILE_SEND_AGAIN,
-                        )));
                         cx.notify();
                         return;
                     }
@@ -527,7 +529,7 @@ impl QuillApp {
             match attachment.kind {
                 AttachmentKind::Photo => blocks.push(quill::rich::RichBlock::Photo {
                     caption: String::new(),
-                    local_path: Some(attachment.path.clone()),
+                    local_path: Some(attachment.photo_file().to_path_buf()),
                 }),
                 AttachmentKind::Video => blocks.push(quill::rich::RichBlock::Video {
                     caption: String::new(),
@@ -707,6 +709,7 @@ impl QuillApp {
                 let added = self.update_pending_attachments(|tray| {
                     ComposerAttachment::append_dropped_files(tray, std::slice::from_ref(&att.path))
                 });
+                self.check_tray_videos(cx);
                 if let Some(added) = added {
                     self.connection.set_note(match added {
                         Ok(_) => StatusNote::silent(tr_with(
