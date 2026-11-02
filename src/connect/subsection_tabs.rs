@@ -61,7 +61,7 @@ impl<S: JsonSender> ConnectDriver<S> {
     /// bot equals the bot's user id.
     pub(crate) fn maybe_preload_topics(&mut self, chat: Option<ChatId>, supergroup: Option<i64>) {
         // A supergroup's chat id is derived from its id (the bot API id).
-        let from_supergroup = supergroup.map(|id| ChatId(-1_000_000_000_000 - id));
+        let from_supergroup = supergroup.map(ChatId::from_supergroup);
         for chat_id in chat.into_iter().chain(from_supergroup) {
             self.preload_topics(chat_id);
         }
