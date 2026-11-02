@@ -252,7 +252,7 @@ impl QuillApp {
         }
         let premium = self.session().is_some_and(Session::my_is_premium);
         if premium {
-            self.submit_rich_composer(rich.markup(), window, cx);
+            self.submit_rich_composer(rich.blocks(), window, cx);
         } else if rich.uses_premium_formatting() {
             self.refuse_rich_send(&rich, window, cx);
         } else if let Some(plain) = rich.plain_markup() {

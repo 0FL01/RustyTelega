@@ -1,9 +1,43 @@
 //! Rich text: plain-text markup to and from `RichBlock`s, and the live preview.
 use super::*;
 
+const FENCE: &str = "```";
+/// Marks a further line of the list item above it.
+const ITEM_LINE_INDENT: &str = "  ";
+
+/// The line numbers each code block covers, fence to fence, as the inline
+/// parser reads them: a line with a fence opens a block that the next line
+/// with one closes. A block with nothing in it is not one.
+pub(super) fn code_fences<'a>(
+    lines: impl Iterator<Item = &'a str>,
+) -> Vec<std::ops::RangeInclusive<usize>> {
+    let mut fences = Vec::new();
+    let mut open = None;
+    let mut empty = true;
+    for (index, line) in lines.enumerate() {
+        match open {
+            None if line.contains(FENCE) => {
+                open = Some(index);
+                empty = true;
+            }
+            Some(start) if line.contains(FENCE) => {
+                if !empty {
+                    fences.push(start..=index);
+                }
+                open = None;
+            }
+            Some(_) => empty &= line.trim().is_empty(),
+            None => {}
+        }
+    }
+    fences
+}
+
 /// Convert composer text into editor blocks. Line markers (same spirit as
 /// the M1 markup): `#`/`##`/`###` headings, `-`/`*` unordered lists,
-/// `1.` ordered lists, `>>` collapsible blocks, `---` dividers.
+/// `1.` ordered lists, `>>` collapsible blocks, `---` dividers. A code fence
+/// is one unit of its paragraph, whatever its lines look like. An indented
+/// line goes on the list item above it.
 pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
     let mut blocks: Vec<RichBlock> = Vec::new();
     let mut paragraph: Vec<String> = Vec::new();
@@ -31,10 +65,18 @@ pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
             }
         };
 
-    let mut lines = text.lines().peekable();
-    while let Some(line) = lines.next() {
+    let fences = code_fences(text.lines());
+    let mut fence = fences.iter().peekable();
+    let mut lines = text.lines().enumerate().peekable();
+    while let Some((index, line)) = lines.next() {
         let trimmed = line.trim();
-        if let Some(heading) = parse_heading_marker(trimmed) {
+        if let Some(code) = fence.next_if(|code| *code.start() == index) {
+            flush_list(&mut list_items, list_ordered, &mut blocks);
+            paragraph.push(line.to_string());
+            while let Some((_, line)) = lines.next_if(|(at, _)| code.contains(at)) {
+                paragraph.push(line.to_string());
+            }
+        } else if let Some(heading) = parse_heading_marker(trimmed) {
             flush_paragraph(&mut paragraph, &mut blocks);
             flush_list(&mut list_items, list_ordered, &mut blocks);
             blocks.push(heading);
@@ -52,7 +94,13 @@ pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
             flush_paragraph(&mut paragraph, &mut blocks);
             flush_list(&mut list_items, list_ordered, &mut blocks);
             let mut body: Vec<String> = Vec::new();
-            while let Some(next) = lines.peek() {
+            while let Some(&(at, next)) = lines.peek() {
+                if let Some(code) = fence.next_if(|code| *code.start() == at) {
+                    while let Some((_, line)) = lines.next_if(|(at, _)| code.contains(at)) {
+                        body.push(line.to_string());
+                    }
+                    continue;
+                }
                 let next_trimmed = next.trim();
                 if next_trimmed.is_empty()
                     || parse_heading_marker(next_trimmed).is_some()
@@ -62,7 +110,8 @@ pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
                 {
                     break;
                 }
-                body.push(lines.next().unwrap_or("").to_string());
+                body.push(next.to_string());
+                lines.next();
             }
             blocks.push(RichBlock::Collapsible {
                 header: header.trim().to_string(),
@@ -74,7 +123,14 @@ pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
         } else if trimmed.is_empty() {
             flush_paragraph(&mut paragraph, &mut blocks);
             flush_list(&mut list_items, list_ordered, &mut blocks);
+        } else if let Some(item) = list_items
+            .last_mut()
+            .filter(|_| line.starts_with(ITEM_LINE_INDENT))
+        {
+            item.text.push('\n');
+            item.text.push_str(trimmed);
         } else {
+            flush_list(&mut list_items, list_ordered, &mut blocks);
             paragraph.push(line.to_string());
         }
     }
@@ -117,6 +173,15 @@ fn one_line(text: &str) -> String {
         .join(" ")
 }
 
+/// A list item's text, its later lines indented to stay in the item.
+fn item_lines(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(&format!("\n{ITEM_LINE_INDENT}"))
+}
+
 fn block_to_markup(block: &RichBlock) -> Option<String> {
     match block {
         RichBlock::Paragraph { text, .. } => {
@@ -149,16 +214,21 @@ fn block_to_markup(block: &RichBlock) -> Option<String> {
                         Some(false) => "[ ] ",
                         None => "",
                     };
-                    format!("{marker}{check}{}", one_line(&item.text))
+                    format!("{marker}{check}{}", item_lines(&item.text))
                 })
                 .collect();
             Some(lines.join("\n"))
         }
         RichBlock::Collapsible { header, body, .. } => {
             let mut lines = vec![format!(">> {}", one_line(header))];
+            let fences = code_fences(body.lines());
             let body = body
                 .lines()
-                .filter(|line| !line.trim().is_empty())
+                .enumerate()
+                .filter(|(index, line)| {
+                    !line.trim().is_empty() || fences.iter().any(|code| code.contains(index))
+                })
+                .map(|(_, line)| line)
                 .collect::<Vec<_>>()
                 .join("\n");
             if !body.is_empty() {

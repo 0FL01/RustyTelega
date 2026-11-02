@@ -7,9 +7,9 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
-/// Text up to and including a blank line, and its blocks. No block crosses a
-/// blank line, so each chunk parses alone. An unchanged chunk keeps its
-/// `Arc`s, which also makes comparing it cheap.
+/// Text up to and including a blank line outside a code fence, and its
+/// blocks. No block crosses such a line, so each chunk parses alone. An
+/// unchanged chunk keeps its `Arc`s, which also makes comparing it cheap.
 struct Chunk {
     len: usize,
     blocks: Vec<Arc<RichBlock>>,
@@ -25,9 +25,11 @@ pub struct MarkupBlocks {
 fn chunks_of(text: &str) -> Vec<Chunk> {
     let mut chunks = Vec::new();
     let (mut start, mut at) = (0, 0);
-    for line in text.split_inclusive('\n') {
+    let fences = super::markup::code_fences(text.split_inclusive('\n'));
+    for (index, line) in text.split_inclusive('\n').enumerate() {
         at += line.len();
-        if line.trim().is_empty() || at == text.len() {
+        let in_code = fences.iter().any(|code| code.contains(&index));
+        if (line.trim().is_empty() && !in_code) || at == text.len() {
             let blocks = markup_to_blocks(text.get(start..at).unwrap_or_default());
             chunks.push(Chunk {
                 len: at - start,
@@ -42,6 +44,22 @@ fn chunks_of(text: &str) -> Vec<Chunk> {
 /// Bytes compared at once before looking for the one that differs: a draft
 /// can be megabytes, and it is walked on every keystroke.
 const COMPARE_STEP: usize = 64;
+const FENCE_BYTES: &[u8] = b"```";
+
+/// Whether the whole lines around `range` hold a fence.
+fn lines_hold_fence(text: &[u8], range: Range<usize>) -> bool {
+    let start = text.get(..range.start).unwrap_or_default();
+    let start = start.iter().rposition(|byte| *byte == b'\n').unwrap_or(0);
+    let end = text.get(range.end..).unwrap_or_default();
+    let end = end
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .map_or(text.len(), |at| range.end + at);
+    let lines = text.get(start..end).unwrap_or_default();
+    lines
+        .windows(FENCE_BYTES.len())
+        .any(|bytes| bytes == FENCE_BYTES)
+}
 
 fn shared_start(a: &[u8], b: &[u8]) -> usize {
     let same_steps = a.chunks(COMPARE_STEP).zip(b.chunks(COMPARE_STEP));
@@ -82,6 +100,15 @@ impl MarkupBlocks {
             new.get(start..).unwrap_or_default(),
         );
         let touched_end = old.len() - shared_end;
+        // Fences pair up across the whole text, so one that moved can change
+        // every chunk after it.
+        if lines_hold_fence(old, start..touched_end)
+            || lines_hold_fence(new, start..new.len() - shared_end)
+        {
+            self.chunks = chunks_of(text);
+            text.clone_into(&mut self.text);
+            return;
+        }
 
         // The chunk the edit starts in and the one it ends in, and one more
         // on each side: an edit at a chunk's edge can join it to its

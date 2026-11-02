@@ -316,3 +316,77 @@ fn pasted_markdown_structure_is_headings_dividers_and_tasks() {
         &"# x\n".repeat(RICH_TEXT_MAX_CHARS)
     ));
 }
+
+#[test]
+fn a_code_block_with_a_comment_line_survives_the_editor_markup() {
+    use crate::text::{TextEntity, TextEntityKind};
+    let code = RichBlock::Paragraph {
+        text: "# setup\nx = 1".into(),
+        entities: vec![TextEntity {
+            utf8_start: 0,
+            utf8_end: 13,
+            kind: TextEntityKind::PreCode {
+                language: "python".into(),
+            },
+        }],
+        buttons: Vec::new(),
+    };
+    let draft = RichDraft::from_message(&[code, RichBlock::Divider]).expect("visible");
+    let again = RichDraft::from_markup(&draft.markup()).expect("structured");
+    assert_eq!(again.blocks(), draft.blocks());
+}
+
+#[test]
+fn a_blank_line_stays_inside_a_code_block() {
+    let text = "```\na\n\n- b\n```\n---";
+    let blocks = markup_to_blocks(text);
+    assert_eq!(blocks.len(), 2, "{blocks:?}");
+    assert!(matches!(&blocks[0], RichBlock::Paragraph { text, .. } if text.contains("\n\n- b")));
+    let mut parsed = MarkupBlocks::default();
+    let shared: Vec<RichBlock> = parsed.parse(text).iter().map(|b| (**b).clone()).collect();
+    assert_eq!(shared, blocks);
+}
+
+#[test]
+fn an_unclosed_fence_is_plain_text() {
+    let blocks = markup_to_blocks("```\n# heading");
+    assert!(matches!(blocks.last(), Some(RichBlock::Heading { .. })));
+}
+
+#[test]
+fn opening_a_fence_far_above_its_close_matches_a_full_parse() {
+    let body = "one\n\ntwo\n\nthree\n\n```\n\nfour";
+    let mut parsed = MarkupBlocks::default();
+    let check = |parsed: &mut MarkupBlocks, text: &str| {
+        let incremental: Vec<RichBlock> =
+            parsed.parse(text).iter().map(|b| (**b).clone()).collect();
+        assert_eq!(incremental, markup_to_blocks(text), "{text:?}");
+    };
+    check(&mut parsed, body);
+    let opened = format!("```\n{body}");
+    check(&mut parsed, &opened);
+    check(&mut parsed, &opened.replacen("one", "ones", 1));
+    check(&mut parsed, body);
+}
+
+#[test]
+fn a_list_item_keeps_its_lines_through_the_editor_markup() {
+    let list = RichBlock::List {
+        ordered: false,
+        items: vec![RichListItem {
+            label: String::new(),
+            text: "one\ntwo".into(),
+            entities: Vec::new(),
+            checked: None,
+        }],
+    };
+    let markup = blocks_to_markup(std::slice::from_ref(&list));
+    assert_eq!(markup_to_blocks(&markup), vec![list]);
+}
+
+#[test]
+fn text_after_a_list_stays_after_it() {
+    let blocks = markup_to_blocks("- a\nafter");
+    assert!(matches!(blocks.first(), Some(RichBlock::List { .. })));
+    assert!(matches!(blocks.last(), Some(RichBlock::Paragraph { .. })));
+}

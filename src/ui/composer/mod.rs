@@ -124,7 +124,8 @@ impl QuillApp {
                 self.remember_sent_hashtags(&text);
                 // M2: the rich editor sends blocks, not text.
                 if self.composer_ui.rich_editor_open {
-                    self.submit_rich_composer(text, window, cx);
+                    let blocks = quill::rich::markup_to_blocks(&text);
+                    self.submit_rich_composer(blocks, window, cx);
                     return;
                 }
                 let plan = self.live.as_ref().map(|live| {
@@ -454,7 +455,7 @@ impl QuillApp {
     /// lost) and the error surfaces as a status note — never as success.
     pub(super) fn submit_rich_composer(
         &mut self,
-        text: String,
+        mut blocks: Vec<quill::rich::RichBlock>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -478,7 +479,8 @@ impl QuillApp {
         // user and we never want to fake a successful send.
         let premium = session.my_is_premium();
         if !premium {
-            match quill::rich::RichDraft::from_markup(&text) {
+            let parsed = blocks.into_iter().map(std::sync::Arc::new).collect();
+            match quill::rich::RichDraft::from_parsed(parsed) {
                 Some(rich) => self.refuse_rich_send(&rich, window, cx),
                 None => {
                     self.connection.set_note(StatusNote::info(tr(
@@ -504,7 +506,6 @@ impl QuillApp {
         if self.slow_mode_blocked(chat_id, cx) {
             return;
         }
-        let mut blocks = quill::rich::markup_to_blocks(&text);
         // M2: an explicitly attached document becomes an inline document
         // block (`pageBlockDocument`) — the file picker's local path, never
         // a TDLib-provided `local.path`.
