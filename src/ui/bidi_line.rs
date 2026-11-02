@@ -74,16 +74,129 @@ pub(crate) fn aligns_end(text: &str) -> bool {
 }
 
 /// A wrapping block of user text (caption, description, poll question) aligned by the
-/// text's own direction. The text keeps GPUI's per-line bidi shaping, so a mixed-direction
-/// string is ordered correctly within each line.
+/// text's own direction.
 pub(crate) fn aligned_block(text: impl Into<SharedString>) -> Div {
     let text: SharedString = text.into();
     let end = aligns_end(&text);
+    aligned_block_to(text, end)
+}
+
+/// [`aligned_block`] against the edge the caller picked, for text with no direction of
+/// its own. Text with right-to-left characters wraps in typing order: GPUI's own wrapping
+/// goes by glyph order, which moves the end of a Hebrew sentence up to the first row and
+/// splits words at the bubble's edge.
+pub(crate) fn aligned_block_to(text: impl Into<SharedString>, end: bool) -> Div {
+    let text: SharedString = text.into();
     let block = div().min_w_0();
+    if quill::text::has_rtl_text(&text) {
+        let block = block.flex();
+        let block = if end {
+            block.w_full().justify_end()
+        } else {
+            block
+        };
+        return block.child(BidiBlock {
+            text,
+            runs: Rc::from([]),
+            paragraph: None,
+        });
+    }
     if end {
         block.w_full().text_right().child(text)
     } else {
         block.child(text)
+    }
+}
+
+/// The element behind [`aligned_block`] for right-to-left text.
+struct BidiBlock {
+    text: SharedString,
+    /// The styled runs, from layout.
+    runs: Rc<[TextRun]>,
+    paragraph: Option<Rc<BidiParagraph>>,
+}
+
+impl IntoElement for BidiBlock {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for BidiBlock {
+    type RequestLayoutState = ();
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _global_id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        _cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
+        let (style, font_size, line_height) = metrics(window);
+        self.runs = text_runs(&self.text, &style, &BidiSource::default()).into();
+        let runs = self.runs.clone();
+        let text = self.text.clone();
+        // Zero minimum width: min-content is one unwrapped line, which would spill out of
+        // the bubble instead of wrapping.
+        let mut layout_style = Style::default();
+        layout_style.min_size.width = px(0.).into();
+        let layout_id = window.request_measured_layout(layout_style, {
+            move |known, available, window, _| {
+                let wrap = known.width.or(match available.width {
+                    AvailableSpace::Definite(width) => Some(width),
+                    _ => None,
+                });
+                super::paragraph_cache::measure(&text, &runs, font_size, line_height, wrap, window)
+                    .unwrap_or_default()
+            }
+        });
+        (layout_id, ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _global_id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        _cx: &mut App,
+    ) -> Self::PrepaintState {
+        let (_, font_size, line_height) = metrics(window);
+        self.paragraph = super::paragraph_cache::layout(
+            &self.text,
+            &self.runs,
+            font_size,
+            line_height,
+            bounds.size.width,
+            window,
+        );
+    }
+
+    fn paint(
+        &mut self,
+        _global_id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        _request_layout: &mut Self::RequestLayoutState,
+        _prepaint: &mut Self::PrepaintState,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        if let Some(paragraph) = &self.paragraph {
+            paragraph.paint(bounds.origin, bounds.size.width, window, cx);
+        }
     }
 }
 

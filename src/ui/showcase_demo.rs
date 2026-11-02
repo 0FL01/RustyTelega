@@ -26,6 +26,7 @@ const STEP: i64 = 1_048_576;
 pub(super) enum Scene {
     Hikers,
     Lunch,
+    PollGallery,
     Maya,
     Channel,
 }
@@ -34,7 +35,7 @@ impl Scene {
     pub(super) fn chat(self) -> i64 {
         match self {
             Scene::Hikers => HIKERS,
-            Scene::Lunch => LUNCH,
+            Scene::Lunch | Scene::PollGallery => LUNCH,
             Scene::Maya => MAYA,
             Scene::Channel => PHOTO_CHANNEL,
         }
@@ -118,7 +119,7 @@ fn message(
     )
 }
 
-fn poll_option(id: &str, text: &str, votes: i32, pct: i32, chosen: bool) -> String {
+pub(super) fn poll_option(id: &str, text: &str, votes: i32, pct: i32, chosen: bool) -> String {
     let text = serde_json::to_string(text).unwrap_or_default();
     format!(
         r#"{{"@type":"pollOption","id":"{id}","text":{{"@type":"formattedText","text":{text},"entities":[]}},"voter_count":{votes},"vote_percentage":{pct},"is_chosen":{chosen}}}"#
@@ -781,6 +782,10 @@ pub(super) fn apply_ready_showcase(
         7_200,
         &rx(&[("😍", 488), ("👍", 120)]),
     ));
+
+    if scene == Scene::PollGallery {
+        jsons.extend(super::showcase_polls_demo::poll_gallery(now));
+    }
 
     for json in jsons {
         if let Some(owned) = copy_and_parse(&json, seq, &dyn_sink) {

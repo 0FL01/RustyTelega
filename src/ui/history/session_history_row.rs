@@ -489,7 +489,14 @@ pub(in crate::ui) fn session_history_row(
             inline,
             cx,
         )),
-        MessageContent::Poll(poll) => Some(poll_row(message, poll, (files, media_roots, session), room, cx)),
+        MessageContent::Poll(poll) => Some(poll_row(
+            message,
+            poll,
+            (files, media_roots, session),
+            room,
+            super::super::message_poll::PollInk::new(on_fill, &look, cx),
+            cx,
+        )),
         // B15: checklist card (tasks, done marks, completer names).
         MessageContent::Checklist(checklist) => Some(checklist_body(
             message.chat_id,

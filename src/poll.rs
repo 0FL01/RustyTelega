@@ -91,6 +91,75 @@ pub fn poll_bar_fraction(vote_percentage: i32) -> f32 {
     (vote_percentage as f32 / 100.0).clamp(0.0, 1.0)
 }
 
+/// The mark on an option once its result shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PollMark {
+    None,
+    /// The user's answer.
+    Chosen,
+    /// The right answer of a quiz, chosen or not.
+    Correct,
+    /// The user's wrong answer in a quiz.
+    Wrong,
+}
+
+/// What one option row shows.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PollRow {
+    /// No numbers yet: a circle or square, filled once chosen.
+    Choice { selected: bool },
+    Result {
+        percent: i32,
+        /// The bar's filled part, in `[0.0, 1.0]`.
+        fill: f32,
+        mark: PollMark,
+    },
+}
+
+/// Telegram Desktop's `Poll::showVotes`: results show after a vote, once the
+/// poll closes, or when the user could never vote, unless the creator
+/// withheld them. TDLib sends zeros for a poll the user has not voted in.
+pub fn poll_shows_results(poll: &Poll) -> bool {
+    !poll_results_hidden(poll)
+        && (poll.is_closed
+            || poll.vote_restriction_reason.is_some()
+            || !poll.chosen_indexes().is_empty())
+}
+
+/// The row of option `index`, a pure function of the poll.
+pub fn poll_row(poll: &Poll, index: usize, option: &crate::telegram::PollOption) -> PollRow {
+    if !poll_shows_results(poll) {
+        return PollRow::Choice {
+            selected: option.is_chosen,
+        };
+    }
+    let mark = match &poll.poll_type {
+        crate::telegram::PollType::Quiz {
+            correct_option_ids, ..
+        } if i32::try_from(index).is_ok_and(|index| correct_option_ids.contains(&index)) => {
+            PollMark::Correct
+        }
+        crate::telegram::PollType::Quiz { .. } if option.is_chosen => PollMark::Wrong,
+        _ if option.is_chosen => PollMark::Chosen,
+        _ => PollMark::None,
+    };
+    PollRow::Result {
+        percent: option.vote_percentage,
+        fill: poll_bar_fraction(option.vote_percentage),
+        mark,
+    }
+}
+
+/// Whether an option reads right to left: by its own text, or, for an option
+/// of digits or emoji with no direction of its own, by the question's.
+pub fn option_is_rtl(text: &str, question: &str) -> bool {
+    match unicode_bidi::get_base_direction_full(text) {
+        unicode_bidi::Direction::Rtl => true,
+        unicode_bidi::Direction::Ltr => false,
+        unicode_bidi::Direction::Mixed => crate::text::is_rtl_text(question),
+    }
+}
+
 /// Human voter-count line under the poll question ("1 vote" / "N votes").
 pub fn voter_count_label(total_voter_count: i32) -> String {
     if total_voter_count == 1 {
@@ -494,6 +563,70 @@ mod tests {
         assert_eq!(poll_bar_fraction(100), 1.0);
         assert_eq!(poll_bar_fraction(150), 1.0);
         assert_eq!(poll_bar_fraction(-5), 0.0);
+    }
+
+    fn row(poll: &Poll, index: usize) -> PollRow {
+        poll_row(poll, index, &poll.options[index])
+    }
+
+    fn mark(poll: &Poll, index: usize) -> Option<PollMark> {
+        match row(poll, index) {
+            PollRow::Result { mark, .. } => Some(mark),
+            PollRow::Choice { .. } => None,
+        }
+    }
+
+    #[test]
+    fn rows_are_choices_until_the_user_votes() {
+        let open = regular_poll(&[], false, true, false);
+        assert_eq!(row(&open, 1), PollRow::Choice { selected: false });
+        let voted = regular_poll(&[1], false, true, false);
+        assert_eq!(mark(&voted, 1), Some(PollMark::Chosen));
+        assert_eq!(mark(&voted, 0), Some(PollMark::None));
+        assert_eq!(
+            row(&voted, 0),
+            PollRow::Result {
+                percent: 40,
+                fill: 0.4,
+                mark: PollMark::None
+            }
+        );
+    }
+
+    #[test]
+    fn closed_and_restricted_polls_show_results_without_a_vote() {
+        let closed = regular_poll(&[], false, true, true);
+        assert_eq!(mark(&closed, 0), Some(PollMark::None));
+        let mut restricted = regular_poll(&[], false, true, false);
+        restricted.vote_restriction_reason = Some(PollVoteRestrictionReason::Other);
+        assert_eq!(mark(&restricted, 0), Some(PollMark::None));
+    }
+
+    #[test]
+    fn hidden_results_keep_the_vote_but_no_numbers() {
+        let mut poll = regular_poll(&[1], false, true, false);
+        poll.can_see_results = false;
+        assert_eq!(row(&poll, 1), PollRow::Choice { selected: true });
+        assert_eq!(row(&poll, 0), PollRow::Choice { selected: false });
+    }
+
+    #[test]
+    fn a_quiz_marks_the_right_answer_and_a_wrong_choice() {
+        let wrong = quiz_poll(&[0]);
+        assert_eq!(mark(&wrong, 0), Some(PollMark::Wrong));
+        assert_eq!(mark(&wrong, 1), Some(PollMark::Correct));
+        assert_eq!(mark(&wrong, 2), Some(PollMark::None));
+        let right = quiz_poll(&[1]);
+        assert_eq!(mark(&right, 1), Some(PollMark::Correct));
+    }
+
+    #[test]
+    fn an_option_reads_in_its_own_direction() {
+        assert!(option_is_rtl("סושי", "What to eat?"));
+        assert!(!option_is_rtl("Sushi", "מה נאכל?"));
+        // No letters: the question decides.
+        assert!(option_is_rtl("2026", "מה נאכל?"));
+        assert!(!option_is_rtl("2026", "What to eat?"));
     }
 
     #[test]
