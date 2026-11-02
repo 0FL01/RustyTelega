@@ -523,3 +523,29 @@ fn a_switch_drops_the_previous_accounts_storage_figures(cx: &mut TestAppContext)
     });
     assert_eq!(bytes(&app, &mut vcx), Some(3 << 20));
 }
+
+#[gpui_kit::test]
+fn a_running_update_download_waits_for_space_and_starts_again(cx: &mut TestAppContext) {
+    use quill::updater::{DownloadProgress, ReleaseInfo, UpdateState};
+    let (app, mut vcx) = new_app(cx);
+    let release = ReleaseInfo {
+        version: "99.0.0".into(),
+        notes: String::new(),
+        url: String::new(),
+        asset: None,
+    };
+    let progress = DownloadProgress::default();
+    app.update_in(&mut vcx, |app, _, _| {
+        app.settings.update_state = UpdateState::Downloading(release.clone(), progress.clone());
+    });
+    read(&app, &mut vcx, Some(FLOORS.warn - 1));
+    assert!(progress.is_held(), "the low disk stops the download");
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.finish_update_download(release.clone(), &progress, Err("stopped"), cx);
+        assert_eq!(
+            app.settings.update_state,
+            UpdateState::Available(release.clone()),
+            "it waits, it did not fail"
+        );
+    });
+}

@@ -87,6 +87,32 @@ impl QuillApp {
         }
     }
 
+    /// The update download ended. One the disk held goes back to
+    /// available, so the disk's return to healthy starts it again from the
+    /// bytes it kept (`auto_download_update`).
+    pub(super) fn finish_update_download(
+        &mut self,
+        release: quill::updater::ReleaseInfo,
+        progress: &DownloadProgress,
+        result: Result<std::path::PathBuf, &'static str>,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.update_state = match result {
+            Ok(plan) => UpdateState::Staged(release, plan),
+            Err(_) if progress.is_held() => UpdateState::Available(release),
+            Err(message) => UpdateState::DownloadFailed(release, message),
+        };
+        cx.notify();
+    }
+
+    /// The disk went low or full: an update download already running stops,
+    /// as one about to start waits (`auto_download_update`).
+    pub(super) fn hold_update_download(&mut self) {
+        if let UpdateState::Downloading(_, progress) = &self.settings.update_state {
+            progress.hold();
+        }
+    }
+
     /// The update button for the current state (`UpdateControl::of`).
     pub(super) fn update_control(&self) -> UpdateControl {
         UpdateControl::of(
@@ -133,14 +159,11 @@ impl QuillApp {
         let download = cx.background_executor().spawn(async move {
             quill::update_install::download_and_stage(&download_release, &download_progress)
         });
+        let held = progress.clone();
         cx.spawn(async move |this, cx| {
             let result = download.await;
             let _ = this.update(cx, |this, cx| {
-                this.settings.update_state = match result {
-                    Ok(plan) => UpdateState::Staged(release, plan),
-                    Err(message) => UpdateState::DownloadFailed(release, message),
-                };
-                cx.notify();
+                this.finish_update_download(release, &held, result, cx);
             });
         })
         .detach();

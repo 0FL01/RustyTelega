@@ -349,6 +349,9 @@ impl QuillApp {
         if after == DiskState::Healthy && before != DiskState::Healthy {
             self.auto_download_update(cx);
         }
+        if after != DiskState::Healthy {
+            self.hold_update_download();
+        }
         before
     }
 
