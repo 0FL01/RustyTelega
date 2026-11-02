@@ -3,9 +3,9 @@
 use super::app::{PaneMode, QuillApp};
 use super::message_media::format_bytes;
 use super::status_note::StatusNote;
-use gpui_kit::component::{ActiveTheme as _, TITLE_BAR_HEIGHT};
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::{ActiveTheme as _, TITLE_BAR_HEIGHT};
 use gpui_kit::component::{Sizable as _, h_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{

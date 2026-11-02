@@ -228,6 +228,23 @@ impl QuillApp {
         ask: ViewAsk,
         cx: &mut Context<QuillApp>,
     ) -> Option<StickerView> {
+        let view = self.resting_sticker_view(ask, cx)?;
+        if super::super::anim_layer::current().is_none() {
+            let fps = view.fps();
+            if fps > 0 {
+                self.request_animation_tick(fps, cx);
+            }
+        }
+        Some(view)
+    }
+
+    /// [`Self::sticker_view`] that asks for no ticks. A wake of the pump
+    /// redraws the app when the first frame is drawn.
+    fn resting_sticker_view(
+        &self,
+        ask: ViewAsk,
+        cx: &mut Context<QuillApp>,
+    ) -> Option<StickerView> {
         if !matches!(ask.format, StickerFormat::Tgs | StickerFormat::Webm) || ask.file.0 == 0 {
             return None;
         }
@@ -258,7 +275,7 @@ impl QuillApp {
         if !ready {
             return None;
         }
-        let view = StickerView {
+        Some(StickerView {
             player: player.clone(),
             spec: Rc::new(spec),
             head: ask.head,
@@ -267,14 +284,7 @@ impl QuillApp {
             max_fps: ask.max_fps,
             active: self.frame.window_active.get() || super::super::frame_clock::assume_active(),
             window: self.windows.scope,
-        };
-        if super::super::anim_layer::current().is_none() {
-            let fps = view.fps();
-            if fps > 0 {
-                self.request_animation_tick(fps, cx);
-            }
-        }
-        Some(view)
+        })
     }
 
     /// [`Self::sticker_view`] when its clip is already open (at any size);
@@ -684,7 +694,7 @@ impl QuillApp {
     ) -> Option<Arc<RenderImage>> {
         let head = HeadId::of(part, ("emoji-image", id.0));
         let at = PlayMode::At(Duration::ZERO);
-        self.sticker_view(ViewAsk::emoji(id, format, head, at, side), cx)?
+        self.resting_sticker_view(ViewAsk::emoji(id, format, head, at, side), cx)?
             .frame_now()
     }
 
@@ -705,6 +715,21 @@ impl QuillApp {
         }
         let mode = self.sticker_mode();
         self.sticker_view(ViewAsk::sticker(id, format, head, mode, side), cx)?
+            .frame_now()
+    }
+
+    /// Sticker `id`'s first frame, on no clock: it stays still and asks for
+    /// no redraws, in the power saving modes too.
+    pub(in crate::ui) fn sticker_first_frame(
+        &self,
+        id: FileId,
+        format: StickerFormat,
+        side: f32,
+        cx: &mut Context<QuillApp>,
+    ) -> Option<Arc<RenderImage>> {
+        let head = panel_sticker_head(id);
+        let mode = PlayMode::At(Duration::ZERO);
+        self.resting_sticker_view(ViewAsk::sticker(id, format, head, mode, side), cx)?
             .frame_now()
     }
 }

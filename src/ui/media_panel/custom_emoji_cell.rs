@@ -106,15 +106,20 @@ impl QuillApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let hovered = self.pickers.media_panel.hovered == Some(item.file_id);
-        // Only the hovered sticker animates; the rest stay still. One with
-        // no thumbnail (TDLib may send none) has only itself to show.
-        let animated = (hovered || item.display_file_id().is_none())
+        // Only the hovered sticker animates; the rest stay still.
+        let animated = hovered
             // The cell less its padding (`p_1`).
             .then(|| {
                 let head = panel_sticker_head(item.file_id);
                 self.sticker_image(item.file_id, item.format, head, STICKER_CELL - 8., cx)
             })
-            .flatten();
+            .flatten()
+            // TDLib may send no thumbnail: the sticker's own first frame.
+            .or_else(|| {
+                item.display_file_id().is_none().then(|| {
+                    self.sticker_first_frame(item.file_id, item.format, STICKER_CELL - 8., cx)
+                })?
+            });
         let still = self.panel_still(&item);
         let source = animated
             .map(ImageSource::Render)

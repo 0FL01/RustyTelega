@@ -172,11 +172,11 @@ fn choosing_a_category_lists_its_stickers_and_back_returns(cx: &mut TestAppConte
     });
 }
 
-/// TDLib may send an animated sticker with no thumbnail: the tile has no
-/// still, so it shows the sticker itself. One with a still waits for the
-/// pointer.
+/// TDLib may send an animated sticker with no thumbnail: the tile loads
+/// the sticker for its first frame. One with a thumbnail needs no clip until
+/// the pointer is over it.
 #[gpui_kit::test]
-fn an_animated_sticker_with_no_thumbnail_plays_in_its_tile(cx: &mut TestAppContext) {
+fn an_animated_sticker_with_no_thumbnail_shows_its_first_frame(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
     let vcx = &mut vcx;
     let (bare, stilled) = (61, 62);
