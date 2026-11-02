@@ -1,6 +1,6 @@
 //! A main window replaced after its renderer was lost, on the test platform:
 //! the window closes and a new one opens around what it kept. The platform
-//! side (a real device loss) only exists on Windows.
+//! side (a real device loss) does not run here.
 use super::{reopen_main_window, watch_closed_windows};
 use crate::ui::app::QuillApp;
 use crate::ui::link_inbox::attach_main_window;
@@ -194,4 +194,39 @@ fn a_handle_to_the_closed_window_reaches_its_replacement(cx: &mut TestAppContext
         reached.map(|h| h.window_id()).ok(),
         Some(replacement.window_id())
     );
+}
+
+struct Pip;
+
+impl Render for Pip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
+
+/// A PiP left alone with no way back to the chats is the state to avoid.
+#[gpui_kit::test]
+fn a_main_window_lost_beside_a_pip_comes_back_and_the_pip_stays(cx: &mut TestAppContext) {
+    let opened = open(cx);
+    let pip: AnyWindowHandle = cx
+        .open_window(size(px(200.), px(120.)), |_, _| Pip)
+        .into();
+    cx.update(|cx| {
+        watch_closed_windows(
+            |_| false,
+            |cx, kept| reopen_main_window(WindowOptions::default(), kept, cx),
+            cx,
+        )
+    });
+    let _ = cx.update_window(opened.window, |_, window, _| window.remove_window());
+    cx.run_until_parked();
+    let windows = cx.windows();
+    assert_eq!(windows.len(), 2, "the new main window beside the PiP");
+    assert!(windows.iter().any(|w| w.window_id() == pip.window_id()));
+    assert!(
+        !windows
+            .iter()
+            .any(|w| w.window_id() == opened.window.window_id())
+    );
+    app_of(&opened);
 }
