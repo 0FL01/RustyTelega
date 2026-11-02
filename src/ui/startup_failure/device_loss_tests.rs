@@ -196,6 +196,82 @@ fn a_handle_to_the_closed_window_reaches_its_replacement(cx: &mut TestAppContext
     );
 }
 
+#[gpui_kit::test]
+fn closing_the_rest_after_a_lost_gpu_still_reaches_the_last_close(cx: &mut TestAppContext) {
+    use std::cell::Cell;
+    use std::rc::Rc;
+    let opened = open(cx);
+    // A second window (a PiP or chat window) that the platform left open.
+    let _pip = cx.open_window(size(px(200.), px(200.)), |_, _| Probe::default());
+    let seen = Rc::new(Cell::new(0usize));
+    let seen_in = seen.clone();
+    cx.update(|cx| {
+        watch_closed_windows(
+            move |_| {
+                seen_in.set(seen_in.get() + 1);
+                true
+            },
+            |_, _| Ok(()),
+            cx,
+        )
+    });
+    let _ = cx.update_window(opened.window, |_, window, _| window.remove_window());
+    cx.run_until_parked();
+    assert!(cx.windows().is_empty());
+    assert_eq!(seen.get(), 2, "every close reaches the watcher");
+}
+
+struct Keyed(std::rc::Rc<std::cell::RefCell<Vec<gpui_kit::EntityId>>>);
+
+impl Render for Keyed {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let state = window.use_keyed_state("kept-by-element", cx, |_, _| 0u8);
+        self.0.borrow_mut().push(state.entity_id());
+        div()
+    }
+}
+
+#[gpui_kit::test]
+fn state_kept_by_elements_comes_back_in_the_new_window(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let first_seen = seen.clone();
+    let first = cx.update(|cx| {
+        cx.open_window(WindowOptions::default(), move |window, cx| {
+            window.keep_when_closed();
+            cx.new(|_| Keyed(first_seen))
+        })
+    });
+    let Ok(first) = first else {
+        panic!("the first window did not open");
+    };
+    let id = first.window_id();
+    let closed: AnyWindowHandle = first.into();
+    VisualTestContext::from_window(closed, cx).run_until_parked();
+    let _ = cx.update_window(closed, |_, window, _| window.remove_window());
+    cx.run_until_parked();
+    let Some(kept) = cx.update(|cx| cx.take_kept_window(id)) else {
+        panic!("the window kept nothing");
+    };
+    let root = kept.root().cloned().map(|root| root.downcast::<Keyed>());
+    let Some(Ok(root)) = root else {
+        panic!("the window kept its root");
+    };
+    let second = cx.update(|cx| {
+        cx.open_window(WindowOptions::default(), move |window, cx| {
+            window.take_over(kept, cx);
+            root
+        })
+    });
+    let Ok(second) = second else {
+        panic!("the second window did not open");
+    };
+    VisualTestContext::from_window(second.into(), cx).run_until_parked();
+    let seen = seen.borrow();
+    assert!(seen.len() >= 2, "both windows drew");
+    assert!(seen.iter().all(|id| Some(id) == seen.first()), "{seen:?}");
+}
+
 struct Pip;
 
 impl Render for Pip {

@@ -302,7 +302,7 @@ fn main_window_options(
 }
 
 /// The main window again after the GPU was lost, around the app it showed.
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(all(any(windows, target_os = "linux"), feature = "ui"))]
 fn reopen_main_window(
     cx: &mut gpui_kit::AsyncApp,
     kept: gpui_kit::KeptWindow,
@@ -412,6 +412,7 @@ fn install_main_window_tray(
             // appears late, the menu bar theme); everything else pokes
             // `wake::CHROME` (applied updates, tray menu clicks, settings).
             let executor = cx.background_executor().clone();
+            let mut tray_waiting = Vec::new();
             ui::run_chrome_loop(executor, || {
                 let alive = tray_view
                     .update(cx, |this, _| {
@@ -426,8 +427,10 @@ fn install_main_window_tray(
                 if !alive {
                     return None;
                 }
-                for action in quill::tray::take_tray_actions() {
-                    let _ = tray_window.update(cx, |_, window, cx| match action {
+                tray_waiting.extend(quill::tray::take_tray_actions());
+                let actions = std::mem::take(&mut tray_waiting);
+                for action in actions {
+                    let done = tray_window.update(cx, |_, window, cx| match action {
                         quill::tray::TrayAction::Open => raise_main_window(window, cx),
                         quill::tray::TrayAction::Lock => {
                             let _ =
@@ -451,6 +454,11 @@ fn install_main_window_tray(
                             });
                         }
                     });
+                    // No window while it recovers from a lost GPU: the
+                    // action runs once there is one again.
+                    if done.is_err() {
+                        tray_waiting.push(action);
+                    }
                 }
                 Some(ui::PassEnd {
                     work_left: false,

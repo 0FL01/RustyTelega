@@ -29,8 +29,14 @@ pub fn install_link_inbox(
                         }
                     })
                     .is_ok();
-                if alive && quill::deep_link_inbox::take_activation() {
-                    let _ = window_handle.update(cx, |_, window, cx| raise_main_window(window, cx));
+                if alive
+                    && quill::deep_link_inbox::take_activation()
+                    && window_handle
+                        .update(cx, |_, window, cx| raise_main_window(window, cx))
+                        .is_err()
+                {
+                    // The main window is being recovered: it pokes the wake.
+                    quill::deep_link_inbox::keep_activation();
                 }
                 alive
             })

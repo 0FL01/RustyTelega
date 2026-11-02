@@ -95,6 +95,9 @@ pub(crate) fn reopen_main_window(
         }
         root
     })?;
+    // What came in while there was no window can run now.
+    quill::wake::LINKS.poke();
+    quill::wake::CHROME.poke();
     Ok(())
 }
 
@@ -138,11 +141,13 @@ fn watch_closed_windows(
         match step {
             Step::Nothing => {}
             Step::Quit => cx.quit(),
-            Step::CloseTheRest => {
+            // A close nested in this callback never reaches the watcher, so
+            // the last one would never act.
+            Step::CloseTheRest => cx.defer(|cx| {
                 for window in cx.windows() {
                     let _ = window.update(cx, |_, window, _| window.remove_window());
                 }
-            }
+            }),
             step @ (Step::Recover | Step::Reopen) => {
                 recovered.set(true);
                 let Some(left) = kept.borrow_mut().take() else {
