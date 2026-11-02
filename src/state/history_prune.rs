@@ -71,6 +71,8 @@ pub struct HistoryPruning {
     /// waiting for the UI's claims before they are trimmed.
     release_chats: VecDeque<i64>,
     release_topics: VecDeque<(i64, i32)>,
+    /// Topic pages still in flight when their entry was dropped.
+    pub(super) gone_topic_pages: BTreeSet<u64>,
     dropped: BTreeMap<i64, DroppedHistory>,
     dropped_order: VecDeque<i64>,
     /// The histories are the only copy of the rows ([`Session::keep_all_histories`]).
@@ -536,9 +538,14 @@ impl Session {
         {
             self.drop_history_entry(chat_id.0);
         }
-        self.threads
-            .topic_histories
-            .retain(|(chat, _), _| *chat != chat_id.0);
+        let topics: Vec<(i64, i32)> = (self.threads.topic_histories.keys())
+            .filter(|(chat, _)| *chat == chat_id.0)
+            .copied()
+            .collect();
+        for key in topics {
+            self.drop_topic_pages_in_flight(key);
+            self.threads.topic_histories.remove(&key);
+        }
         self.history_pruning
             .closed_topics
             .retain(|(chat, _)| *chat != chat_id.0);
@@ -587,6 +594,7 @@ impl Session {
             else {
                 break;
             };
+            self.drop_topic_pages_in_flight(key);
             self.threads.topic_histories.remove(&key);
             self.forget_side_tables_once_unloaded(ChatId(key.0));
         }

@@ -181,6 +181,9 @@ impl Session {
         if !newer {
             self.clear_topic_load_failed(chat_id, topic);
         }
+        if self.history_pruning.gone_topic_pages.remove(&pending.id.0) {
+            return;
+        }
         let entry = self.topic_history_entry(chat_id, topic);
         // A newer page for a window that already reaches the latest was
         // asked for from one that has gone.
@@ -219,6 +222,9 @@ impl Session {
         let (Some(chat_id), Some(topic)) = (pending.chat_id, pending.forum_topic_id) else {
             return;
         };
+        if self.history_pruning.gone_topic_pages.remove(&pending.id.0) {
+            return;
+        }
         let history = self.threads.topic_histories.get_mut(&(chat_id.0, topic));
         if history
             .as_ref()
@@ -305,6 +311,14 @@ impl Session {
             }
             None => false,
         }
+    }
+
+    /// The topic's entry is going, and its stale pages with it: a page that
+    /// lands later must not start a new entry as if it were the latest.
+    pub(super) fn drop_topic_pages_in_flight(&mut self, key: (i64, i32)) {
+        let ends = [WindowEnd::Oldest, WindowEnd::Newest];
+        let in_flight = self.topic_page_ids(ChatId(key.0), key.1, &ends);
+        self.history_pruning.gone_topic_pages.extend(in_flight);
     }
 
     /// Mark the topic's page requests in flight for `ends` stale: they were
