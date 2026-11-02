@@ -905,6 +905,7 @@ impl StateInner {
             return;
         }
 
+        let view_before = self.scroll_view();
         let padding = self.last_padding.unwrap_or_default();
         let scroll_max =
             (self.items.summary().height + padding.top + padding.bottom - height).max(px(0.));
@@ -946,7 +947,21 @@ impl StateInner {
             );
         }
 
-        cx.notify(current_view);
+        // A list pushed against its end has nothing new to draw. Items past a
+        // measured edge still come in: the frame that reached the edge moved,
+        // and its layout measured the overdraw beyond it.
+        if self.scroll_view() != view_before {
+            cx.notify(current_view);
+        }
+    }
+
+    /// What a frame draws differently when a scroll changes it.
+    fn scroll_view(&self) -> (Option<(ListOffset, bool, bool)>, FollowState) {
+        (
+            self.scroll_anchor
+                .map(|anchor| (anchor.position, anchor.provisional, anchor.pending_end)),
+            self.follow_state,
+        )
     }
 
     fn logical_scroll_top(&self) -> ListOffset {

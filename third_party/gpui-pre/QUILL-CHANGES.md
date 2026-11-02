@@ -564,3 +564,10 @@ be replaced without rebuilding what it showed
 
 `subscribe_in` and `observe_in` need no change: they run in the subscriber's
 current window, which is the new one from its first frame.
+
+The Quill project changed it in 2026 so a list pushed against its end stops
+rendering its view (sweep item X04):
+
+- `src/elements/list.rs`: `ListState::scroll` notifies only when the anchor or
+  the follow state changed. The scroll handler still runs on every wheel
+  event.
