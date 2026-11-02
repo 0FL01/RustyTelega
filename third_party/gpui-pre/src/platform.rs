@@ -1,5 +1,3 @@
-// Modified by the Quill project (2026) from gpui-pre 0.3.9 (Apache-2.0):
-// `AtlasBackend::insert_image`, `PlatformWindow::capture_image`. See third_party/gpui-pre/QUILL-CHANGES.md.
 mod app_menu;
 mod keyboard;
 mod keystroke;
@@ -364,47 +362,6 @@ bitflags::bitflags! {
 
 pub use platform_info::{OperatingSystem, PlatformInfo, PlatformTarget};
 
-/// Quill: the app's answer to a quit the OS started.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QuitAnswer {
-    /// The quit goes ahead.
-    Allow,
-    /// The quit is cancelled.
-    Refuse,
-    /// The app is busy further up the stack and cannot be asked now.
-    Later,
-}
-
-/// Quill: how many times a platform asks again, from its event loop, an app
-/// that keeps answering [`QuitAnswer::Later`]. A nested run loop (a modal
-/// panel) can hold the app for as long as it is up, and each ask comes
-/// straight back.
-pub const QUIT_ASKS_AGAIN: u32 = 100;
-
-/// Quill: what a platform does with an answer to a quit it asked about
-/// `asked` times before.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QuitStep {
-    /// The quit goes ahead (`true`) or is cancelled.
-    Settled(bool),
-    /// Ask again from the event loop; carry this count to that ask.
-    AskAgain(u32),
-}
-
-impl QuitAnswer {
-    /// The step after this answer. An app still busy after
-    /// [`QUIT_ASKS_AGAIN`] asks refuses the quit, as it would while busy,
-    /// rather than keep the event loop spinning; the user can quit again.
-    pub fn step(self, asked: u32) -> QuitStep {
-        match self {
-            Self::Allow => QuitStep::Settled(true),
-            Self::Refuse => QuitStep::Settled(false),
-            Self::Later if asked < QUIT_ASKS_AGAIN => QuitStep::AskAgain(asked.saturating_add(1)),
-            Self::Later => QuitStep::Settled(false),
-        }
-    }
-}
-
 #[expect(missing_docs)]
 pub trait Platform: 'static {
     /// Returns the host OS and application target reported by this backend.
@@ -504,11 +461,6 @@ pub trait Platform: 'static {
     fn open_with_system(&self, path: &Path);
 
     fn on_quit(&self, callback: Box<dyn FnMut() -> bool>);
-    /// Quill: registers the callback asked before a quit the OS started goes
-    /// ahead: a Dock Quit or log out on macOS, the end of the session on
-    /// Windows. `App::quit` never asks. [`QuitAnswer::Later`] makes the
-    /// platform hold the quit and ask again from its event loop.
-    fn on_quit_request(&self, _callback: Box<dyn FnMut() -> QuitAnswer>) {}
     fn on_reopen(&self, callback: Box<dyn FnMut()>);
     /// Registers the callback invoked when the system is about to sleep.
     fn on_system_sleep(&self, callback: Box<dyn FnMut()>);
@@ -523,7 +475,7 @@ pub trait Platform: 'static {
     /// phase changes. See [`AppLifecyclePhase`] for the phase vocabulary and
     /// its mapping onto iOS and Android.
     ///
-    /// Of the desktop platforms only macOS invokes this, with `Active`.
+    /// Desktop platforms never invoke this.
     fn on_app_lifecycle(&self, _callback: Box<dyn FnMut(AppLifecyclePhase)>) {}
 
     /// Registers a callback invoked when the OS signals memory pressure
@@ -561,6 +513,14 @@ pub trait Platform: 'static {
     fn thermal_state(&self) -> ThermalState;
     fn on_thermal_state_change(&self, callback: Box<dyn FnMut()>);
     fn prevent_idle_sleep(&self, reason: &str) -> Task<Result<ActivityGuard>>;
+
+    /// Returns the operating system's power mode, or [`PowerMode::Unknown`]
+    /// when the platform cannot determine it.
+    fn power_mode(&self) -> PowerMode {
+        PowerMode::Unknown
+    }
+    /// Registers a callback invoked when the reported power mode changes.
+    fn on_power_mode_change(&self, _callback: Box<dyn FnMut()>) {}
 
     /// Sets the application's process-wide identity and user-visible name.
     ///
@@ -747,6 +707,20 @@ pub struct SystemNotificationResponse {
     /// The pressed action button's [`SystemNotificationAction::id`], or
     /// `None` when the user activated the notification body itself.
     pub action_id: Option<SharedString>,
+}
+
+/// The operating system's preference for energy use versus performance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerMode {
+    /// The platform cannot determine the mode, or cannot distinguish the
+    /// active mode from other non-low-power modes.
+    Unknown,
+    /// The system prioritizes reducing energy use.
+    LowPower,
+    /// The system balances energy use and performance.
+    Balanced,
+    /// The system prioritizes performance over energy use.
+    HighPower,
 }
 
 /// Thermal state of the system
@@ -1368,10 +1342,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
         false
     }
     fn set_edited(&mut self, _edited: bool) {}
-    /// Quill: the reason Windows shows while this window holds back the end
-    /// of the session, or `None` to stop showing it. Other platforms have no
-    /// such text.
-    fn set_shutdown_block_reason(&self, _reason: Option<&str>) {}
     fn set_document_path(&self, _path: Option<&std::path::Path>) {}
     fn toggle_simple_fullscreen(&self) {}
     fn is_simple_fullscreen(&self) -> bool {
@@ -1428,6 +1398,7 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
         WindowControls::default()
     }
     fn set_client_inset(&self, _inset: Pixels) {}
+    fn set_client_corner_radii(&self, _radii: Corners<Pixels>) {}
     fn gpu_specs(&self) -> Option<GpuSpecs>;
 
     fn update_ime_position(&self, _bounds: Bounds<Pixels>);
@@ -1486,14 +1457,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     #[cfg(any(test, feature = "test-support"))]
     fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
         anyhow::bail!("render_to_image not implemented for this platform")
-    }
-
-    /// Quill: renders `scene` offscreen with this window's renderer and
-    /// reads the pixels back (RGBA, device pixels), without presenting it
-    /// or reading the screen. Backs [`Window::capture_frame`]; built in
-    /// every configuration, unlike [`Self::render_to_image`].
-    fn capture_image(&self, _scene: &Scene) -> Result<image::RgbaImage> {
-        anyhow::bail!("this platform's renderer cannot capture the window")
     }
 }
 
@@ -1840,35 +1803,6 @@ pub trait PlatformAtlas {
     ) -> Result<Option<AtlasTile>>;
     fn remove(&self, key: &AtlasKey);
 
-    /// QUILL: start a new use mark: tiles asked for from here on carry it,
-    /// for `remove_emoji_glyphs_unused_since`.
-    fn next_use_mark(&self) -> u64 {
-        0
-    }
-
-    /// QUILL: how many color emoji glyphs the atlas holds.
-    fn emoji_glyph_count(&self) -> usize {
-        0
-    }
-
-    /// QUILL: remove the color emoji glyphs nothing asked for since `mark`
-    /// started; how many went. GPUI keeps every glyph it rasterized for
-    /// good, and color emoji are big (4 bytes a pixel, often 64 px and up).
-    fn remove_emoji_glyphs_unused_since(&self, _mark: u64) -> usize {
-        0
-    }
-
-    /// QUILL: how many text (non-emoji) glyphs the atlas holds.
-    fn text_glyph_count(&self) -> usize {
-        0
-    }
-
-    /// QUILL: remove the text glyphs nothing asked for since `mark` started;
-    /// how many went. Their tiles go back to the texture's allocator.
-    fn remove_text_glyphs_unused_since(&self, _mark: u64) -> usize {
-        0
-    }
-
     #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
     fn contains(&self, _key: &AtlasKey) -> bool {
         false
@@ -1884,32 +1818,12 @@ pub trait AtlasBackend {
         bytes: &[u8],
     ) -> Result<AtlasTile>;
 
-    /// QUILL: insert an image tile. Images come and go while glyphs and
-    /// SVGs stay for good, so a backend that frees a texture once its last
-    /// tile goes keeps images in textures of their own: one long-lived
-    /// glyph in an image texture would keep the whole texture alive.
-    fn insert_image(
-        &mut self,
-        kind: AtlasTextureKind,
-        size: Size<DevicePixels>,
-        bytes: &[u8],
-    ) -> Result<AtlasTile> {
-        self.insert(kind, size, bytes)
-    }
-
     fn remove(&mut self, tile: AtlasTile);
 }
 
 #[doc(hidden)]
 pub struct AtlasState<Backend> {
-    /// Each tile with the use mark it was last asked for under.
-    tiles_by_key: FxHashMap<AtlasKey, (AtlasTile, u64)>,
-    /// QUILL: the current use mark (`next_use_mark`).
-    use_mark: u64,
-    /// QUILL: how many keys are color emoji glyphs.
-    emoji_glyphs: usize,
-    /// QUILL: how many keys are text glyphs.
-    text_glyphs: usize,
+    tiles_by_key: FxHashMap<AtlasKey, AtlasTile>,
     pub backend: Backend,
 }
 
@@ -1917,24 +1831,8 @@ impl<Backend> AtlasState<Backend> {
     pub fn new(backend: Backend) -> Self {
         Self {
             tiles_by_key: FxHashMap::default(),
-            use_mark: 0,
-            emoji_glyphs: 0,
-            text_glyphs: 0,
             backend,
         }
-    }
-
-    pub fn next_use_mark(&mut self) -> u64 {
-        self.use_mark += 1;
-        self.use_mark
-    }
-
-    pub fn emoji_glyph_count(&self) -> usize {
-        self.emoji_glyphs
-    }
-
-    pub fn text_glyph_count(&self) -> usize {
-        self.text_glyphs
     }
 
     pub fn contains(&self, key: &AtlasKey) -> bool {
@@ -1943,8 +1841,6 @@ impl<Backend> AtlasState<Backend> {
 
     pub fn clear(&mut self, reset_backend: impl FnOnce(&mut Backend)) {
         self.tiles_by_key.clear();
-        self.emoji_glyphs = 0;
-        self.text_glyphs = 0;
         reset_backend(&mut self.backend);
     }
 }
@@ -1961,87 +1857,26 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
         key: AtlasKey,
         build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
     ) -> Result<Option<AtlasTile>> {
-        let use_mark = self.use_mark;
         match self.tiles_by_key.entry(key) {
-            Entry::Occupied(entry) => {
-                let (tile, used) = entry.into_mut();
-                *used = use_mark;
-                Ok(Some(*tile))
-            }
+            Entry::Occupied(entry) => Ok(Some(*entry.get())),
             Entry::Vacant(entry) => {
                 profiling::scope!("new tile");
                 let Some((size, bytes)) = build()? else {
                     return Ok(None);
                 };
-                let kind = entry.key().texture_kind();
-                // QUILL: images in textures of their own (`insert_image`).
-                let tile = if matches!(entry.key(), AtlasKey::Image(_)) {
-                    self.backend.insert_image(kind, size, &bytes)?
-                } else {
-                    self.backend.insert(kind, size, &bytes)?
-                };
-                match glyph_class(entry.key()) {
-                    Some(GlyphClass::Emoji) => self.emoji_glyphs += 1,
-                    Some(GlyphClass::Text) => self.text_glyphs += 1,
-                    None => {}
-                }
-                entry.insert((tile, use_mark));
+                let tile = self
+                    .backend
+                    .insert(entry.key().texture_kind(), size, &bytes)?;
+                entry.insert(tile);
                 Ok(Some(tile))
             }
         }
     }
 
     pub fn remove(&mut self, key: &AtlasKey) {
-        if let Some((tile, _)) = self.tiles_by_key.remove(key) {
-            match glyph_class(key) {
-                Some(GlyphClass::Emoji) => self.emoji_glyphs -= 1,
-                Some(GlyphClass::Text) => self.text_glyphs -= 1,
-                None => {}
-            }
+        if let Some(tile) = self.tiles_by_key.remove(key) {
             self.backend.remove(tile);
         }
-    }
-
-    pub fn remove_emoji_glyphs_unused_since(&mut self, mark: u64) -> usize {
-        let count = self.remove_glyphs_unused_since(GlyphClass::Emoji, mark);
-        self.emoji_glyphs -= count;
-        count
-    }
-
-    pub fn remove_text_glyphs_unused_since(&mut self, mark: u64) -> usize {
-        let count = self.remove_glyphs_unused_since(GlyphClass::Text, mark);
-        self.text_glyphs -= count;
-        count
-    }
-
-    fn remove_glyphs_unused_since(&mut self, class: GlyphClass, mark: u64) -> usize {
-        let mut gone = Vec::new();
-        self.tiles_by_key.retain(|key, (tile, used)| {
-            let keep = *used >= mark || glyph_class(key) != Some(class);
-            if !keep {
-                gone.push(*tile);
-            }
-            keep
-        });
-        let count = gone.len();
-        for tile in gone {
-            self.backend.remove(tile);
-        }
-        count
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum GlyphClass {
-    Emoji,
-    Text,
-}
-
-fn glyph_class(key: &AtlasKey) -> Option<GlyphClass> {
-    match key {
-        AtlasKey::Glyph(params) if params.is_emoji => Some(GlyphClass::Emoji),
-        AtlasKey::Glyph(_) => Some(GlyphClass::Text),
-        _ => None,
     }
 }
 
@@ -2096,26 +1931,6 @@ impl PlatformAtlas for HeadlessAtlas {
 
     fn remove(&self, key: &AtlasKey) {
         self.0.lock().remove(key);
-    }
-
-    fn next_use_mark(&self) -> u64 {
-        self.0.lock().next_use_mark()
-    }
-
-    fn emoji_glyph_count(&self) -> usize {
-        self.0.lock().emoji_glyph_count()
-    }
-
-    fn remove_emoji_glyphs_unused_since(&self, mark: u64) -> usize {
-        self.0.lock().remove_emoji_glyphs_unused_since(mark)
-    }
-
-    fn text_glyph_count(&self) -> usize {
-        self.0.lock().text_glyph_count()
-    }
-
-    fn remove_text_glyphs_unused_since(&self, mark: u64) -> usize {
-        self.0.lock().remove_text_glyphs_unused_since(mark)
     }
 
     #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
@@ -2820,10 +2635,23 @@ pub struct WindowOptions {
     /// Leave this `false` for windows that rely on AppKit's native titlebar dragging.
     pub app_owns_titlebar_drag: bool,
 
-    /// The minimum interval between animation frames while the window is inactive.
+    /// The minimum frame interval while inactive without sustained high-rate input.
     ///
-    /// Set to `None` to disable inactive-window animation frame throttling.
+    /// Defaults to approximately 30 fps. Set to `None` to disable this limit.
+    /// The longest applicable interval wins; mandatory platform presentations bypass all limits.
     pub inactive_frame_interval: Option<Duration>,
+
+    /// The minimum frame interval while the platform reports Low Power Mode.
+    ///
+    /// Defaults to approximately 30 fps. Set to `None` to disable this limit.
+    /// The longest applicable interval wins; mandatory platform presentations bypass all limits.
+    pub low_power_frame_interval: Option<Duration>,
+
+    /// The minimum frame interval under serious or critical thermal pressure.
+    ///
+    /// Defaults to approximately 60 fps. Set to `None` to disable this limit.
+    /// The longest applicable interval wins; mandatory platform presentations bypass all limits.
+    pub thermal_frame_interval: Option<Duration>,
 
     /// Whether the window should be resizable by the user
     pub is_resizable: bool,
@@ -2976,6 +2804,8 @@ impl Default for WindowOptions {
             is_movable: true,
             app_owns_titlebar_drag: false,
             inactive_frame_interval: Some(Duration::from_micros(33_333)),
+            low_power_frame_interval: Some(Duration::from_micros(33_333)),
+            thermal_frame_interval: Some(Duration::from_micros(16_667)),
             is_resizable: true,
             is_minimizable: true,
             display_id: None,

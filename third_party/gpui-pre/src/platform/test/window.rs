@@ -1,5 +1,3 @@
-// Modified by the Quill project (2026) from gpui-pre 0.3.9 (Apache-2.0):
-// `capture_image` answers with `render_to_image`. See third_party/gpui-pre/QUILL-CHANGES.md.
 use crate::{
     AnyWindowHandle, Bounds, DevicePixels, DispatchEventResult, DisplayId, GpuSpecs, HeadlessAtlas,
     Pixels, PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput,
@@ -32,6 +30,7 @@ pub(crate) struct TestWindowState {
     sprite_atlas: Arc<dyn PlatformAtlas>,
     renderer: Option<Box<dyn PlatformHeadlessRenderer>>,
     pub(crate) should_close_handler: Option<Box<dyn FnMut() -> bool>>,
+    close_callback: Option<Box<dyn FnOnce()>>,
     hit_test_window_control_callback: Option<Box<dyn FnMut() -> Option<WindowControlArea>>>,
     input_callback: Option<Box<dyn FnMut(PlatformInput) -> DispatchEventResult>>,
     active_status_change_callback: Option<Box<dyn FnMut(bool)>>,
@@ -106,6 +105,7 @@ impl TestWindow {
             edited: false,
             document_path: None,
             should_close_handler: None,
+            close_callback: None,
             hit_test_window_control_callback: None,
             input_callback: None,
             active_status_change_callback: None,
@@ -137,6 +137,13 @@ impl TestWindow {
             start_external_drag_result: false,
         })))
     }
+    pub fn simulate_close(&self) {
+        let callback = self.0.lock().close_callback.take();
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+
     pub fn simulate_scheduled_frame(&self) -> bool {
         let callback = {
             let mut state = self.0.lock();
@@ -169,20 +176,6 @@ impl TestWindow {
         if let Some(mut callback) = callback {
             callback(visibility);
             self.0.lock().visibility_callback = Some(callback);
-        }
-    }
-
-    /// Moves the window's top left corner to `origin`, as the platform
-    /// reports a window the user dragged (Quill).
-    pub fn simulate_move(&self, origin: Point<Pixels>) {
-        let callback = {
-            let mut state = self.0.lock();
-            state.bounds.origin = origin;
-            state.moved_callback.take()
-        };
-        if let Some(mut callback) = callback {
-            callback();
-            self.0.lock().moved_callback = Some(callback);
         }
     }
 
@@ -550,7 +543,9 @@ impl PlatformWindow for TestWindow {
         self.0.lock().should_close_handler = Some(callback);
     }
 
-    fn on_close(&self, _callback: Box<dyn FnOnce()>) {}
+    fn on_close(&self, callback: Box<dyn FnOnce()>) {
+        self.0.lock().close_callback = Some(callback);
+    }
 
     fn on_hit_test_window_control(&self, callback: Box<dyn FnMut() -> Option<WindowControlArea>>) {
         self.0.lock().hit_test_window_control_callback = Some(callback);
@@ -586,12 +581,6 @@ impl PlatformWindow for TestWindow {
         } else {
             anyhow::bail!("render_to_image not available: no HeadlessRenderer configured")
         }
-    }
-
-    // Quill: a test window captures through its headless renderer.
-    #[cfg(any(test, feature = "test-support"))]
-    fn capture_image(&self, scene: &Scene) -> anyhow::Result<RgbaImage> {
-        self.render_to_image(scene)
     }
 
     fn as_test(&mut self) -> Option<&mut TestWindow> {

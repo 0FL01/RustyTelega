@@ -1,7 +1,3 @@
-// Modified by the Quill project (2026) from gpui-pre-apple 0.3.9 (Apache-2.0):
-// a malformed CoreText run is skipped instead of panicking, and `layout_line`
-// keeps one CTFont per font and size.
-// See third_party/gpui-pre-apple/QUILL-CHANGES.md.
 use anyhow::anyhow;
 use collections::{HashMap, HashSet};
 use core_foundation::{
@@ -58,13 +54,10 @@ use {
     std::sync::OnceLock,
 };
 
-use crate::{open_type::apply_features_and_fallbacks, sized_fonts::SizedFonts};
+use crate::open_type::apply_features_and_fallbacks;
 
 #[allow(non_upper_case_globals)]
 const kCGImageAlphaOnly: u32 = 7;
-
-/// QUILL: how many sized fonts `layout_line` keeps.
-const MAX_SIZED_FONTS: usize = 256;
 
 /// Apple text system using CoreText for font shaping.
 pub struct AppleTextSystem(RwLock<AppleTextSystemState>);
@@ -84,8 +77,6 @@ struct AppleTextSystemState {
     font_ids_by_postscript_name: HashMap<String, FontId>,
     font_ids_by_font_key: HashMap<FontKey, SmallVec<[FontId; 4]>>,
     postscript_names_by_font_id: HashMap<FontId, String>,
-    /// QUILL: by font and the bits of the size.
-    sized_fonts: SizedFonts<(FontId, u32), CTFont>,
 }
 
 impl AppleTextSystem {
@@ -99,7 +90,6 @@ impl AppleTextSystem {
             font_ids_by_postscript_name: HashMap::default(),
             font_ids_by_font_key: HashMap::default(),
             postscript_names_by_font_id: HashMap::default(),
-            sized_fonts: SizedFonts::new(MAX_SIZED_FONTS),
         }))
     }
 }
@@ -555,7 +545,12 @@ impl AppleTextSystemState {
 
         {
             let mut text = text;
-            let mut break_ligature = true;
+            // CoreText merges adjacent runs that end up in equal fonts, including runs of
+            // different fonts that fall back to the same one, so every other run that inserts
+            // text is set a hair larger to keep ligatures from forming across them. The first
+            // run keeps its exact size: SF tracks by its exact point size, and a nudged size
+            // draws wider or narrower than AppKit sets the same text.
+            let mut break_ligature = false;
             for run in font_runs {
                 let text_run;
                 (text_run, text) = text.split_at(run.len);
@@ -579,15 +574,16 @@ impl AppleTextSystemState {
                 } else {
                     font_size
                 };
-                let sized_font = self
-                    .sized_fonts
-                    .get_or_build((run.font_id, f32::from(font_size).to_bits()), || {
-                        font.native_font().clone_with_font_size(font_size.into())
-                    });
                 unsafe {
-                    string.set_attribute(cf_range, kCTFontAttributeName, sized_font);
+                    string.set_attribute(
+                        cf_range,
+                        kCTFontAttributeName,
+                        &font.native_font().clone_with_font_size(font_size.into()),
+                    );
                 }
-                break_ligature = !break_ligature;
+                if length > 0 {
+                    break_ligature = !break_ligature;
+                }
             }
         }
         // Retrieve the glyphs from the shaped line, converting UTF16 offsets to UTF8 offsets.
@@ -596,41 +592,32 @@ impl AppleTextSystemState {
         let mut runs = <Vec<ShapedRun>>::with_capacity(glyph_runs.len() as usize);
         let mut ix_converter = StringIndexConverter::new(text);
         for run in glyph_runs.into_iter() {
-            // Quill: a run without attributes or a font is skipped, and a glyph without a
-            // string index too, instead of upstream's `unwrap`s.
-            let Some(attributes) = run.attributes() else {
-                log::warn!("skipping a CoreText run without attributes");
-                continue;
-            };
-            // SAFETY: `kCTFontAttributeName` is a CoreText constant that lives for the
-            // whole process.
-            let font = unsafe { attributes.find(kCTFontAttributeName) }
-                .and_then(|font| font.downcast::<CTFont>());
-            let Some(font) = font else {
-                log::warn!("skipping a CoreText run without a font");
-                continue;
+            let attributes = run.attributes().unwrap();
+            let font = unsafe {
+                attributes
+                    .get(kCTFontAttributeName)
+                    .downcast::<CTFont>()
+                    .unwrap()
             };
             let font_id = self.id_for_native_font(font);
 
-            if !matches!(runs.last(), Some(last) if last.font_id == font_id) {
-                runs.push(ShapedRun {
-                    font_id,
-                    glyphs: Vec::with_capacity(run.glyph_count().try_into().unwrap_or(0)),
-                });
-            }
-            let Some(shaped_run) = runs.last_mut() else {
-                continue;
+            let glyphs = match runs.last_mut() {
+                Some(run) if run.font_id == font_id => &mut run.glyphs,
+                _ => {
+                    runs.push(ShapedRun {
+                        font_id,
+                        glyphs: Vec::with_capacity(run.glyph_count().try_into().unwrap_or(0)),
+                    });
+                    &mut runs.last_mut().unwrap().glyphs
+                }
             };
-            let glyphs = &mut shaped_run.glyphs;
             for ((&glyph_id, position), &glyph_utf16_ix) in run
                 .glyphs()
                 .iter()
                 .zip(run.positions().iter())
                 .zip(run.string_indices().iter())
             {
-                let Ok(glyph_utf16_ix) = usize::try_from(glyph_utf16_ix) else {
-                    continue;
-                };
+                let glyph_utf16_ix = usize::try_from(glyph_utf16_ix).unwrap();
                 if ix_converter.utf16_ix > glyph_utf16_ix {
                     // We cannot reuse current index converter, as it can only seek forward. Restart the search.
                     ix_converter = StringIndexConverter::new(text);
@@ -796,8 +783,7 @@ mod lenient_font_attributes {
 mod tests {
     use crate::AppleTextSystem;
     use gpui::{
-        FontFallbacks, FontFeatures, FontId, FontRun, GlyphId, LineLayout, PlatformTextSystem,
-        font, px,
+        FontFallbacks, FontFeatures, FontId, FontRun, GlyphId, PlatformTextSystem, font, px,
     };
     use std::sync::Arc;
 
@@ -824,76 +810,124 @@ mod tests {
         assert!(!layout.runs.is_empty());
     }
 
-    fn shaped(layout: &LineLayout) -> Vec<(FontId, GlyphId, i32, usize, bool)> {
-        layout
-            .runs
-            .iter()
-            .flat_map(|run| {
-                run.glyphs.iter().map(|glyph| {
-                    (
-                        run.font_id,
-                        glyph.id,
-                        (f32::from(glyph.position.x) * 100.).round() as i32,
-                        glyph.index,
-                        glyph.is_emoji,
-                    )
-                })
-            })
-            .collect()
-    }
-
     #[test]
-    fn test_kept_fonts_shape_like_new_ones() {
-        let kept = AppleTextSystem::new();
-        let helvetica = font("Helvetica");
-        let line = "ok \u{1F600}\u{1F44D}\u{1F3FD} done \u{05E9}\u{05DC}\u{05D5}\u{05DD}";
-        for size in [13., 16., 26., 13.] {
-            let run = |fonts: &AppleTextSystem| {
-                [FontRun {
-                    font_id: fonts.font_id(&helvetica).unwrap(),
-                    len: line.len(),
-                }]
-            };
-            let kept_layout = kept.layout_line(line, px(size), &run(&kept));
-            let new = AppleTextSystem::new();
-            let new_layout = new.layout_line(line, px(size), &run(&new));
-            assert!(new_layout.runs.len() > 1, "the line needs a fallback font");
-            assert_eq!(shaped(&kept_layout), shaped(&new_layout), "at {size}");
-            assert_eq!(kept_layout.width, new_layout.width, "at {size}");
+    fn test_layout_line_sets_a_lone_run_at_its_exact_size() {
+        use core_foundation::attributed_string::CFMutableAttributedString;
+        use core_foundation::base::{CFRange, TCFType};
+        use core_foundation::string::CFString;
+        use core_text::line::CTLine;
+        use core_text::string_attributes::kCTFontAttributeName;
+
+        let fonts = AppleTextSystem::new();
+        let font_id = fonts.font_id(&font(".SystemUIFont")).unwrap();
+        let text = "Hamburgefonstiv 0123 Wafer";
+        let bom = "\u{feff}";
+        let with_bom = format!("{bom}{text}");
+        for size in [11., 17., 22.] {
+            let exact = fonts.0.read().fonts[font_id.0]
+                .native_font()
+                .clone_with_font_size(size as f64);
+            let mut string = CFMutableAttributedString::new();
+            string.replace_str(&CFString::new(text), CFRange::init(0, 0));
+            let range = CFRange::init(0, string.char_len());
+            unsafe { string.set_attribute(range, kCTFontAttributeName, &exact) };
+            let line = CTLine::new_with_attributed_string(string.as_concrete_TypeRef());
+            let width = line.get_typographic_bounds().width as f32;
+
+            let layout = fonts.layout_line(
+                text,
+                px(size),
+                &[FontRun {
+                    font_id,
+                    len: text.len(),
+                }],
+            );
+            assert_eq!(f32::from(layout.width), width, "{size} px");
+
+            // replace_str drops a leading BOM, so its run must not count as the previous run.
+            let layout = fonts.layout_line(
+                &with_bom,
+                px(size),
+                &[
+                    FontRun {
+                        font_id,
+                        len: bom.len(),
+                    },
+                    FontRun {
+                        font_id,
+                        len: text.len(),
+                    },
+                ],
+            );
+            assert_eq!(f32::from(layout.width), width, "{size} px after a BOM run");
         }
     }
 
     #[test]
-    fn test_adjacent_runs_shape_alike_past_the_font_limit() {
-        let kept = AppleTextSystem::new();
-        let helvetica = font("Helvetica");
-        let font_id = kept.font_id(&helvetica).unwrap();
-        // Two runs of one font take the `next_up` size that breaks ligatures.
-        let (line, split) = ("office fine", 3);
-        let runs = [
-            FontRun { font_id, len: split },
-            FontRun {
-                font_id,
-                len: line.len() - split,
-            },
-        ];
-        let before = kept.layout_line(line, px(16.), &runs);
-        for extra in 0..super::MAX_SIZED_FONTS {
-            let size = px(100. + extra as f32);
-            kept.layout_line("x", size, &[FontRun { font_id, len: 1 }]);
-        }
-        let new = AppleTextSystem::new();
-        let new_id = new.font_id(&helvetica).unwrap();
-        let new_runs = runs.map(|run| FontRun {
-            font_id: new_id,
-            len: run.len,
-        });
-        let new_layout = new.layout_line(line, px(16.), &new_runs);
-        let after = kept.layout_line(line, px(16.), &runs);
+    fn test_layout_line_breaks_ligatures_between_runs() {
+        let fonts = AppleTextSystem::new();
+        fonts
+            .add_fonts(vec![
+                include_bytes!("../../../assets/fonts/lilex/Lilex-Regular.ttf")
+                    .as_slice()
+                    .into(),
+            ])
+            .unwrap();
+        let glyphs = |text: &str, runs: &[(FontId, usize)]| -> Vec<GlyphId> {
+            let runs = runs
+                .iter()
+                .map(|&(font_id, len)| FontRun { font_id, len })
+                .collect::<Vec<_>>();
+            fonts
+                .layout_line(text, px(16.), &runs)
+                .runs
+                .iter()
+                .flat_map(|run| run.glyphs.iter().map(|glyph| glyph.id))
+                .collect()
+        };
 
-        assert_eq!(shaped(&before), shaped(&new_layout));
-        assert_eq!(shaped(&after), shaped(&new_layout));
-        assert_eq!(after.width, new_layout.width);
+        let lilex = fonts.font_id(&font("Lilex")).unwrap();
+        let gt = glyphs(">", &[(lilex, 1)])[0];
+        assert_ne!(glyphs(">>>", &[(lilex, 3)]), vec![gt; 3], ">>> as one run");
+        assert_eq!(
+            glyphs(">>>", &[(lilex, 1), (lilex, 1), (lilex, 1)]),
+            vec![gt; 3]
+        );
+        let mut split = glyphs(">>", &[(lilex, 2)]);
+        split.push(gt);
+        assert_eq!(glyphs(">>>", &[(lilex, 2), (lilex, 1)]), split);
+        let mut split = vec![gt];
+        split.extend(glyphs(">>", &[(lilex, 2)]));
+        assert_eq!(glyphs(">>>", &[(lilex, 1), (lilex, 2)]), split);
+
+        // Distinct font ids that resolve to the same font.
+        let zed_mono = fonts.font_id(&font(".ZedMono")).unwrap();
+        let mut no_fallbacks = font("Lilex");
+        no_fallbacks.fallbacks = Some(FontFallbacks(Arc::new(Vec::new())));
+        let no_fallbacks = fonts.font_id(&no_fallbacks).unwrap();
+        for other in [zed_mono, no_fallbacks] {
+            assert_ne!(lilex, other);
+            assert_eq!(
+                glyphs(">>>", &[(lilex, 1), (other, 1), (lilex, 1)]),
+                vec![gt; 3]
+            );
+        }
+
+        // Empty runs between two runs of one font.
+        let times = fonts.font_id(&font("Times")).unwrap();
+        let helvetica = fonts.font_id(&font("Helvetica")).unwrap();
+        let system = fonts.font_id(&font(".SystemUIFont")).unwrap();
+        let mut split = glyphs("f", &[(times, 1)]);
+        split.extend(glyphs("i", &[(times, 1)]));
+        assert_ne!(glyphs("fi", &[(times, 2)]), split, "fi as one run");
+        assert_eq!(
+            glyphs("fi", &[(times, 1), (helvetica, 0), (system, 0), (times, 1)]),
+            split
+        );
+
+        // Runs of different fonts that both fall back to Geeza Pro for Arabic.
+        assert_eq!(glyphs("لا", &[(helvetica, 4)]).len(), 1, "لا as one run");
+        assert_eq!(glyphs("لا", &[(helvetica, 2), (times, 2)]).len(), 2);
     }
 
     #[test]

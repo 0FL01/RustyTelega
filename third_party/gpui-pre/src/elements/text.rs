@@ -1,5 +1,3 @@
-// Modified by the Quill project (2026) from gpui-pre 0.3.9 (Apache-2.0):
-// a tooltip is filtered under its owner's tags. See third_party/gpui-pre/QUILL-CHANGES.md.
 use crate::{
     ActiveTooltip, AnyView, App, Bounds, DispatchPhase, Element, ElementId, GlobalElementId,
     HighlightStyle, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, LayoutId,
@@ -272,7 +270,7 @@ impl Element for &'static str {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let mut state = TextLayout::default();
+        let state = TextLayout::default();
         let layout_id = state.layout(SharedString::from(*self), None, window, cx);
         (layout_id, state)
     }
@@ -346,7 +344,7 @@ impl Element for SharedString {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let mut state = TextLayout::default();
+        let state = TextLayout::default();
         let layout_id = state.layout(self.clone(), None, window, cx);
         (layout_id, state)
     }
@@ -418,7 +416,7 @@ impl StyledText {
     /// Set the styling attributes for the given text, as well as
     /// as any ranges of text that have had their style customized.
     pub fn with_default_highlights(
-        mut self,
+        self,
         default_style: &TextStyle,
         highlights: impl IntoIterator<Item = (Range<usize>, HighlightStyle)>,
     ) -> Self {
@@ -862,7 +860,7 @@ impl TextLayout {
     }
 
     /// Get the byte index into the input of the pixel position.
-    pub fn index_for_position(&self, mut position: Point<Pixels>) -> Result<usize, usize> {
+    pub fn index_for_position(&self, position: Point<Pixels>) -> Result<usize, usize> {
         let element_state = self.0.borrow();
         let element_state = element_state
             .as_ref()
@@ -1168,12 +1166,10 @@ impl Element for InteractiveText {
     ) {
         let current_view = window.current_view();
         let text_layout = self.text.layout().clone();
-        // Quill: its tooltip is filtered under the tags above it.
-        window.record_tooltip_tags(self.tooltip_id);
         window.with_element_state::<InteractiveTextState, _>(
             global_id.unwrap(),
             |interactive_state, window| {
-                let mut interactive_state = interactive_state.unwrap_or_default();
+                let interactive_state = interactive_state.unwrap_or_default();
                 if let Some(click_listener) = self.click_listener.take() {
                     let mouse_position = window.mouse_position();
                     if let Ok(ix) = text_layout.index_for_position(mouse_position)
@@ -1228,7 +1224,7 @@ impl Element for InteractiveText {
                 }
 
                 window.on_mouse_event({
-                    let mut hover_listener = self.hover_listener.take();
+                    let hover_listener = self.hover_listener.take();
                     let hitbox = hitbox.clone();
                     let text_layout = text_layout.clone();
                     let hovered_index = interactive_state.hovered_index.clone();

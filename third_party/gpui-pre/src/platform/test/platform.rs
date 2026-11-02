@@ -58,7 +58,6 @@ pub(crate) struct TestPlatform {
     weak: Weak<Self>,
     menus: RefCell<Vec<OwnedMenu>>,
     pub(crate) app_lifecycle_callback: RefCell<Option<Box<dyn FnMut(AppLifecyclePhase)>>>,
-    pub(crate) quit_request_callback: RefCell<Option<Box<dyn FnMut() -> crate::QuitAnswer>>>,
     pub(crate) memory_warning_callback: RefCell<Option<Box<dyn FnMut()>>>,
 }
 
@@ -84,7 +83,7 @@ impl ScreenCaptureSource for TestScreenCaptureSource {
         _foreground_executor: &ForegroundExecutor,
         _frame_callback: Box<dyn Fn(ScreenCaptureFrame) + Send>,
     ) -> oneshot::Receiver<Result<Box<dyn ScreenCaptureStream>>> {
-        let (mut tx, rx) = oneshot::channel();
+        let (tx, rx) = oneshot::channel();
         let stream = TestScreenCaptureStream {};
         tx.send(Ok(Box::new(stream) as Box<dyn ScreenCaptureStream>))
             .ok();
@@ -146,6 +145,7 @@ impl TestPlatform {
         Self::with_platform(executor, foreground_executor, text_system, None)
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn simulate_display_added(
         &self,
         display_id: DisplayId,
@@ -157,6 +157,7 @@ impl TestPlatform {
 
     /// Adds a display without telling App yet, as when the platform's
     /// notifications about a window arrive before those about displays.
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn connect_display(
         &self,
         display_id: DisplayId,
@@ -167,6 +168,7 @@ impl TestPlatform {
         self.displays.borrow_mut().push(display);
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn simulate_display_removed(&self, display_id: DisplayId) {
         self.displays
             .borrow_mut()
@@ -174,6 +176,7 @@ impl TestPlatform {
         self.report_displays_changed();
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn simulate_display_refresh_interval_change(
         &self,
         display_id: DisplayId,
@@ -187,6 +190,7 @@ impl TestPlatform {
         self.report_displays_changed();
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     fn report_displays_changed(&self) {
         let callback = self.displays_changed_callback.borrow_mut().take();
         if let Some(mut callback) = callback {
@@ -258,7 +262,6 @@ impl TestPlatform {
             headless_renderer_factory,
             menus: Default::default(),
             app_lifecycle_callback: Default::default(),
-            quit_request_callback: Default::default(),
             memory_warning_callback: Default::default(),
         })
     }
@@ -575,7 +578,7 @@ impl Platform for TestPlatform {
     fn screen_capture_sources(
         &self,
     ) -> oneshot::Receiver<Result<Vec<Rc<dyn ScreenCaptureSource>>>> {
-        let (mut tx, rx) = oneshot::channel();
+        let (tx, rx) = oneshot::channel();
         tx.send(Ok(self
             .screen_capture_sources
             .borrow()
@@ -687,10 +690,6 @@ impl Platform for TestPlatform {
     }
 
     fn on_quit(&self, _callback: Box<dyn FnMut() -> bool>) {}
-
-    fn on_quit_request(&self, callback: Box<dyn FnMut() -> crate::QuitAnswer>) {
-        *self.quit_request_callback.borrow_mut() = Some(callback);
-    }
 
     fn on_reopen(&self, _callback: Box<dyn FnMut()>) {
         unimplemented!()

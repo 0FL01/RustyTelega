@@ -32,44 +32,20 @@ pub struct ForegroundExecutor {
     not_send: PhantomData<Rc<()>>,
 }
 
-#[cfg(feature = "test-support")]
-thread_local! {
-    /// [`ForegroundExecutor::live_tasks`].
-    static LIVE_TASKS: std::cell::RefCell<
-        std::collections::BTreeMap<&'static core::panic::Location<'static>, usize>,
-    > = std::cell::RefCell::default();
+/// A thread-safe handle for spawning `Send` futures on the main thread.
+#[derive(Clone)]
+pub struct SendForegroundExecutor {
+    inner: scheduler::SendLocalExecutor,
 }
 
-/// Counts one foreground task in [`LIVE_TASKS`] while its future exists.
-#[cfg(feature = "test-support")]
-struct LiveTask(&'static core::panic::Location<'static>);
-
-#[cfg(feature = "test-support")]
-impl LiveTask {
+impl SendForegroundExecutor {
+    /// Enqueues a future to run on the main thread, even when submitted from another thread.
     #[track_caller]
-    fn wrap<R>(future: impl Future<Output = R> + 'static) -> impl Future<Output = R> + 'static {
-        let at = core::panic::Location::caller();
-        LIVE_TASKS.with(|tasks| *tasks.borrow_mut().entry(at).or_default() += 1);
-        let live = LiveTask(at);
-        async move {
-            let _live = live;
-            future.await
-        }
-    }
-}
-
-#[cfg(feature = "test-support")]
-impl Drop for LiveTask {
-    fn drop(&mut self) {
-        let _ = LIVE_TASKS.try_with(|tasks| {
-            let mut tasks = tasks.borrow_mut();
-            if let Some(count) = tasks.get_mut(self.0) {
-                *count = count.saturating_sub(1);
-                if *count == 0 {
-                    tasks.remove(self.0);
-                }
-            }
-        });
+    pub fn spawn<R>(&self, future: impl Future<Output = R> + Send + 'static) -> Task<R>
+    where
+        R: Send + 'static,
+    {
+        self.inner.spawn(future)
     }
 }
 
@@ -338,6 +314,13 @@ impl BackgroundExecutor {
 }
 
 impl ForegroundExecutor {
+    /// Creates a thread-safe handle that submits `Send` futures to this foreground executor.
+    pub fn to_send(&self) -> SendForegroundExecutor {
+        SendForegroundExecutor {
+            inner: self.inner.to_send(),
+        }
+    }
+
     /// Creates a new ForegroundExecutor from the given PlatformDispatcher.
     pub fn new(dispatcher: Arc<dyn PlatformDispatcher>) -> Self {
         #[cfg(any(test, feature = "test-support"))]
@@ -396,20 +379,7 @@ impl ForegroundExecutor {
     where
         R: 'static,
     {
-        #[cfg(feature = "test-support")]
-        let future = LiveTask::wrap(future);
         self.inner.spawn(future.boxed_local())
-    }
-
-    /// The tasks spawned on this thread's foreground executors that have
-    /// neither finished nor been dropped, counted by where they were
-    /// spawned. A test reads it to check that closing a surface ends the
-    /// tasks opening it started.
-    #[cfg(feature = "test-support")]
-    pub fn live_tasks(
-        &self,
-    ) -> std::collections::BTreeMap<&'static core::panic::Location<'static>, usize> {
-        LIVE_TASKS.with(|tasks| tasks.borrow().clone())
     }
 
     /// Enqueues the given Task to run on the main thread with the given priority.
@@ -423,8 +393,6 @@ impl ForegroundExecutor {
         R: 'static,
     {
         // Priority is ignored for foreground tasks - they run in order on the main thread
-        #[cfg(feature = "test-support")]
-        let future = LiveTask::wrap(future);
         self.inner.spawn(future)
     }
 
@@ -449,8 +417,6 @@ impl ForegroundExecutor {
         let dispatcher = self.dispatcher.clone();
         #[cfg(feature = "profiler")]
         let foreground_runnables = self.foreground_runnables.clone();
-        #[cfg(feature = "test-support")]
-        let future = LiveTask::wrap(future);
         self.inner
             .spawn_with_dispatch(future.boxed_local(), move |runnable| {
                 #[cfg(feature = "profiler")]
@@ -611,6 +577,25 @@ mod test {
 
         let app = App::new_app(platform, asset_source, http_client);
         (dispatcher, background_executor, app)
+    }
+
+    #[test]
+    fn send_foreground_executor_submits_from_worker() {
+        let dispatcher = TestDispatcher::new(0);
+        let foreground_executor = ForegroundExecutor::new(Arc::new(dispatcher.clone()));
+        let main_thread = std::thread::current().id();
+        let foreground_executor = foreground_executor.to_send();
+        let task = std::thread::spawn(move || {
+            foreground_executor.spawn(async move {
+                assert_eq!(std::thread::current().id(), main_thread);
+                42
+            })
+        })
+        .join()
+        .expect("worker must submit the foreground task");
+
+        dispatcher.run_until_parked();
+        assert_eq!(task.now_or_never(), Some(42));
     }
 
     #[test]

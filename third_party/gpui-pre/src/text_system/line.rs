@@ -1,5 +1,3 @@
-// Modified by the Quill project (2026) from gpui-pre 0.3.10 (Apache-2.0):
-// `ShapedLine` keeps one decoration run inline. See third_party/gpui-pre/QUILL-CHANGES.md.
 use crate::{
     App, Bounds, DevicePixels, Half, Hsla, LineLayout, Pixels, Point, RenderGlyphParams, Result,
     SharedString, StrikethroughStyle, TextAlign, UnderlineStyle, Window, WrapBoundary,
@@ -48,12 +46,8 @@ pub struct ShapedLine {
     pub(crate) layout: Arc<LineLayout>,
     /// The text that was shaped for this line.
     pub text: SharedString,
-    pub(crate) decoration_runs: DecorationRuns,
+    pub(crate) decoration_runs: SmallVec<[DecorationRun; 32]>,
 }
-
-/// QUILL: one run inline. Thirty-two made every `ShapedLine` 3 KB, nearly
-/// all of it empty, and laid-out paragraphs keep one per visual run.
-pub(crate) type DecorationRuns = SmallVec<[DecorationRun; 1]>;
 
 impl ShapedLine {
     /// Returns a forward-only cursor for this shaped line.
@@ -905,7 +899,7 @@ fn paint_line_background(
                 }
 
                 if let Some((mut background_origin, background_color)) = finished_background {
-                    let mut width = glyph_origin.x - background_origin.x;
+                    let width = glyph_origin.x - background_origin.x;
                     if background_origin.x == glyph_origin.x {
                         background_origin.x -= max_glyph_size.width.half();
                     };

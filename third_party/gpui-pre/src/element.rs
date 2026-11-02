@@ -120,12 +120,6 @@ pub trait Element: 'static + IntoElement {
     /// See the [accessibility guide](crate::_accessibility) for an overview.
     fn write_a11y_info(&self, _node: &mut accesskit::Node) {}
 
-    /// The tag an in-process reader of the tree sees on this element's node
-    /// ([`InteractiveElement::a11y_tag`]). Never sent to the platform.
-    fn a11y_tag(&self) -> Option<crate::SharedString> {
-        None
-    }
-
     /// Add synthetic child nodes to an [`Element`] that has an
     /// [`.id()`][Element::id] and a [`.role()`][Element::a11y_role].
     ///
@@ -445,15 +439,6 @@ impl<E: Element> Drawable<E> {
                             });
                             self.element.write_a11y_info(&mut node);
                             window.a11y.node_bounds.insert(node_id, bounds);
-                            // Only here, under `a11y_role`: a tag on an
-                            // element without a role has no node to ride
-                            // and never reaches the tree. It still tags
-                            // the element's hitbox and the tag stack, so
-                            // readers of pointer and focus tags see it; a
-                            // tag meant for the tree needs a role.
-                            if let Some(tag) = self.element.a11y_tag() {
-                                window.a11y.node_tags.insert(node_id, tag);
-                            }
                             pushed_a11y_node = window.a11y.nodes.push(node_id, node);
                             #[cfg(debug_assertions)]
                             if pushed_a11y_node {
@@ -961,7 +946,7 @@ mod global_element_id_tests {
         for (items, depth) in [(500, 4), (500, 12), (2000, 12)] {
             let window = cx.add_window(move |_, _| DeepStatefulTree { items, depth });
             let window = crate::AnyWindowHandle::from(window);
-            let mut frame = |cx: &mut crate::TestAppContext| {
+            let frame = |cx: &mut crate::TestAppContext| {
                 cx.update_window(window, |_, window, cx| {
                     window.refresh();
                     let started = std::time::Instant::now();

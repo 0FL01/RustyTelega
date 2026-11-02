@@ -10,16 +10,16 @@ use ctor::ctor;
 use dispatch2::DispatchQueue;
 use futures::channel::oneshot;
 use gpui::{
-    Action, ActivationPolicy, ActivityGuard, AnyWindowHandle, AppLifecyclePhase,
-    BackgroundExecutor, ClipboardItem, CursorStyle, ForegroundExecutor, GraphicalEnvironment,
-    KeyContext, Keymap, Menu, MenuItem, OsMenu, OwnedMenu, PathPromptOptions, Platform,
-    PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem,
-    PlatformWindow, QuitAnswer, QuitStep, Result, SystemMenuType, Task, ThermalState, WindowAppearance,
-    WindowKind, WindowParams, WindowingRequest, popup::PopupNotSupportedError,
+    Action, ActivationPolicy, ActivityGuard, AnyWindowHandle, BackgroundExecutor, ClipboardItem,
+    CursorStyle, ForegroundExecutor, GraphicalEnvironment, KeyContext, Keymap, Menu, MenuItem,
+    OsMenu, OwnedMenu, PathPromptOptions, Platform, PlatformDisplay, PlatformKeyboardLayout,
+    PlatformKeyboardMapper, PlatformTextSystem, PlatformWindow, PowerMode, Result, SystemMenuType,
+    Task, ThermalState, WindowAppearance, WindowKind, WindowParams, WindowingRequest,
+    popup::PopupNotSupportedError,
 };
 use gpui_apple::{
     keychain,
-    thermal::{self, ThermalObserver},
+    process_info::{self, ProcessInfoObserver},
 };
 use gpui_util::{ResultExt, new_std_command};
 use itertools::Itertools;
@@ -32,10 +32,9 @@ use objc2::{
 use objc2_app_kit::{
     NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSAppearanceNameVibrantDark,
     NSAppearanceNameVibrantLight, NSApplication, NSApplicationActivationPolicy,
-    NSApplicationTerminateReply, NSControlStateValueOn, NSCursor, NSDocumentController,
-    NSEventModifierFlags, NSMenu, NSMenuItem, NSModalResponse, NSModalResponseOK, NSOpenPanel,
-    NSSavePanel, NSScroller, NSScrollerStyle, NSWorkspace, NSWorkspaceDidWakeNotification,
-    NSWorkspaceWillSleepNotification,
+    NSControlStateValueOn, NSCursor, NSDocumentController, NSEventModifierFlags, NSMenu,
+    NSMenuItem, NSModalResponse, NSModalResponseOK, NSOpenPanel, NSSavePanel, NSScroller,
+    NSScrollerStyle, NSWorkspace, NSWorkspaceDidWakeNotification, NSWorkspaceWillSleepNotification,
 };
 use objc2_foundation::{
     NSActivityOptions, NSArray, NSBundle, NSError, NSInteger, NSProcessInfo, NSString, NSURL,
@@ -87,15 +86,6 @@ unsafe fn build_classes() {
             decl.add_method(
                 sel!(applicationShouldHandleReopen:hasVisibleWindows:),
                 should_handle_reopen as extern "C-unwind" fn(_, Sel, *mut AnyObject, Bool) -> Bool,
-            );
-            decl.add_method(
-                sel!(applicationDidBecomeActive:),
-                did_become_active as extern "C-unwind" fn(_, Sel, *mut AnyObject),
-            );
-            decl.add_method(
-                sel!(applicationShouldTerminate:),
-                should_terminate
-                    as extern "C-unwind" fn(_, Sel, *mut AnyObject) -> NSApplicationTerminateReply,
             );
             decl.add_method(
                 sel!(applicationWillTerminate:),
@@ -161,7 +151,6 @@ unsafe fn build_classes() {
                 sel!(onSystemSleep:),
                 on_system_sleep as extern "C-unwind" fn(_, Sel, *mut AnyObject),
             );
-
             decl.add_method(
                 sel!(onSystemWake:),
                 on_system_wake as extern "C-unwind" fn(_, Sel, *mut AnyObject),
@@ -185,19 +174,14 @@ pub(crate) struct MacPlatformState {
     general_pasteboard: Pasteboard,
     find_pasteboard: Pasteboard,
     reopen: Option<Box<dyn FnMut()>>,
-    app_lifecycle: Option<Box<dyn FnMut(AppLifecyclePhase)>>,
     on_keyboard_layout_change: Option<Box<dyn FnMut()>>,
-    thermal_observer: Option<ThermalObserver>,
+    thermal_observer: Option<ProcessInfoObserver>,
+    power_mode_observer: Option<ProcessInfoObserver>,
     on_displays_changed: Option<Box<dyn FnMut()>>,
     on_system_sleep: Option<Box<dyn FnMut()>>,
     on_system_wake: Option<Box<dyn FnMut()>>,
     system_power_observers_registered: bool,
     quit: Option<Box<dyn FnMut() -> bool>>,
-    quit_request: Option<Box<dyn FnMut() -> QuitAnswer>>,
-    /// `quit_request` was registered; an empty slot then means it runs.
-    quit_request_set: bool,
-    /// `Platform::quit` ran: the app decided, so `terminate:` asks nothing.
-    quit_decided: bool,
     menu_command: Option<Box<dyn FnMut(&dyn Action)>>,
     validate_menu_command: Option<Box<dyn FnMut(&dyn Action) -> bool>>,
     will_open_menu: Option<Box<dyn FnMut()>>,
@@ -260,11 +244,7 @@ impl MacPlatform {
             general_pasteboard: Pasteboard::general(),
             find_pasteboard: Pasteboard::find(),
             reopen: None,
-            app_lifecycle: None,
             quit: None,
-            quit_request: None,
-            quit_request_set: false,
-            quit_decided: false,
             menu_command: None,
             validate_menu_command: None,
             will_open_menu: None,
@@ -274,6 +254,7 @@ impl MacPlatform {
             dock_menu: None,
             on_keyboard_layout_change: None,
             thermal_observer: None,
+            power_mode_observer: None,
             on_displays_changed: None,
             on_system_sleep: None,
             on_system_wake: None,
@@ -600,7 +581,6 @@ impl Platform for MacPlatform {
         // this, we make quitting the application asynchronous so that we aren't holding borrows to
         // the app state on the stack when we actually terminate the app.
 
-        self.0.lock().quit_decided = true;
         unsafe {
             DispatchQueue::main().exec_async_f(ptr::null_mut(), quit);
         }
@@ -1059,18 +1039,8 @@ impl Platform for MacPlatform {
         self.0.lock().quit = Some(callback);
     }
 
-    fn on_quit_request(&self, callback: Box<dyn FnMut() -> QuitAnswer>) {
-        let mut lock = self.0.lock();
-        lock.quit_request = Some(callback);
-        lock.quit_request_set = true;
-    }
-
     fn on_reopen(&self, callback: Box<dyn FnMut()>) {
         self.0.lock().reopen = Some(callback);
-    }
-
-    fn on_app_lifecycle(&self, callback: Box<dyn FnMut(AppLifecyclePhase)>) {
-        self.0.lock().app_lifecycle = Some(callback);
     }
 
     fn on_keyboard_layout_change(&self, callback: Box<dyn FnMut()>) {
@@ -1090,7 +1060,7 @@ impl Platform for MacPlatform {
     }
 
     fn on_thermal_state_change(&self, callback: Box<dyn FnMut()>) {
-        let observer = ThermalObserver::new(&self.foreground_executor(), callback);
+        let observer = process_info::observe_thermal_state(&self.foreground_executor(), callback);
         self.0.lock().thermal_observer = Some(observer);
     }
 
@@ -1099,13 +1069,18 @@ impl Platform for MacPlatform {
         self.ensure_system_power_observers();
     }
 
+    fn on_power_mode_change(&self, callback: Box<dyn FnMut()>) {
+        let observer = process_info::observe_power_mode(&self.foreground_executor(), callback);
+        self.0.lock().power_mode_observer = Some(observer);
+    }
+
     fn on_system_wake(&self, callback: Box<dyn FnMut()>) {
         self.0.lock().on_system_wake = Some(callback);
         self.ensure_system_power_observers();
     }
 
     fn thermal_state(&self) -> ThermalState {
-        thermal::thermal_state()
+        process_info::thermal_state()
     }
 
     fn prevent_idle_sleep(&self, reason: &str) -> Task<Result<ActivityGuard>> {
@@ -1113,6 +1088,10 @@ impl Platform for MacPlatform {
             reason,
             NSActivityOptions::UserInitiated,
         )))
+    }
+
+    fn power_mode(&self) -> PowerMode {
+        process_info::power_mode()
     }
 
     fn show_system_notification(&self, notification: gpui::SystemNotification) {
@@ -1350,7 +1329,6 @@ extern "C-unwind" fn did_finish_launching(this: &AnyObject, _: Sel, _: *mut AnyO
             name: ns_string("NSApplicationDidChangeScreenParametersNotification"),
             object: ptr::null_mut::<AnyObject>()
         ];
-
         let platform = get_mac_platform(this);
         let callback = {
             let mut state = platform.0.lock();
@@ -1394,95 +1372,18 @@ extern "C-unwind" fn should_handle_reopen(
     this: &AnyObject,
     _: Sel,
     _: *mut AnyObject,
-    _: Bool,
+    has_open_windows: Bool,
 ) -> Bool {
-    let platform = unsafe { get_mac_platform(this) };
-    let mut lock = platform.0.lock();
-    if let Some(mut callback) = lock.reopen.take() {
-        drop(lock);
-        callback();
-        platform.0.lock().reopen.get_or_insert(callback);
+    if !has_open_windows.as_bool() {
+        let platform = unsafe { get_mac_platform(this) };
+        let mut lock = platform.0.lock();
+        if let Some(mut callback) = lock.reopen.take() {
+            drop(lock);
+            callback();
+            platform.0.lock().reopen.get_or_insert(callback);
+        }
     }
     Bool::YES
-}
-
-extern "C-unwind" fn did_become_active(this: &AnyObject, _: Sel, _: *mut AnyObject) {
-    // Deferred like `on_screen_parameters_change`: the notification may fire
-    // while the App is already borrowed.
-    let platform = unsafe { get_mac_platform(this) };
-    let platform_ptr = platform as *const MacPlatform as *mut c_void;
-    unsafe {
-        DispatchQueue::main().exec_async_f(platform_ptr, did_become_active);
-    }
-
-    extern "C" fn did_become_active(context: *mut c_void) {
-        let platform = unsafe { &*(context as *const MacPlatform) };
-        let callback = platform.0.lock().app_lifecycle.take();
-        if let Some(mut callback) = callback {
-            callback(AppLifecyclePhase::Active);
-            platform.0.lock().app_lifecycle.get_or_insert(callback);
-        }
-    }
-}
-
-extern "C-unwind" fn should_terminate(
-    this: &AnyObject,
-    _: Sel,
-    _: *mut AnyObject,
-) -> NSApplicationTerminateReply {
-    let platform = unsafe { get_mac_platform(this) };
-    if platform.0.lock().quit_decided {
-        return NSApplicationTerminateReply::TerminateNow;
-    }
-    match ask_quit_request(platform) {
-        QuitAnswer::Allow => NSApplicationTerminateReply::TerminateNow,
-        QuitAnswer::Refuse => NSApplicationTerminateReply::TerminateCancel,
-        QuitAnswer::Later => {
-            ask_quit_request_later(platform, 1);
-            NSApplicationTerminateReply::TerminateLater
-        }
-    }
-}
-
-fn ask_quit_request(platform: &MacPlatform) -> QuitAnswer {
-    let mut lock = platform.0.lock();
-    if !lock.quit_request_set {
-        return QuitAnswer::Allow;
-    }
-    let Some(mut callback) = lock.quit_request.take() else {
-        return QuitAnswer::Later;
-    };
-    drop(lock);
-    let answer = callback();
-    platform.0.lock().quit_request.get_or_insert(callback);
-    answer
-}
-
-/// How many asks the quit AppKit waits on has had; one quit waits at a time.
-static QUIT_ASKED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-
-// The app was busy when AppKit asked: it waits for
-// `replyToApplicationShouldTerminate:`, and the app is asked again from the
-// main queue, at most `QUIT_ASKS_AGAIN` times (`QuitAnswer::step`).
-fn ask_quit_request_later(platform: &MacPlatform, asked: u32) {
-    QUIT_ASKED.store(asked, std::sync::atomic::Ordering::Relaxed);
-    let platform_ptr = platform as *const MacPlatform as *mut c_void;
-    // SAFETY: platform lives for the process lifetime while callbacks are registered.
-    unsafe {
-        DispatchQueue::main().exec_async_f(platform_ptr, answer_later);
-    }
-
-    extern "C" fn answer_later(context: *mut c_void) {
-        // SAFETY: context is the MacPlatform pointer queued above.
-        let platform = unsafe { &*(context as *const MacPlatform) };
-        let asked = QUIT_ASKED.load(std::sync::atomic::Ordering::Relaxed);
-        match ask_quit_request(platform).step(asked) {
-            QuitStep::AskAgain(asked) => ask_quit_request_later(platform, asked),
-            QuitStep::Settled(allow) => {
-                NSApplication::sharedApplication(platform.1).replyToApplicationShouldTerminate(allow)
-            }
-        }
-    }
 }
 
 extern "C-unwind" fn will_terminate(this: &AnyObject, _: Sel, _: *mut AnyObject) {

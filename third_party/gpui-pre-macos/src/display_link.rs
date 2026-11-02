@@ -1,7 +1,8 @@
-// Modified by the Quill project (2026) from gpui-pre-macos 0.3.9 (Apache-2.0):
-// the display link stops while the window is idle, and the latest output (present) time per
-// display is kept for video pacing. See third_party/gpui-pre-macos/QUILL-CHANGES.md.
-//! Frame pacing for macOS windows, built on `CVDisplayLink`.
+//! Frame pacing for macOS windows.
+//!
+//! On macOS 14 and later a window is paced by a `CAMetalDisplayLink` on its
+//! layer ([`gpui_apple::display_link::MetalFrameSource`]). Earlier systems use
+//! the shared `CVDisplayLink` registry described below ([`WindowFrameSource`]).
 //!
 //! CVDisplayLink has no safe teardown: `CVDisplayLinkStop` merely flags the
 //! link's io thread to exit "soon" and returns immediately, and there is no
@@ -60,9 +61,11 @@ use dispatch2::{
     _dispatch_source_type_data_add, DispatchObject, DispatchQueue, DispatchRetained, DispatchSource,
 };
 use gpui::{FrameRequestSource, PlatformFrameSignal};
+use gpui_apple::display_link::MetalFrameSource;
 use gpui_util::ResultExt;
 use scheduler::Instant;
 use std::{
+    cell::{Cell, RefCell},
     collections::{BTreeMap, btree_map},
     ffi::c_void,
     sync::{Arc, Mutex, MutexGuard, PoisonError},
@@ -89,11 +92,6 @@ struct DisplayEntry {
     link: sys::DisplayLink,
     running: bool,
     subscribers: Vec<DisplayLinkSubscriber>,
-    /// Quill: the latest callback's output time (the vsync its frame is
-    /// shown at), as an `Instant` and in host ticks.
-    present: Option<(Instant, u64)>,
-    /// Quill: the display's refresh period from the latest output time.
-    period: Option<Duration>,
 }
 
 struct DisplayLinkSubscriber {
@@ -131,7 +129,7 @@ fn debug_assert_main_thread() {
 unsafe extern "C" fn display_link_output_callback(
     _display_link_out: *mut sys::CVDisplayLink,
     current_time: *const sys::CVTimeStamp,
-    output_time: *const sys::CVTimeStamp,
+    _output_time: *const sys::CVTimeStamp,
     _flags_in: i64,
     _flags_out: *mut i64,
     display_id: *mut c_void,
@@ -150,19 +148,9 @@ unsafe extern "C" fn display_link_output_callback(
             received_at,
         )
     });
-    // SAFETY: CoreVideo owns this timestamp for the lifetime of the callback.
-    let present = present_instant(unsafe { output_time.as_ref() });
-    // SAFETY: as above.
-    let period = refresh_period_of(unsafe { output_time.as_ref() });
     let display_id = display_id as usize as CGDirectDisplayID;
-    let mut registry = lock_registry();
-    if let Some(entry) = registry.displays.get_mut(&display_id) {
-        if present.is_some() {
-            entry.present = present;
-        }
-        if period.is_some() {
-            entry.period = period;
-        }
+    let registry = lock_registry();
+    if let Some(entry) = registry.displays.get(&display_id) {
         for subscriber in &entry.subscribers {
             if let Some(signal_at) = signal_at {
                 subscriber
@@ -201,49 +189,6 @@ fn frame_request_instant(
         .unwrap_or(received_at)
 }
 
-/// Quill: an output timestamp (in the future) as an `Instant`, sampled
-/// against the current host time like [`frame_request_instant`].
-fn present_instant(timestamp: Option<&sys::CVTimeStamp>) -> Option<(Instant, u64)> {
-    let timestamp = timestamp.filter(|timestamp| {
-        timestamp.version == 0 && timestamp.flags & sys::kCVTimeStampHostTimeValid != 0
-    })?;
-    let now_host = objc2_core_video::CVGetCurrentHostTime();
-    let now = Instant::now();
-    let frequency = objc2_core_video::CVGetHostClockFrequency();
-    if !frequency.is_finite() || frequency <= 0.0 {
-        return None;
-    }
-    let ahead = timestamp.host_time.checked_sub(now_host)?;
-    let at = now.checked_add(Duration::try_from_secs_f64(ahead as f64 / frequency).ok()?)?;
-    Some((at, timestamp.host_time))
-}
-
-/// Quill: the refresh period an output timestamp reports
-/// (`videoRefreshPeriod / videoTimeScale`), when valid.
-fn refresh_period_of(timestamp: Option<&sys::CVTimeStamp>) -> Option<Duration> {
-    let timestamp = timestamp.filter(|timestamp| timestamp.version == 0)?;
-    if timestamp.video_refresh_period <= 0 || timestamp.video_time_scale <= 0 {
-        return None;
-    }
-    let secs = timestamp.video_refresh_period as f64 / f64::from(timestamp.video_time_scale);
-    Duration::try_from_secs_f64(secs).ok()
-}
-
-/// Quill: when the latest frame paced by `display_id`'s link is shown, as
-/// an `Instant` and in Mach host ticks, and the display's refresh period,
-/// read under one lock so they belong together (`None` before its link
-/// first ran). Video players pull the picture due then; draw spacing can't
-/// tell the refresh period apart from a player that skips frames on
-/// purpose.
-pub fn present_timing(
-    display_id: CGDirectDisplayID,
-) -> (Option<(Instant, u64)>, Option<Duration>) {
-    lock_registry()
-        .displays
-        .get(&display_id)
-        .map_or((None, None), |entry| (entry.present, entry.period))
-}
-
 fn subscribe(
     display_id: CGDirectDisplayID,
     frame_requests: DispatchRetained<DispatchSource>,
@@ -279,8 +224,6 @@ fn subscribe(
                 link,
                 running: false,
                 subscribers: Vec::new(),
-                present: None,
-                period: None,
             }),
             (btree_map::Entry::Vacant(_), None) => {
                 // Entries are never removed, so an entry observed above cannot
@@ -351,6 +294,54 @@ fn unsubscribe(display_id: CGDirectDisplayID, subscriber_id: SubscriberId) {
     }
 }
 
+/// A window's `CAMetalDisplayLink`, shared with GPUI's frame waker so that a
+/// wake reaches the current link without taking the window's lock.
+///
+/// The link pauses after any update in which GPUI neither drew, presented,
+/// nor asked for another frame, so an idle window acquires no drawables. GPUI
+/// decides when frames are needed (including presenting after high-rate
+/// input); this only stops the link between those decisions.
+#[derive(Default)]
+pub struct MetalFrames {
+    source: RefCell<Option<MetalFrameSource>>,
+    /// Whether GPUI asked for a frame since the current update began.
+    woken: Cell<bool>,
+}
+
+impl MetalFrames {
+    pub fn replace(&self, source: Option<MetalFrameSource>) {
+        *self.source.borrow_mut() = source;
+    }
+
+    pub fn is_attached(&self) -> bool {
+        self.source.borrow().is_some()
+    }
+
+    pub fn wake(&self) {
+        self.woken.set(true);
+        // A source being replaced starts unpaused, so skipping it is safe.
+        if let Ok(source) = self.source.try_borrow()
+            && let Some(source) = source.as_ref()
+        {
+            source.set_paused(false);
+        }
+    }
+
+    pub fn begin_frame(&self) {
+        self.woken.set(false);
+    }
+
+    /// Ends an update, pausing the link if GPUI neither used its drawable nor
+    /// asked for another frame while it ran. Returns whether it paused.
+    pub fn end_frame(&self, used_drawable: bool) -> bool {
+        let pause = !used_drawable && !self.woken.get();
+        if pause && let Some(source) = self.source.borrow().as_ref() {
+            source.set_paused(true);
+        }
+        pause
+    }
+}
+
 /// A per-window source of frame requests, paced by the display the window is
 /// on. The wrapped dispatch source coalesces vsync ticks from the display's
 /// io thread and invokes `callback(data)` on the main queue.
@@ -400,18 +391,6 @@ impl WindowFrameSource {
             unsubscribe(display_id, subscriber_id);
         }
         self.signal.take();
-    }
-
-    /// Quill: whether the display is pacing this window's frames.
-    pub fn is_running(&self) -> bool {
-        self.registration.is_some()
-    }
-
-    /// Quill: the dispatch source that delivers this window's steps on the
-    /// main queue; `merge_data(1)` on it requests one step now, from any
-    /// thread, whether or not the display link runs.
-    pub fn requests(&self) -> DispatchRetained<DispatchSource> {
-        self.frame_requests.clone()
     }
 }
 
@@ -609,6 +588,56 @@ mod sys {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use objc2::AnyThread;
+    use objc2_quartz_core::CAMetalDisplayLink;
+
+    #[test]
+    fn metal_frames_pause_only_when_gpui_neither_draws_nor_asks_again() {
+        let frames = MetalFrames::default();
+
+        frames.begin_frame();
+        assert!(
+            !frames.end_frame(true),
+            "a frame that drew keeps the link running"
+        );
+
+        frames.begin_frame();
+        frames.wake();
+        assert!(
+            !frames.end_frame(false),
+            "a wake during the update, like a throttled frame's retry, keeps it running"
+        );
+
+        frames.wake();
+        frames.begin_frame();
+        assert!(
+            frames.end_frame(false),
+            "a wake before the update was served by it"
+        );
+
+        frames.begin_frame();
+        assert!(frames.end_frame(false), "an idle update pauses the link");
+    }
+
+    #[test]
+    fn a_renderer_draws_normally_after_its_display_link_is_invalidated() {
+        if !MetalFrameSource::is_available() {
+            return;
+        }
+        let mut renderer =
+            crate::renderer::MetalRenderer::new(Default::default(), false, false).unwrap();
+        renderer.update_drawable_size(gpui::size(gpui::DevicePixels(64), gpui::DevicePixels(64)));
+        let layer = renderer.layer().expect("window renderer has a layer");
+        // The link is never added to a run loop: attaching it to the layer is
+        // the state under test.
+        let link = CAMetalDisplayLink::initWithMetalLayer(CAMetalDisplayLink::alloc(), layer);
+        renderer.set_display_link_attached(true);
+        renderer.draw(&gpui::Scene::default());
+
+        link.invalidate();
+        renderer.set_display_link_attached(false);
+        renderer.draw(&gpui::Scene::default());
+    }
 
     #[test]
     fn host_timestamp_preserves_request_age_at_different_clock_rates() {

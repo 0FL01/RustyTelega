@@ -258,28 +258,6 @@ impl<T: Render> Entity<T> {
     pub fn cached(self, style: StyleRefinement) -> ViewElement<Entity<T>> {
         ViewElement::with_type_name(self, type_name::<T>()).cached(style)
     }
-
-    /// Quill: embed this entity as a view that can redraw on its own.
-    ///
-    /// When only live views are notified, the next frame renders those alone
-    /// and takes everything else from the last whole frame, ancestors
-    /// included ([`Window::draw`]). So nothing around a live view may depend
-    /// on its being rendered, and it can't change the window's layout, hit
-    /// tests, focus or accessibility tree: those stay as the last whole frame
-    /// left them, and what it builds in such a frame only paints. A live view
-    /// that builds hitboxes (a hover, a click, a tooltip) never redraws alone,
-    /// since only a whole frame's hit test answers for them: every notify of
-    /// it draws a whole frame. A cached view holding a live view that redrew
-    /// on its own renders again in the next whole frame rather than replay. A
-    /// live view inside another live view redraws with it, a cached view
-    /// between them included.
-    #[track_caller]
-    pub fn live(self) -> ViewElement<Entity<T>> {
-        let live = AnyView::from(self.clone());
-        let mut element = ViewElement::with_type_name(self, type_name::<T>());
-        element.live = Some(live);
-        element
-    }
 }
 
 /// The element type for [`View`] implementations. Wraps a `View` and hooks it
@@ -289,10 +267,6 @@ pub struct ViewElement<V: View> {
     view: Option<V>,
     entity_id: Option<EntityId>,
     cached_style: Option<StyleRefinement>,
-    /// Quill: the view, when it is a live one ([`Entity::live`]).
-    live: Option<AnyView>,
-    /// Quill: its entry in the frame's live views, once prepainted.
-    live_site: Option<usize>,
     #[cfg(feature = "profiler")]
     view_type_name: &'static str,
     #[cfg(debug_assertions)]
@@ -315,8 +289,6 @@ impl<V: View> ViewElement<V> {
         ViewElement {
             entity_id,
             cached_style: None,
-            live: None,
-            live_site: None,
             #[cfg(feature = "profiler")]
             view_type_name,
             view: Some(view),
@@ -348,7 +320,7 @@ impl<V: View> IntoElement for ViewElement<V> {
     }
 }
 
-pub(crate) struct ViewElementState {
+struct ViewElementState {
     prepaint_range: Range<PrepaintStateIndex>,
     paint_range: Range<PaintIndex>,
     cache_key: ViewElementCacheKey,
@@ -359,6 +331,7 @@ struct ViewElementCacheKey {
     bounds: Bounds<Pixels>,
     content_mask: ContentMask<Pixels>,
     text_style: TextStyle,
+    opacity: f32,
 }
 
 #[cfg(not(gpui_hot_reload))]
@@ -438,9 +411,6 @@ impl<V: View> Element for ViewElement<V> {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<AnyElement> {
-        if let Some(view) = self.live.take() {
-            self.live_site = Some(window.note_live_view(view, bounds));
-        }
         if let Some(entity_id) = self.entity_id {
             // Stateful path.
             #[cfg(feature = "profiler")]
@@ -454,9 +424,6 @@ impl<V: View> Element for ViewElement<V> {
                 cx,
                 &mut |window, cx| render_view(self.view.take().unwrap(), window, cx),
             );
-            if let Some(site) = self.live_site {
-                window.live_view_prepainted(site);
-            }
             #[cfg(feature = "profiler")]
             window.window_profiler.end_view(
                 start,
@@ -484,7 +451,6 @@ impl<V: View> Element for ViewElement<V> {
             // Stateful path.
             #[cfg(feature = "profiler")]
             let start = window.window_profiler.begin_view();
-            let scene_start = window.next_frame.scene.len();
             paint_view(
                 entity_id,
                 self.cached_style.is_some(),
@@ -493,9 +459,6 @@ impl<V: View> Element for ViewElement<V> {
                 window,
                 cx,
             );
-            if let Some(site) = self.live_site {
-                window.live_view_painted(site, scene_start);
-            }
             #[cfg(feature = "profiler")]
             window.window_profiler.end_view(
                 start,
@@ -580,14 +543,17 @@ fn prepaint_view(
             |element_state, window| {
                 let content_mask = window.content_mask();
                 let text_style = window.text_style();
+                let opacity = window.element_opacity();
 
+                // Opacity is compared by bits so that a NaN opacity still matches itself
+                // and the view keeps using its cache.
                 if let Some(mut element_state) = element_state
                     && element_state.cache_key.bounds == bounds
                     && element_state.cache_key.content_mask == content_mask
                     && element_state.cache_key.text_style == text_style
+                    && element_state.cache_key.opacity.to_bits() == opacity.to_bits()
                     && !window.dirty_views.contains(&entity_id)
                     && !window.refreshing
-                    && !window.a11y_focus_moved(&element_state.prepaint_range)
                 {
                     let prepaint_start = window.prepaint_index();
                     window.reuse_prepaint(element_state.prepaint_range.clone());
@@ -621,6 +587,7 @@ fn prepaint_view(
                             bounds,
                             content_mask,
                             text_style,
+                            opacity,
                         },
                     },
                 )
@@ -660,15 +627,23 @@ fn paint_view(
                     let mut element_state = element_state.unwrap();
 
                     let paint_start = window.paint_index();
+                    let opacity = window.element_opacity();
 
+                    // Prepaint can only predict the opacity paint applies: an ancestor's
+                    // hover or drag-over style depends on this frame's hit test, which
+                    // isn't known until prepaint finishes. The key records what was
+                    // actually painted, and output replayed under a different opacity is
+                    // redrawn on the next frame.
                     if let Some(element) = element {
                         let refreshing = mem::replace(&mut window.refreshing, true);
                         element.paint(window, cx);
                         window.refreshing = refreshing;
+                        element_state.cache_key.opacity = opacity;
                     } else {
-                        let replayed = element_state.paint_range.clone();
-                        window.reuse_paint(replayed.clone());
-                        window.replay_live_views(&global_id.unwrap()[..], &replayed, &paint_start);
+                        window.reuse_paint(element_state.paint_range.clone());
+                        if element_state.cache_key.opacity.to_bits() != opacity.to_bits() {
+                            window.request_animation_frame();
+                        }
                     }
 
                     let paint_end = window.paint_index();
