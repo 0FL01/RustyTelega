@@ -289,6 +289,16 @@ impl Session {
                 found = true;
             }
         }
+        // A reply's original fetched with getRepliedMessage, kept beside the
+        // histories: its strip shows the edit too. Not counted as loaded.
+        for target in self.messages.reply_targets.values_mut() {
+            if let ReplyTarget::Loaded(message) = target
+                && message.chat_id == chat_id
+                && message.id == message_id
+            {
+                edit(message);
+            }
+        }
         found
     }
 
