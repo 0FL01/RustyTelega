@@ -62,4 +62,12 @@ TDLib's file cleanup (`FileGcWorker::run_gc`) never looks at the Downloads list.
 
 - `cargo fmt`, `scripts/check-file-size.sh` (OK), `scripts/check-hotspots.sh origin/sweep-all` (OK) and `python3 scripts/check-lang.py` (OK).
 - `cargo clippy -- -D warnings` for `--features demo-capture --all-targets` and for `--no-default-features --all-targets`: both clean.
-- `cargo test --features demo-capture --lib --bin quill`: see the next section.
+- `cargo test --features demo-capture --lib --bin quill`:
+  - lib: 7046 passed, 0 failed, 23 ignored.
+  - bin: 2638 passed, 4 failed, 2 ignored.
+- The 4 bin failures also fail on `origin/sweep-all` (ba0cf717) without this branch's commits, run the same way. They are not from this branch, and no B2, B19 or B20 finding covers them, so they were left alone:
+  - `ui::anim_layer::layer_tick_tests::a_sticker_tick_renders_the_layers_alone`
+  - `ui::media_viewer::cover::tests::the_chat_behind_the_viewer_holds_still_until_it_closes`
+  - `ui::send_effects::tests::an_unread_message_plays_its_effect_once_when_it_shows`
+  - `ui::send_effects::tests::the_ticks_of_an_effect_leave_the_slices_alone`
+  Run alone on this branch, the sticker test passed and the other three failed again. They need their own look before release.
