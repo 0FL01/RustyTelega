@@ -94,8 +94,8 @@ mod tests {
 
         impl Render for Slices {
             fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-                let slice =
-                    AnyView::from(self.owner.clone()).cached(StyleRefinement::default().size_full());
+                let slice = AnyView::from(self.owner.clone())
+                    .cached(StyleRefinement::default().size_full());
                 div().size_full().child(slice)
             }
         }

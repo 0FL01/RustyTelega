@@ -208,9 +208,7 @@ impl Render for Pip {
 #[gpui_kit::test]
 fn a_main_window_lost_beside_a_pip_comes_back_and_the_pip_stays(cx: &mut TestAppContext) {
     let opened = open(cx);
-    let pip: AnyWindowHandle = cx
-        .open_window(size(px(200.), px(120.)), |_, _| Pip)
-        .into();
+    let pip: AnyWindowHandle = cx.open_window(size(px(200.), px(120.)), |_, _| Pip).into();
     cx.update(|cx| {
         watch_closed_windows(
             |_| false,
