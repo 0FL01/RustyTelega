@@ -98,6 +98,10 @@ impl QuillApp {
             _ => Vec::new(),
         };
         match plan_drop(action, paths, &folder_files) {
+            // Not the plan's kinds: a lone GIF goes as a GIF this way.
+            DropPlan::Attach(_) if action == DropAction::AsMedia => {
+                self.attach_dropped_files(paths, cx);
+            }
             DropPlan::Attach(planned) => {
                 let Some(appended) = self.update_pending_attachments(|tray| {
                     ComposerAttachment::append_planned(tray, &planned)

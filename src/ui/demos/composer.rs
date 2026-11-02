@@ -29,6 +29,20 @@ register_demos![
                 ("demo-clip.mp4", AttachmentKind::Video),
             ])
         }),
+    // A HEIC in the tray: its JPEG is made as it joins, and it goes as a photo.
+    DemoSpec::chat_list("ready-send-heic")
+        .setup(|_, window, cx| cx.defer_in(window, |app, _, cx| app.check_tray_videos(cx)))
+        .attachments(|| {
+            attachments(&[
+                ("showcase/ridge.heic", AttachmentKind::Photo),
+                ("demo-thumb.png", AttachmentKind::Photo),
+            ])
+        }),
+    // A HEIC dragged over the chat: the drop zones it offers.
+    DemoSpec::chat_list("ready-drop-heic").setup(|app, _, _| {
+        let heic = quill::drop_modes::DragEntry::probe(std::path::Path::new("ridge.heic"));
+        app.composer_ui.drop_preview = quill::drop_modes::classify(&[heic]);
+    }),
     // Ready chat draft with typos underlined (red wavy).
     DemoSpec::chat_list("ready-spellcheck").setup(|app, window, cx| app.demo_spellcheck(
         SpellcheckDemo::Spellcheck,

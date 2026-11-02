@@ -102,7 +102,7 @@ impl QuillApp {
         self.pending_attachments()
             .iter()
             .filter(|attachment| attachment.kind == AttachmentKind::Photo)
-            .filter_map(|attachment| self.tray_photo_size(&attachment.path))
+            .filter_map(|attachment| self.tray_photo_size(attachment.photo_file()))
             .any(|(width, height)| can_use_high_quality(width, height))
     }
 
@@ -155,6 +155,7 @@ impl QuillApp {
             .detach();
         }
         self.prepare_tray_file_thumbnails(cx);
+        self.check_tray_media(cx);
     }
 
     /// Videos in the open slot's tray are still being read (a probe for

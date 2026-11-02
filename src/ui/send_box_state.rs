@@ -25,6 +25,11 @@ pub(crate) struct SendBoxUi {
     pub(super) thumbnailing: HashMap<PathBuf, u64>,
     pub(super) thumbnailed: HashSet<PathBuf>,
     pub(super) thumbnail_jobs: u64,
+    /// Photos and videos being read as they join a tray
+    /// (`send_box_media_check.rs`), the job that reads each.
+    pub(super) media_checking: HashMap<PathBuf, u64>,
+    pub(super) media_checked: HashSet<PathBuf>,
+    pub(super) media_check_jobs: u64,
     /// The "Paid Content" price box.
     pub(super) price: Option<PriceDialog>,
     /// The video editor opened from the tray or the edit box.
@@ -43,6 +48,9 @@ impl SendBoxUi {
             thumbnailing: HashMap::new(),
             thumbnailed: HashSet::new(),
             thumbnail_jobs: 0,
+            media_checking: HashMap::new(),
+            media_checked: HashSet::new(),
+            media_check_jobs: 0,
             price: None,
             video_editor: None,
             prep: super::send_prep::SendPrepState::default(),
@@ -60,6 +68,8 @@ impl SendBoxUi {
             self.sound_checked.remove(path);
             self.thumbnailing.remove(path);
             self.thumbnailed.remove(path);
+            self.media_checking.remove(path);
+            self.media_checked.remove(path);
         }
     }
 }

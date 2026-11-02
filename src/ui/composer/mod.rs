@@ -173,7 +173,7 @@ impl QuillApp {
                         return;
                     }
                     // A picture sent as a file is still getting its thumbnail.
-                    if self.tray_thumbnails_pending() {
+                    if self.tray_thumbnails_pending() || self.tray_media_checks_pending() {
                         self.connection.set_note(StatusNote::silent(tr(
                             keys::Q_CHAT_PREPARING_THE_FILE_SEND_AGAIN,
                         )));
