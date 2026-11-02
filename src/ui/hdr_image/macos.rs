@@ -42,6 +42,8 @@ const HDR_PEAK_MIN: f32 = 1.01;
 /// A decoded HDR still's GPU buffer.
 pub(crate) struct Frame {
     buffer: CFRetained<CVPixelBuffer>,
+    #[cfg(test)]
+    headroom_bits: std::sync::atomic::AtomicU32,
 }
 
 // SAFETY: a CVPixelBuffer is a CoreFoundation object with atomic retain
@@ -54,7 +56,19 @@ impl Frame {
         self.buffer.clone()
     }
 
+    /// Tests: the headroom last set on this frame.
+    #[cfg(test)]
+    pub(crate) fn headroom(&self) -> f32 {
+        f32::from_bits(
+            self.headroom_bits
+                .load(std::sync::atomic::Ordering::Relaxed),
+        )
+    }
+
     pub(crate) fn set_headroom(&self, headroom: f32) {
+        #[cfg(test)]
+        self.headroom_bits
+            .store(headroom.to_bits(), std::sync::atomic::Ordering::Relaxed);
         let key = CFString::from_static_str(HEADROOM_KEY);
         let value = CFNumber::new_f32(headroom);
         // SAFETY: the attachment is a CFNumber, which is what the renderer
@@ -218,7 +232,11 @@ fn draw_half_float(image: &CFRetained<CGImage>) -> Result<Option<HdrPixels>, Dec
         return Ok(None);
     }
     Ok(Some(HdrPixels {
-        frame: Frame { buffer },
+        frame: Frame {
+            buffer,
+            #[cfg(test)]
+            headroom_bits: std::sync::atomic::AtomicU32::new(0),
+        },
         size: (w32, h32),
         peak,
     }))
