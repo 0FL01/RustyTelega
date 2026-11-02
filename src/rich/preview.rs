@@ -245,7 +245,10 @@ mod tests {
             let to = (to..=text.len())
                 .find(|at| text.is_char_boundary(*at))
                 .unwrap_or(text.len());
-            let piece = PIECES.get((seed >> 3) % PIECES.len()).copied().unwrap_or("");
+            let piece = PIECES
+                .get((seed >> 3) % PIECES.len())
+                .copied()
+                .unwrap_or("");
             match seed % 4 {
                 0 => text.replace_range(from..to, ""),
                 1 => text.replace_range(from..to, piece),
@@ -254,7 +257,11 @@ mod tests {
             if text.len() > 300 {
                 text.clear();
             }
-            assert_eq!(plain(&parsed.parse(&text)), markup_to_blocks(&text), "{text:?}");
+            assert_eq!(
+                plain(&parsed.parse(&text)),
+                markup_to_blocks(&text),
+                "{text:?}"
+            );
         }
     }
 

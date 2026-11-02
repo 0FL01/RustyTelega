@@ -18,7 +18,12 @@ pub struct RichDraft {
 impl RichDraft {
     /// The draft of a parsed `richMessage`. `None` when no block shows.
     pub fn from_message(blocks: &[RichBlock]) -> Option<Self> {
-        Self::from_blocks(blocks.iter().map(|block| Arc::new(editor_block(block))).collect())
+        Self::from_blocks(
+            blocks
+                .iter()
+                .map(|block| Arc::new(editor_block(block)))
+                .collect(),
+        )
     }
 
     /// The draft the rich editor's markup saves as. `None` when the markup

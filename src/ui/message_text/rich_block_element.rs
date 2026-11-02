@@ -464,7 +464,10 @@ mod reveal_tests {
 
     #[test]
     fn revealing_one_text_leaves_the_other_hidden() {
-        let (first, second) = (RichPart { block: 0, part: 0 }, RichPart { block: 1, part: 0 });
+        let (first, second) = (
+            RichPart { block: 0, part: 0 },
+            RichPart { block: 1, part: 0 },
+        );
         let Some(key) = reveal_key(first) else {
             panic!("the run is a spoiler");
         };

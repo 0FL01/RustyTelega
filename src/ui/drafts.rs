@@ -84,7 +84,12 @@ impl QuillApp {
         let reply = self.draft_reply(self.composer_ui.reply(), chat_id);
         let markup = self.composer_markup(cx);
         let content = if self.composer_ui.rich_editor_open {
-            let blocks = self.composer_ui.rich_draft.parsed.borrow_mut().parse(&markup);
+            let blocks = self
+                .composer_ui
+                .rich_draft
+                .parsed
+                .borrow_mut()
+                .parse(&markup);
             RichDraft::from_parsed(blocks).map_or(DraftContent::Text(markup), DraftContent::Rich)
         } else if let Some(rich) = self.stored_rich_draft() {
             DraftContent::Rich(rich.clone())

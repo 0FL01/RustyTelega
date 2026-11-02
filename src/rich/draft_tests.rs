@@ -237,7 +237,10 @@ fn details_keep_their_formatting_through_the_editor() {
     let input = draft.input().expect("details have an input form");
     let block = &input["source"]["blocks"][0];
     assert_eq!(block["header"]["texts"][1]["@type"], "richTextBold");
-    assert_eq!(block["blocks"][0]["text"]["texts"][1]["@type"], "richTextBold");
+    assert_eq!(
+        block["blocks"][0]["text"]["texts"][1]["@type"],
+        "richTextBold"
+    );
 }
 
 #[test]

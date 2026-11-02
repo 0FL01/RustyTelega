@@ -319,10 +319,7 @@ pub fn preview_block(block: RichBlock) -> RichBlock {
                 .collect(),
         },
         RichBlock::Collapsible {
-            header,
-            body,
-            open,
-            ..
+            header, body, open, ..
         } => {
             let (header, header_entities) = markup_preview_text(&header);
             let (body, body_entities) = markup_preview_text(&body);
