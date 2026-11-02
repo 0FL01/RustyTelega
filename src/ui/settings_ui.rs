@@ -288,6 +288,13 @@ impl QuillApp {
         let ptt_section = self.push_to_talk_settings(&prefs.push_to_talk, cx);
         let mic_test_section = self.mic_test_section(cx);
         let device_prefs_section = self.call_device_prefs_section(cx);
+        let mic_test_section = self.setting_stand_in(
+            device_prefs_section.is_none(),
+            &["calls.accept_on_device", "calls.system_sound_prefs"],
+            mic_test_section,
+            cx,
+        );
+        let mic_test_section = self.setting_spot(&["calls.mic_test"], mic_test_section, cx);
         // Phase 6: one kit RadioGroup per privacy setting. Controlled:
         // the chosen index writes the value and the owner re-renders.
         let privacy_group =
@@ -369,12 +376,16 @@ impl QuillApp {
                     .px_1()
                     .child(tr(keys::SETTINGS_SECTION_CALL_SETTINGS)),
             )
-            .child(pref_row(
-                "call-pref-confirm",
-                prefs.confirm_before_calling,
-                tr(keys::Q_PREFS_CONFIRM_BEFORE_CALLING),
-                tr(keys::Q_PREFS_ASK_BEFORE_PLACING_A_CALL),
-                |prefs, on| prefs.confirm_before_calling = on,
+            .child(self.setting_spot(
+                &["calls.confirm_before_calling"],
+                pref_row(
+                    "call-pref-confirm",
+                    prefs.confirm_before_calling,
+                    tr(keys::Q_PREFS_CONFIRM_BEFORE_CALLING),
+                    tr(keys::Q_PREFS_ASK_BEFORE_PLACING_A_CALL),
+                    |prefs, on| prefs.confirm_before_calling = on,
+                ),
+                cx,
             ))
             // Slice calls-proxy: "Use proxy for calls" (official:
             // Settings → Data & Storage → Proxy). Client-side toggle in
@@ -454,7 +465,7 @@ impl QuillApp {
             })
             .child(ptt_section)
             .child(mic_test_section)
-            .child(device_prefs_section)
+            .children(device_prefs_section)
             .child(
                 div()
                     .text_xs()

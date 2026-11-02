@@ -15,7 +15,7 @@ use quill::call_device_prefs::{
 use quill::lang::{keys, tr};
 
 impl QuillApp {
-    pub(super) fn call_device_prefs_section(&self, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn call_device_prefs_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let settings = self.session().map(|session| &session.settings);
         let current = settings
             .and_then(|settings| settings.sessions.as_deref())
@@ -41,41 +41,58 @@ impl QuillApp {
             })
             .detach();
         }
+        let target = system_sound_target();
+        if current.is_none() && target.is_none() {
+            return None;
+        }
         let mut block = div().flex().flex_col().gap_1().px_2().py_1();
         if let Some((session_id, on)) = current {
             block = block.child(
-                div()
-                    .id("call-accept-here")
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        Switch::new("call-accept-here-switch")
-                            .checked(on)
-                            .disabled(mutating)
-                            .accessibility_label(ACCEPT_CALLS_TITLE)
-                            .on_click(cx.listener(move |this, &requested, _, cx| {
-                                if requested != on {
-                                    this.toggle_session_calls(session_id, cx);
-                                }
-                            })),
-                    )
-                    .child(div().text_sm().child(ACCEPT_CALLS_TITLE)),
-            );
-        }
-        if let Some(target) = system_sound_target() {
-            block = block.child(
-                div().flex().child(
-                    Button::new("call-system-sound-prefs")
-                        .label(SYSTEM_PREFS_TITLE)
-                        .small()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            let failure = tr(keys::Q_OPS_COULDNT_OPEN_THE_SYSTEM_SOUND);
-                            this.open_system_settings(target, failure, cx);
-                        })),
+                self.setting_spot(
+                    &["calls.accept_on_device"],
+                    div()
+                        .id("call-accept-here")
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            Switch::new("call-accept-here-switch")
+                                .checked(on)
+                                .disabled(mutating)
+                                .accessibility_label(ACCEPT_CALLS_TITLE)
+                                .on_click(cx.listener(move |this, &requested, _, cx| {
+                                    if requested != on {
+                                        this.toggle_session_calls(session_id, cx);
+                                    }
+                                })),
+                        )
+                        .child(div().text_sm().child(ACCEPT_CALLS_TITLE)),
+                    cx,
                 ),
             );
         }
-        block.text_color(cx.theme().foreground).into_any_element()
+        if let Some(target) = target {
+            let ids: &'static [&'static str] = if current.is_some() {
+                &["calls.system_sound_prefs"]
+            } else {
+                &["calls.system_sound_prefs", "calls.accept_on_device"]
+            };
+            block = block.child(
+                self.setting_spot(
+                    ids,
+                    div().flex().child(
+                        Button::new("call-system-sound-prefs")
+                            .label(SYSTEM_PREFS_TITLE)
+                            .small()
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let failure = tr(keys::Q_OPS_COULDNT_OPEN_THE_SYSTEM_SOUND);
+                                this.open_system_settings(target, failure, cx);
+                            })),
+                    ),
+                    cx,
+                ),
+            );
+        }
+        Some(block.text_color(cx.theme().foreground).into_any_element())
     }
 }
