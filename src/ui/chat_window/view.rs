@@ -177,9 +177,10 @@ impl Render for ChatWindowView {
             app.adopt_remote_draft(window, cx);
             app.chat_window_body(chat_id, window, cx)
         });
-        app.update(cx, |app, _| {
+        let disk_bar = app.update(cx, |app, cx| {
             app.set_window_scope(outer);
             app.frame.tick_view.set(outer_tick);
+            app.disk_low_banner(cx)
         });
         let view = cx.weak_entity();
         super::super::window_frame::sync(window, app.read(cx).appearance.native_window_frame);
@@ -230,6 +231,7 @@ impl Render for ChatWindowView {
             .child(gpui_kit::base::TextSelectionLayer)
             .child(scope_probe(self.owner.clone(), Some(chat_id)))
             .child(title_bar)
+            .children(disk_bar)
             .child(WindowScope {
                 app: self.owner.clone(),
                 target: Some(chat_id),

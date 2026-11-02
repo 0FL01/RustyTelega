@@ -237,6 +237,11 @@ pub struct DataStoragePrefs {
     /// later "No limit" sticks.
     #[serde(default)]
     pub storage_limits_seeded: bool,
+    /// The listed downloads a low or full disk paused, as (chat id,
+    /// message id): TDLib keeps them paused across restarts, and its file
+    /// ids differ in the next instance, so the message finds them again.
+    #[serde(default)]
+    pub disk_paused: std::collections::BTreeSet<(i64, i64)>,
     pub mobile: AutoDownloadNetSettings,
     pub roaming: AutoDownloadNetSettings,
     pub wifi: AutoDownloadNetSettings,
@@ -248,6 +253,7 @@ impl Default for DataStoragePrefs {
             version: DATA_STORAGE_PREFS_VERSION,
             seeded: false,
             storage_limits_seeded: false,
+            disk_paused: std::collections::BTreeSet::new(),
             mobile: AutoDownloadNetSettings::default(),
             roaming: AutoDownloadNetSettings::default(),
             wifi: AutoDownloadNetSettings::default(),

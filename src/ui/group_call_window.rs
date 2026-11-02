@@ -380,6 +380,9 @@ impl Render for GroupCallPanel {
         let stream_full = stream_full(window, owner.read(cx));
         let panel = cx.entity_id();
         let members = self.members.clone();
+        let disk_bar = owner.update(cx, |app, cx| {
+            app.disk_low_overlay(px(super::calls::call_video::WINDOW_CONTROLS), cx)
+        });
         let (body, animating, stream_title) = owner.update(cx, |app, cx| {
             app.frame.tick_view.set(Some(panel));
             let body =
@@ -446,6 +449,7 @@ impl Render for GroupCallPanel {
                 }
             }))
             .child(body)
+            .when_some(disk_bar, |this, bar| this.relative().child(bar))
             // tdesktop's pin-on-top control; full screen there is no
             // window chrome to pin.
             .when(!full, |this| {

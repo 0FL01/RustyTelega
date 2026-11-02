@@ -32,14 +32,17 @@ struct Harness {
 }
 
 fn new_app(cx: &mut TestAppContext) -> Harness {
+    new_demo_app(cx, "ready-chats")
+}
+
+fn new_demo_app(cx: &mut TestAppContext, demo: &'static str) -> Harness {
     cx.update(gpui_kit::init);
     cx.update(bind_keys);
     let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
     let slot_in = slot.clone();
     let handle = cx.open_window(size(px(1100.), px(700.)), move |window, cx| {
-        let view = cx.new(|cx| {
-            QuillApp::new_with_demo(window, cx, None, Some(ScreenshotDemo::named("ready-chats")))
-        });
+        let view = cx
+            .new(|cx| QuillApp::new_with_demo(window, cx, None, Some(ScreenshotDemo::named(demo))));
         let focus = view.focus_handle(cx);
         window.focus(&focus, cx);
         let shell = cx.new(|_| QuillShell::new(view.clone()));
@@ -1227,11 +1230,103 @@ fn a_note_from_a_chat_window_toasts_in_that_window(cx: &mut TestAppContext) {
     assert!(status_toast_drawn(chat_window, cx), "the window shows it");
     assert!(!status_toast_drawn(h.main, cx), "the main window does not");
 
-    // The next input in the main window brings the toast there.
+    // The pointer moving over the main window leaves the toast where it
+    // was asked for.
     h.app.update(cx, |app, cx| {
         app.note_window_input(None);
         cx.notify();
     });
-    assert!(status_toast_drawn(h.main, cx));
-    assert!(!status_toast_drawn(chat_window, cx));
+    assert!(status_toast_drawn(chat_window, cx));
+    assert!(!status_toast_drawn(h.main, cx));
+}
+
+#[gpui_kit::test]
+fn a_late_open_failure_toasts_in_the_window_that_asked(cx: &mut TestAppContext) {
+    crate::ui::app_render::pin_toasts_for_tests();
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    let (answer, answered) = futures_channel::oneshot::channel();
+    quill::platform::script_next_os_open(quill::platform::OsOpen::Pending(answered));
+    h.app.update(cx, |app, cx| {
+        app.note_window_input(Some(OTHER));
+        app.open_link("https://example.com/a", cx);
+        // The pointer moves over the main window before the OS answers.
+        app.note_window_input(None);
+    });
+    answer.send(false).unwrap();
+    cx.run_until_parked();
+    assert!(status_toast_drawn(chat_window, cx), "the window that asked");
+    assert!(!status_toast_drawn(h.main, cx));
+}
+
+#[gpui_kit::test]
+fn closing_a_chat_window_moves_its_toast_to_the_main_window(cx: &mut TestAppContext) {
+    crate::ui::app_render::pin_toasts_for_tests();
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    h.app.update(cx, |app, cx| {
+        app.note_window_input(Some(OTHER));
+        app.connection
+            .set_note(crate::ui::status_note::StatusNote::error(
+                "Couldn't open the link",
+            ));
+        cx.notify();
+    });
+    assert!(status_toast_drawn(chat_window, cx));
+    cx.update_window(chat_window, |_, window, cx| {
+        window.dispatch_action(Box::new(CloseWindow), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(status_toast_drawn(h.main, cx), "the toast is not lost");
+}
+
+#[gpui_kit::test]
+fn a_narrow_forum_window_showing_its_topics_draws_the_toast(cx: &mut TestAppContext) {
+    crate::ui::app_render::pin_toasts_for_tests();
+    let h = new_demo_app(cx, "ready-composer-bars");
+    let forum = crate::ui::demos::composer::FORUM_CHAT;
+    let chat_window = h.open_in_new_window(forum, cx);
+    cx.simulate_window_resize(chat_window, size(px(700.), px(700.)));
+    cx.run_until_parked();
+    let topics_only = cx
+        .update_window(chat_window, |_, window, cx| {
+            window.render_frame(cx);
+            window.try_find("chat-window-history").is_none()
+        })
+        .unwrap();
+    assert!(topics_only, "the window shows only the topic list");
+    h.app.update(cx, |app, cx| {
+        app.note_window_input(Some(forum));
+        app.connection
+            .set_note(crate::ui::status_note::StatusNote::error(
+                "Couldn't open the link",
+            ));
+        cx.notify();
+    });
+    assert!(status_toast_drawn(chat_window, cx));
+}
+
+#[gpui_kit::test]
+fn a_low_disk_shows_its_bar_in_a_chat_window_until_space_returns(cx: &mut TestAppContext) {
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    let bar = |cx: &mut TestAppContext| {
+        cx.update_window(chat_window, |_, window, cx| {
+            window.render_frame(cx);
+            window.try_find("disk-low-storage").is_some()
+        })
+        .unwrap()
+    };
+    assert!(!bar(cx));
+    h.app.update(cx, |app, cx| {
+        app.apply_disk_reading(Some(quill::disk_guard::FLOORS.warn - 1), cx);
+    });
+    cx.run_until_parked();
+    assert!(bar(cx), "the warning is in the chat window too");
+    h.app.update(cx, |app, cx| {
+        app.apply_disk_reading(Some(quill::disk_guard::FLOORS.warn_clear), cx);
+    });
+    cx.run_until_parked();
+    assert!(!bar(cx), "and goes once space returns");
 }

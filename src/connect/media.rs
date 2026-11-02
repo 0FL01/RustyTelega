@@ -342,7 +342,10 @@ impl<S: JsonSender> ConnectDriver<S> {
         let extra = self.session.request_download(file_id);
         let request = if let Some((chat_id, message_id)) = origin {
             self.session.begin_user_download(file_id);
-            self.session.media.downloads.note_chat(file_id.0, chat_id);
+            self.session
+                .media
+                .downloads
+                .note_origin(file_id.0, chat_id, message_id);
             add_file_to_downloads_request(
                 extra,
                 file_id,
@@ -373,8 +376,9 @@ impl<S: JsonSender> ConnectDriver<S> {
     }
 
     /// Applies one disk reading. A low disk holds automatic downloads and
-    /// pauses the listed downloads that would not fit above close; a
-    /// healthy one resumes those. Returns how many of the paused ones had
+    /// pauses the listed downloads that would not fit above close; a full
+    /// one (a call holds the client open) has no room, so it pauses them
+    /// all; a healthy one resumes those. Returns how many of the paused ones had
     /// been resumed since the disk paused them, so the caller can say why
     /// they stopped again.
     pub fn note_disk(
@@ -383,23 +387,31 @@ impl<S: JsonSender> ConnectDriver<S> {
         free: Option<u64>,
         floors: &DiskFloors,
     ) -> Result<usize, ConnectSendError> {
-        let room = free.map(|free| free.saturating_sub(floors.close));
+        let room = match state {
+            DiskState::Healthy => None,
+            DiskState::Low => free.map(|free| free.saturating_sub(floors.close)),
+            DiskState::Full => Some(0),
+        };
         let media = &mut self.session.media;
         media.disk_holds_auto_downloads = state != DiskState::Healthy;
-        media.disk_room = room.filter(|_| state == DiskState::Low);
+        media.disk_room = room;
         if !self.chats_path_active() {
             return Ok(0);
         }
         if state == DiskState::Healthy {
             let paused: Vec<i32> = self.session.media.disk_paused.drain().collect();
             for id in paused {
+                self.forget_disk_pause(id);
                 if self.session.media.downloads.is_paused(id) {
                     self.resume_download(FileId(id))?;
                 }
             }
+            let searched = self.search_disk_paused_elsewhere();
+            self.save_disk_pauses_if_changed();
+            searched?;
             return Ok(0);
         }
-        let (DiskState::Low, Some(room)) = (state, room) else {
+        let Some(room) = room else {
             return Ok(0);
         };
         let media = &self.session.media;
@@ -419,8 +431,10 @@ impl<S: JsonSender> ConnectDriver<S> {
             if !self.session.media.disk_paused.insert(id) {
                 repaused += 1;
             }
+            self.save_disk_pause(id);
             self.pause_download(FileId(id))?;
         }
+        self.save_disk_pauses_if_changed();
         Ok(repaused)
     }
 

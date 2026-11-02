@@ -45,6 +45,10 @@ pub(crate) struct DiskUi {
     cache_folder: Option<PathBuf>,
     /// The on-screen account's message database, for Manage local storage.
     pub(super) database_bytes: Option<u64>,
+    /// The account on screen since the last switch: `cache_folder` and
+    /// `database_bytes` read for another one are dropped. `None` before
+    /// any switch: the reading's own account is the one on screen.
+    on_screen: Option<quill::ids::AccountKey>,
     main_window: AnyWindowHandle,
     start_refused: bool,
 }
@@ -71,6 +75,7 @@ impl DiskUi {
             full_notices: 0,
             cache_folder: None,
             database_bytes: None,
+            on_screen: None,
             main_window: window.window_handle(),
             start_refused: false,
         }
@@ -130,7 +135,7 @@ fn watch(root: PathBuf, cx: &Context<QuillApp>) {
                 .await;
             device = seen_on.or(device);
             let Ok(wait) = this.update(cx, |this, cx| {
-                (this.disk.cache_folder, this.disk.database_bytes) = account;
+                this.note_account_files(account, cx);
                 this.apply_data_reading(reading, floors, cx)
             }) else {
                 break;
@@ -141,16 +146,27 @@ fn watch(root: PathBuf, cx: &Context<QuillApp>) {
     .detach();
 }
 
+/// What [`account_files`] read, and for which account.
+pub(super) struct AccountFiles {
+    pub(super) account: quill::ids::AccountKey,
+    pub(super) cache_folder: Option<PathBuf>,
+    pub(super) database_bytes: Option<u64>,
+}
+
 /// The on-screen account's cache folder, while it exists, and the size of
 /// its message database.
-fn account_files(root: &std::path::Path) -> (Option<PathBuf>, Option<u64>) {
-    let active = quill::settings::active_account(root);
-    let paths = quill::settings::AccountPaths::for_root(root, &active);
+fn account_files(root: &std::path::Path) -> AccountFiles {
+    let account = quill::settings::active_account(root);
+    let paths = quill::settings::AccountPaths::for_root(root, &account);
     let database = paths
         .database_exists()
         .then(|| quill::disk_guard::database_size(&paths.tdlib_database));
     let files = paths.tdlib_files;
-    (files.is_dir().then_some(files), database)
+    AccountFiles {
+        account,
+        cache_folder: files.is_dir().then_some(files),
+        database_bytes: database,
+    }
 }
 
 /// `QUILL_DEMO_DISK_FREE_MB` stands in for the disk in a capture build. It
@@ -168,6 +184,52 @@ fn demo_reading() -> Option<u64> {
 }
 
 impl QuillApp {
+    /// The cache folder and database size read for an account: kept only
+    /// while that account is on screen, since a read that started before a
+    /// switch can land after it.
+    pub(super) fn note_account_files(&mut self, files: AccountFiles, cx: &mut Context<Self>) {
+        if self
+            .disk
+            .on_screen
+            .as_ref()
+            .is_some_and(|on_screen| *on_screen != files.account)
+        {
+            return;
+        }
+        self.disk.cache_folder = files.cache_folder;
+        self.disk.database_bytes = files.database_bytes;
+        cx.notify();
+    }
+
+    /// The account on screen changed to `account`: the old figures go at
+    /// once (Manage local storage must not show the previous account's
+    /// database), and the new ones are read now instead of at the next
+    /// reading, up to 30 s away.
+    pub(super) fn disk_account_switched(
+        &mut self,
+        account: quill::ids::AccountKey,
+        cx: &mut Context<Self>,
+    ) {
+        self.disk.on_screen = Some(account);
+        self.disk.cache_folder = None;
+        self.disk.database_bytes = None;
+        cx.notify();
+        if cfg!(test) {
+            return;
+        }
+        let Some(root) = quill::settings::safe_app_root() else {
+            return;
+        };
+        QuillApp::spawn_main(cx, async move |this, cx| {
+            let files = cx
+                .background_executor()
+                .spawn(async move { account_files(&root) })
+                .await;
+            let _ = this.update(cx, |this, cx| this.note_account_files(files, cx));
+        })
+        .detach();
+    }
+
     /// A reading with the floors for what the data folders hold now.
     /// Returns how long to wait for the next one.
     pub(super) fn apply_data_reading(
@@ -225,18 +287,24 @@ impl QuillApp {
         let room = free.is_some_and(|free| free >= floors.open);
         let retry_starts = self.disk.start_refused && room;
         let retry_screen = self.disk.screen_refused && room && after != DiskState::Full;
+        let screen_held = self.disk.held_for_call;
         let before = self.enter_disk_state(after, cx);
         let step = before.step(
             after,
             DiskClients {
                 running,
                 retry_starts,
+                screen_held,
             },
         );
         match step {
             DiskStep::Hold => {}
             DiskStep::Close => self.close_clients_for_full_disk(cx),
             DiskStep::Reconnect => self.reconnect_after_disk(cx),
+            DiskStep::ReconnectBackground => {
+                self.disk.start_refused = false;
+                self.ensure_background_accounts(cx);
+            }
             DiskStep::RetryStarts => {
                 self.disk.start_refused = false;
                 self.ensure_background_accounts(cx);
@@ -281,6 +349,9 @@ impl QuillApp {
         if after == DiskState::Healthy && before != DiskState::Healthy {
             self.auto_download_update(cx);
         }
+        if after != DiskState::Healthy {
+            self.hold_update_download();
+        }
         before
     }
 
@@ -290,20 +361,7 @@ impl QuillApp {
     fn announce_full_disk(&mut self, cx: &mut Context<Self>) {
         self.bring_main_window_forward(cx);
         self.disk.full_notices += 1;
-        let (title, body) = if self.disk.unwritable {
-            (
-                keys::Q_DISK_UNWRITABLE_TITLE,
-                keys::Q_DISK_UNWRITABLE_NOTICE,
-            )
-        } else {
-            (keys::Q_DISK_FULL_TITLE, keys::Q_DISK_FULL_NOTICE)
-        };
-        let notice = quill::notify::OsNotification {
-            chat_id: quill::ids::ChatId(0),
-            message_id: None,
-            title: tr(title).to_string(),
-            body: tr(body).to_string(),
-        };
+        let notice = full_disk_notice(self.disk.unwritable);
         let locked = self.account.passcode.locked;
         self.show_os_notification(notice, None, None, locked, cx);
     }
@@ -367,7 +425,7 @@ impl QuillApp {
     /// On the full-disk screen, a link that shows the account's cached files
     /// in the file manager, so they can be removed there. Quill deletes
     /// nothing itself while TDLib is closed: TDLib keeps their records.
-    pub(super) fn disk_full_reveal(&self) -> Option<gpui_kit::AnyElement> {
+    pub(super) fn disk_full_reveal(&self, cx: &Context<Self>) -> Option<gpui_kit::AnyElement> {
         if !self.disk.shows_screen() || self.disk.unwritable {
             return None;
         }
@@ -377,16 +435,39 @@ impl QuillApp {
                 .label(tr(keys::Q_DISK_SHOW_CACHED_FILES))
                 .link()
                 .small()
-                .on_click(move |_, _, _| {
-                    let _ = quill::platform::reveal_in_file_manager(&folder);
-                })
+                .on_click(cx.listener(move |this, _, _, cx| this.reveal_in_folder(&folder, cx)))
+                .into_any_element(),
+        )
+    }
+
+    /// The low-disk bar laid over the top of a call or voice chat window,
+    /// `top` below its edge (clear of the window controls). Every window
+    /// shows the bar until space returns, so a user working away from the
+    /// main window sees it too.
+    pub(in crate::ui) fn disk_low_overlay(
+        &self,
+        top: gpui_kit::Pixels,
+        cx: &Context<Self>,
+    ) -> Option<gpui_kit::AnyElement> {
+        let bar = self.disk_low_banner(cx)?;
+        Some(
+            gpui_kit::div()
+                .absolute()
+                .top(top)
+                .left_0()
+                .right_0()
+                .child(bar)
                 .into_any_element(),
         )
     }
 
     /// The kit's banner has no action slot, so the row around it carries the
-    /// tint and the button.
-    pub(super) fn disk_low_banner(&self, cx: &Context<Self>) -> Option<gpui_kit::AnyElement> {
+    /// tint and the button. Drawn in every window (`disk_low_overlay`); the
+    /// button opens the storage list in the main window and brings it up.
+    pub(in crate::ui) fn disk_low_banner(
+        &self,
+        cx: &Context<Self>,
+    ) -> Option<gpui_kit::AnyElement> {
         let held = self.disk.is_full() && self.disk.held_for_call;
         let low = self.disk.state == DiskState::Low && !self.disk.shows_screen();
         (low || held).then(|| {
@@ -418,12 +499,28 @@ impl QuillApp {
                             .label(tr(keys::SETTINGS_MANAGE_LOCAL_STORAGE))
                             .outline()
                             .small()
-                            .on_click(cx.listener(|this, _, _, cx| this.open_local_storage(cx))),
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.open_local_storage(cx);
+                                this.bring_main_window_forward(cx);
+                            })),
                     )
                 })
                 .into_any_element()
         })
     }
+}
+
+/// The system notification for the full-disk screen.
+pub(super) fn full_disk_notice(unwritable: bool) -> quill::notify::OsNotification {
+    let (title, body) = if unwritable {
+        (
+            keys::Q_DISK_UNWRITABLE_TITLE,
+            keys::Q_DISK_UNWRITABLE_NOTICE,
+        )
+    } else {
+        (keys::Q_DISK_FULL_TITLE, keys::Q_DISK_FULL_NOTICE)
+    };
+    quill::notify::OsNotification::about_app(tr(title).to_string(), tr(body).to_string())
 }
 
 fn disk_size(bytes: u64) -> String {

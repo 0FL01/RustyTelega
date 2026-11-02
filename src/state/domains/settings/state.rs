@@ -95,6 +95,9 @@ pub struct SettingsState {
     pub storage_clearing: bool,
     /// Batch 6: the local storage limits TDLib reports (`updateOption`).
     pub storage_limits: crate::storage_limits::StorageLimits,
+    /// This session sent the first cache limits; the account counts as
+    /// seeded once TDLib echoes them (`storage_limits.chosen()`).
+    pub storage_limits_seed_sent: bool,
     /// B13: new-chat privacy, inactive-session TTL, 18+ option, network
     /// usage and the remember-password check.
     pub privacy_data: PrivacyData,
@@ -273,6 +276,7 @@ impl SettingsState {
             storage_freed: None,
             storage_clearing: false,
             storage_limits: Default::default(),
+            storage_limits_seed_sent: false,
             privacy_data: Default::default(),
             notices: AccountNotices::default(),
             sessions: None,

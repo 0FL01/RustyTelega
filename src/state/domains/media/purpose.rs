@@ -12,6 +12,10 @@ pub enum MediaPurpose {
     /// Slice media-downloads-pause: `toggleDownloadIsPaused`. Response is
     /// `Ok`; the pause state itself arrives on `updateFileDownload`.
     ToggleDownloadIsPaused,
+    /// `searchFileDownloads` for the active downloads, to resume the ones a
+    /// low or full disk paused in an earlier TDLib instance. Response is
+    /// `foundFileDownloads`.
+    SearchDiskPausedDownloads,
     /// The next older `searchChatMessages` page for a gallery tab, asked
     /// for while the media viewer pages toward the end of the list.
     GetSharedMediaMore {
@@ -58,6 +62,7 @@ flat_purposes!(Media(MediaPurpose) {
     DownloadFile,
     CancelDownloadFile,
     ToggleDownloadIsPaused,
+    SearchDiskPausedDownloads,
     CancelUpload,
     GetMapThumbnailFile,
 });

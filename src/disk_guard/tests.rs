@@ -10,6 +10,7 @@ const FLOORS: DiskFloors = DiskFloors {
 const NONE: DiskClients = DiskClients {
     running: false,
     retry_starts: false,
+    screen_held: false,
 };
 const RUNNING: DiskClients = DiskClients {
     running: true,
@@ -22,6 +23,7 @@ const RETRY: DiskClients = DiskClients {
 const RUNNING_AND_RETRY: DiskClients = DiskClients {
     running: true,
     retry_starts: true,
+    screen_held: false,
 };
 
 fn walk(start: DiskState, reads: &[Option<u64>]) -> Vec<DiskState> {
@@ -123,6 +125,19 @@ fn going_full_closes_clients_and_leaving_full_reconnects() {
 }
 
 #[test]
+fn leaving_full_during_a_held_call_restarts_only_the_background() {
+    use DiskState::{Full, Healthy, Low};
+    let held = DiskClients {
+        running: true,
+        screen_held: true,
+        ..NONE
+    };
+    assert_eq!(Full.step(Low, held), DiskStep::ReconnectBackground);
+    assert_eq!(Full.step(Healthy, held), DiskStep::ReconnectBackground);
+    assert_eq!(Full.step(Full, held), DiskStep::Close, "still full");
+}
+
+#[test]
 fn a_refused_start_goes_again_only_outside_full() {
     use DiskState::{Healthy, Low};
     assert_eq!(Low.step(Low, RUNNING_AND_RETRY), DiskStep::RetryStarts);
@@ -190,10 +205,29 @@ fn the_fall_is_measured_between_two_readings() {
 
 #[test]
 fn the_floors_keep_their_order() {
-    let floors = super::FLOORS;
-    assert!(floors.close < floors.open);
-    assert!(floors.open < floors.warn);
-    assert!(floors.warn < floors.warn_clear);
+    let gib = 1 << 30;
+    let big = super::DataUse {
+        accounts: 6,
+        largest_database: 3 * gib / 2,
+    };
+    for floors in [super::FLOORS, DiskFloors::for_data(big)] {
+        assert!(floors.close < floors.open, "{floors:?}");
+        assert!(floors.open < floors.warn, "{floors:?}");
+        assert!(floors.warn < floors.warn_clear, "{floors:?}");
+    }
+}
+
+#[test]
+fn a_disk_that_would_refuse_the_next_open_shows_the_bar_first() {
+    let gib: u64 = 1 << 30;
+    let floors = DiskFloors::for_data(super::DataUse {
+        accounts: 3,
+        largest_database: 3 * gib / 2,
+    });
+    let free = Some(floors.open - 1);
+    assert!(refuses_open(free, &floors));
+    assert_eq!(DiskState::Healthy.next(free, &floors), DiskState::Low);
+    assert_eq!(DiskFloors::for_data(super::DataUse::ONE).warn, gib);
 }
 
 #[cfg(unix)]
@@ -219,6 +253,20 @@ fn a_symlinked_files_folder_is_read_where_it_really_lives() {
     let _ = std::fs::remove_dir_all(&elsewhere);
 }
 
+#[cfg(unix)]
+#[test]
+fn a_files_folder_linked_to_a_pulled_drive_is_unwritable() {
+    let root = crate::scratch::unique_dir("quill-disk-pulled");
+    let drive = crate::scratch::unique_dir("quill-disk-drive");
+    std::fs::create_dir_all(root.join("accounts/primary/tdlib")).unwrap();
+    std::os::unix::fs::symlink(&drive, root.join("accounts/primary/files")).unwrap();
+    assert!(!read_data(&root, None).unwritable, "the drive is there");
+    std::fs::remove_dir_all(&drive).unwrap();
+    assert!(read_data(&root, None).unwritable, "the drive was pulled");
+    assert_eq!(data_free_bytes(&root), Some(0));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn a_missing_data_root_still_gets_a_reading() {
     let root = std::env::temp_dir().join("quill-no-such-root/at/all");
@@ -240,19 +288,38 @@ mod linux {
         quota
     }
 
+    const NOW: u64 = 1_800_000_000;
+
     #[test]
     fn a_user_quota_counts_as_the_free_space() {
-        assert_eq!(room_under(&quota(0, 1024, 1024 * 1000)), Some(24 * 1024));
         assert_eq!(
-            room_under(&quota(512, 1024, 0)),
-            Some(512 * 1024),
-            "soft first"
+            room_under(&quota(0, 1024, 1024 * 1000), NOW),
+            Some(24 * 1024)
         );
-        assert_eq!(room_under(&quota(10, 0, 1 << 30)), Some(0), "over it");
-        assert_eq!(room_under(&quota(0, 0, 5)), None, "no limit");
+        assert_eq!(room_under(&quota(0, 0, 5), NOW), None, "no limit");
         let mut unset = quota(0, 1024, 0);
         unset.dqb_valid = 0;
-        assert_eq!(room_under(&unset), None);
+        assert_eq!(room_under(&unset, NOW), None);
+    }
+
+    #[test]
+    fn writes_reach_the_hard_limit_until_the_soft_limits_grace_ends() {
+        let mut over_soft = quota(512, 1024, 600 * 1024);
+        assert_eq!(
+            room_under(&over_soft, NOW),
+            Some(424 * 1024),
+            "over soft with no grace time recorded"
+        );
+        over_soft.dqb_valid |= libc::QIF_BTIME;
+        over_soft.dqb_btime = NOW + 3600;
+        assert_eq!(room_under(&over_soft, NOW), Some(424 * 1024), "in grace");
+        over_soft.dqb_btime = NOW;
+        assert_eq!(room_under(&over_soft, NOW), Some(0), "grace over");
+        let mut soft_only = quota(10, 0, 1 << 30);
+        assert_eq!(room_under(&soft_only, NOW), None, "in grace, no hard limit");
+        soft_only.dqb_valid |= libc::QIF_BTIME;
+        soft_only.dqb_btime = NOW - 1;
+        assert_eq!(room_under(&soft_only, NOW), Some(0));
     }
 
     #[test]

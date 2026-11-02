@@ -16,6 +16,9 @@ pub enum MediaPayload {
     },
     /// `updateFileAddedToDownloads` (schema line 11151).
     UpdateFileAddedToDownloads(Box<ParsedFileDownload>),
+    /// `foundFileDownloads` (schema line 3779), the answer to
+    /// `searchFileDownloads`.
+    FoundFileDownloads(Vec<ParsedFileDownload>),
     /// `updateFileRemovedFromDownloads` (schema line 11161).
     UpdateFileRemovedFromDownloads {
         file_id: i32,

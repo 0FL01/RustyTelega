@@ -14,7 +14,6 @@ use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use quill::lang::{keys, tr, tr_with};
-use quill::platform::OsOpen;
 use quill::updater::{DownloadProgress, UpdateControl, UpdateState, check_latest_release};
 use std::time::Duration;
 
@@ -88,6 +87,32 @@ impl QuillApp {
         }
     }
 
+    /// The update download ended. One the disk held goes back to
+    /// available, so the disk's return to healthy starts it again from the
+    /// bytes it kept (`auto_download_update`).
+    pub(super) fn finish_update_download(
+        &mut self,
+        release: quill::updater::ReleaseInfo,
+        progress: &DownloadProgress,
+        result: Result<std::path::PathBuf, &'static str>,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.update_state = match result {
+            Ok(plan) => UpdateState::Staged(release, plan),
+            Err(_) if progress.is_held() => UpdateState::Available(release),
+            Err(message) => UpdateState::DownloadFailed(release, message),
+        };
+        cx.notify();
+    }
+
+    /// The disk went low or full: an update download already running stops,
+    /// as one about to start waits (`auto_download_update`).
+    pub(super) fn hold_update_download(&mut self) {
+        if let UpdateState::Downloading(_, progress) = &self.settings.update_state {
+            progress.hold();
+        }
+    }
+
     /// The update button for the current state (`UpdateControl::of`).
     pub(super) fn update_control(&self) -> UpdateControl {
         UpdateControl::of(
@@ -134,14 +159,11 @@ impl QuillApp {
         let download = cx.background_executor().spawn(async move {
             quill::update_install::download_and_stage(&download_release, &download_progress)
         });
+        let held = progress.clone();
         cx.spawn(async move |this, cx| {
             let result = download.await;
             let _ = this.update(cx, |this, cx| {
-                this.settings.update_state = match result {
-                    Ok(plan) => UpdateState::Staged(release, plan),
-                    Err(message) => UpdateState::DownloadFailed(release, message),
-                };
-                cx.notify();
+                this.finish_update_download(release, &held, result, cx);
             });
         })
         .detach();
@@ -442,18 +464,10 @@ impl QuillApp {
     }
 
     fn open_license_notices(&mut self, cx: &mut Context<Self>) {
-        let open = quill::about::bundled_notices().map_or(OsOpen::Answered(false), |path| {
-            quill::platform::open_local_file(&path)
-        });
-        self.published_notices_unless_opened(open, cx);
-    }
-
-    pub(super) fn published_notices_unless_opened(&mut self, open: OsOpen, cx: &mut Context<Self>) {
-        self.when_os_answers(open, cx, |this, opened, cx| {
-            if !opened {
-                this.open_link(quill::about::NOTICES_URL, cx);
-            }
-        });
+        match quill::about::bundled_notices() {
+            Some(path) => self.open_file_then(&path, cx, published_notices_unless_opened),
+            None => self.open_link(quill::about::NOTICES_URL, cx),
+        }
     }
 
     /// "Updated to Quill X" after an update, with its notes; the update
@@ -498,5 +512,17 @@ impl QuillApp {
                     ),
             )
             .into_any_element()
+    }
+}
+
+/// The license notices did not open from the app bundle: the published
+/// copy opens in the browser instead.
+pub(super) fn published_notices_unless_opened(
+    this: &mut QuillApp,
+    opened: bool,
+    cx: &mut Context<QuillApp>,
+) {
+    if !opened {
+        this.open_link(quill::about::NOTICES_URL, cx);
     }
 }

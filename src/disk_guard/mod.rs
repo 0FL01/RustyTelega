@@ -28,7 +28,7 @@ pub struct DataReading {
 /// `device` is where the root was last seen ([`data_root_device`]).
 pub fn read_data(root: &Path, device: Option<u64>) -> DataReading {
     let mut reading = folders::tightest(&folders::data_folders(root), read_volume);
-    reading.unwritable |= folders::volume_gone(root, device);
+    reading.unwritable |= folders::volume_gone(root, device) || folders::dangling_link(root);
     reading
 }
 
@@ -76,6 +76,9 @@ const APFS_RESERVE: u64 = 32 * MIB;
 const CATCH_UP_ROOM: u64 = 128 * MIB;
 const WRITTEN_IN_SHORTEST_READ: u64 = FASTEST_WRITER_PER_SEC * SHORTEST_READ.as_secs();
 const WRITTEN_WHILE_CONFIRMING: u64 = FASTEST_WRITER_PER_SEC * CONFIRM_READ.as_secs();
+const WARN_LEAST: u64 = 1024 * MIB;
+const WARN_ABOVE_OPEN: u64 = 256 * MIB;
+const WARN_CLEAR_ABOVE_WARN: u64 = 256 * MIB;
 const CLOSE_FIXED: u64 = WRITTEN_IN_SHORTEST_READ + WRITTEN_WHILE_CONFIRMING + APFS_RESERVE;
 
 /// What the data folders hold that the floors scale with.
@@ -101,13 +104,22 @@ impl DiskFloors {
     pub const fn for_data(data: DataUse) -> Self {
         let accounts = if data.accounts == 0 { 1 } else { data.accounts };
         let close = CLOSE_FIXED.saturating_add(CLOSE_WRITES_PER_ACCOUNT.saturating_mul(accounts));
+        let open = close
+            .saturating_add(CATCH_UP_ROOM)
+            .saturating_add(data.largest_database);
+        // The bar shows before the next open could be refused, however large
+        // the database or however many accounts.
+        let above_open = open.saturating_add(WARN_ABOVE_OPEN);
+        let warn = if above_open > WARN_LEAST {
+            above_open
+        } else {
+            WARN_LEAST
+        };
         Self {
-            warn: 1024 * MIB,
-            warn_clear: 1280 * MIB,
+            warn,
+            warn_clear: warn.saturating_add(WARN_CLEAR_ABOVE_WARN),
             close,
-            open: close
-                .saturating_add(CATCH_UP_ROOM)
-                .saturating_add(data.largest_database),
+            open,
         }
     }
 }
@@ -175,6 +187,9 @@ pub enum DiskStep {
     Hold,
     Close,
     Reconnect,
+    /// Leaving Full while a call kept the on-screen client open: that
+    /// client never closed, so only the background accounts start again.
+    ReconnectBackground,
     RetryStarts,
 }
 
@@ -182,6 +197,8 @@ pub enum DiskStep {
 pub struct DiskClients {
     pub running: bool,
     pub retry_starts: bool,
+    /// At Full, a call kept the on-screen client open.
+    pub screen_held: bool,
 }
 
 impl DiskState {
@@ -189,6 +206,7 @@ impl DiskState {
         match (self, after) {
             (Self::Full, Self::Full) if !clients.running => DiskStep::Hold,
             (_, Self::Full) => DiskStep::Close,
+            (Self::Full, _) if clients.screen_held => DiskStep::ReconnectBackground,
             (Self::Full, _) => DiskStep::Reconnect,
             _ if clients.retry_starts => DiskStep::RetryStarts,
             _ => DiskStep::Hold,

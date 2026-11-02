@@ -480,15 +480,26 @@ pub mod keychain {
     }
 }
 
-/// The OS's answer to an open: true when the helper started (`open`,
-/// `xdg-open`) or the shell took the target (Windows).
+/// The OS's answer to an open: true when the helper (`open`, `xdg-open`)
+/// exited with success, or the shell took the target (Windows).
 #[must_use]
 pub enum OsOpen {
     Answered(bool),
-    /// Windows calls the shell on a thread of its own, since a cold browser
-    /// or a network path can take seconds. A thread that ended without
-    /// answering cancels the channel: nothing opened.
+    /// The answer comes from another thread: Windows calls the shell there,
+    /// since a cold browser or a network path can take seconds, and on macOS
+    /// and Linux a thread waits for the helper's exit status. A thread that
+    /// ended without answering cancels the channel: nothing opened.
     Pending(futures_channel::oneshot::Receiver<bool>),
+}
+
+impl OsOpen {
+    /// Whether it opened, once the OS has said.
+    pub async fn opened(self) -> bool {
+        match self {
+            Self::Answered(opened) => opened,
+            Self::Pending(answer) => answer.await.unwrap_or(false),
+        }
+    }
 }
 
 /// Open an `http`/`https` URL with the OS (`xdg-open` / `open`). No WebView.
@@ -521,6 +532,7 @@ pub fn mailto_url(address: &str) -> Option<String> {
 }
 
 /// Open the mail client on a new message to `address`.
+#[allow(clippy::disallowed_methods, reason = "the definition of the door")]
 pub fn open_mailto(address: &str) -> OsOpen {
     match mailto_url(address) {
         Some(url) => open_mailto_url(&url),
@@ -539,6 +551,21 @@ pub fn open_mailto_url(url: &str) -> OsOpen {
         return OsOpen::Answered(false);
     }
     os_open(std::ffi::OsStr::new(url), "open the mail client")
+}
+
+/// Open a pane of the system settings: a `x-apple.systempreferences:` URL
+/// on macOS or an `ms-settings:` one on Windows. Anything else is refused.
+pub fn open_system_settings(target: &str) -> OsOpen {
+    let settings = ["x-apple.systempreferences:", "ms-settings:"]
+        .iter()
+        .any(|scheme| target.starts_with(scheme));
+    let plain = target
+        .chars()
+        .all(|ch| !ch.is_whitespace() && !ch.is_control());
+    if !settings || !plain {
+        return OsOpen::Answered(false);
+    }
+    os_open(std::ffi::OsStr::new(target), "open System Settings")
 }
 
 /// Hand a URL or path to the OS default handler: the one door every helper
@@ -578,7 +605,7 @@ fn os_open_now(target: &std::ffi::OsStr) -> OsOpen {
     };
     let mut command = std::process::Command::new(program);
     command.arg(target);
-    OsOpen::Answered(os_spawn(command))
+    os_spawn(command)
 }
 
 /// Windows calls `ShellExecuteW` directly: `cmd /C start` would re-parse
@@ -647,24 +674,52 @@ fn os_open_now(_target: &std::ffi::OsStr) -> OsOpen {
     OsOpen::Answered(true)
 }
 
-/// Start a helper program (`open`, `xdg-open`, `explorer`) without a shell.
-#[cfg(not(any(test, feature = "test-support")))]
-fn os_spawn(mut command: std::process::Command) -> bool {
+/// Start a helper program (`open`, `xdg-open`) without a shell. Its exit
+/// status is the answer: xdg-open exits 3 or 4 with no handler, and
+/// `open -R` exits 1 for a file that moved.
+#[cfg(all(unix, not(any(test, feature = "test-support"))))]
+fn os_spawn(mut command: std::process::Command) -> OsOpen {
+    match command.spawn() {
+        Ok(child) => answer_on_exit(child),
+        Err(_) => OsOpen::Answered(false),
+    }
+}
+
+/// `explorer /select,` exits 1 whether it showed the file or not, so on
+/// Windows a helper that started is the answer.
+#[cfg(all(windows, not(any(test, feature = "test-support"))))]
+fn os_spawn(mut command: std::process::Command) -> OsOpen {
     match command.spawn() {
         Ok(child) => {
             crate::child_reap::wait_in_background(child);
-            true
+            OsOpen::Answered(true)
         }
-        Err(_) => false,
+        Err(_) => OsOpen::Answered(false),
+    }
+}
+
+/// Answers once `child` exits, with whether it exited with success. When no
+/// thread can wait for it, the helper did start, so that is the answer.
+#[cfg(unix)]
+#[cfg_attr(all(feature = "test-support", not(test)), allow(dead_code))]
+fn answer_on_exit(mut child: std::process::Child) -> OsOpen {
+    let (answer, answered) = futures_channel::oneshot::channel();
+    let waiter = crate::thread_guard::spawn_guarded("quill-os-open-wait", move || {
+        let success = child.wait().is_ok_and(|status| status.success());
+        let _ = answer.send(success);
+    });
+    match waiter {
+        Ok(_) => OsOpen::Pending(answered),
+        Err(_) => OsOpen::Answered(true),
     }
 }
 
 /// Test builds launch nothing: they count the attempt instead, so a test
 /// can prove that nothing reached the OS ([`os_launch_attempts`]).
 #[cfg(any(test, feature = "test-support"))]
-fn os_spawn(_command: std::process::Command) -> bool {
+fn os_spawn(_command: std::process::Command) -> OsOpen {
     test_launches::note();
-    true
+    OsOpen::Answered(true)
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -734,13 +789,20 @@ pub fn open_local_file(path: &std::path::Path) -> OsOpen {
 /// MED3: reveal a file in the file manager — macOS `open -R` (selects the
 /// file in Finder), Windows `explorer /select,`, Linux opens the parent
 /// directory with `xdg-open` (no portable select-file equivalent). Never
-/// while the agent UI driver injects input, like [`os_open`]. The helper
-/// starts on the calling thread on every OS, so the answer comes at once.
+/// while the agent UI driver injects input, like [`os_open`]. A path that
+/// is gone is a failure before any helper runs: explorer exits 1 either
+/// way, and xdg-open on a missing folder only says so in its status.
 pub fn reveal_in_file_manager(path: &std::path::Path) -> OsOpen {
-    os_gate("reveal a file in its folder").unwrap_or_else(|| OsOpen::Answered(reveal_now(path)))
+    if let Some(answer) = os_gate("reveal a file in its folder") {
+        return answer;
+    }
+    if !path.exists() {
+        return OsOpen::Answered(false);
+    }
+    reveal_now(path)
 }
 
-fn reveal_now(path: &std::path::Path) -> bool {
+fn reveal_now(path: &std::path::Path) -> OsOpen {
     if cfg!(target_os = "macos") {
         let mut command = std::process::Command::new("open");
         command.args(["-R"]).arg(path);
@@ -771,6 +833,7 @@ fn reveal_now(path: &std::path::Path) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods, reason = "tests of the doors themselves")]
 mod tests {
     use super::*;
     use futures_lite::future::block_on;
@@ -780,6 +843,33 @@ mod tests {
             OsOpen::Pending(answer) => answer,
             OsOpen::Answered(opened) => panic!("answered {opened} on the calling thread"),
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_helper_that_exits_with_an_error_did_not_open() {
+        let run = |code: &str| {
+            let child = std::process::Command::new("sh")
+                .args(["-c", &format!("exit {code}")])
+                .spawn()
+                .unwrap();
+            block_on(answer_on_exit(child).opened())
+        };
+        assert!(!run("3"), "xdg-open: no handler");
+        assert!(!run("1"), "open -R: the file moved");
+        assert!(run("0"));
+    }
+
+    #[test]
+    fn revealing_a_path_that_is_gone_fails_before_any_helper() {
+        let gone = std::env::temp_dir().join("quill-no-such-folder/at/all.txt");
+        let launches = os_launch_attempts();
+        assert!(!block_on(reveal_in_file_manager(&gone).opened()));
+        assert_eq!(os_launch_attempts(), launches, "nothing ran");
+        assert!(block_on(
+            reveal_in_file_manager(&std::env::temp_dir()).opened()
+        ));
+        assert_eq!(os_launch_attempts(), launches + 1);
     }
 
     #[test]

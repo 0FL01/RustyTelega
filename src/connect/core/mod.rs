@@ -736,6 +736,8 @@ impl<S: JsonSender> ConnectDriver<S> {
         let _ = self.refresh_gift_collections_if_stale();
         // "Send via Blockchain": the temporary password is in, ask for the URL.
         let _ = self.continue_gift_export();
+        let _ = self.resume_disk_paused_found();
+        self.note_storage_limits_seeded();
         if view_after {
             self.sync_shown_views()?;
         }

@@ -207,20 +207,36 @@ impl<S: JsonSender> ConnectDriver<S> {
     /// TDLib keeps every cached file until the optimizer runs, and it only
     /// runs with a limit set. The first Ready of an account that never had
     /// limits sets tdesktop's starting ones, once: the flag stays, so a
-    /// later "No limit" is never overwritten.
+    /// later "No limit" is never overwritten. The flag is saved only once
+    /// TDLib holds limits ([`Self::note_storage_limits_seeded`]): a process
+    /// that dies first, or an option TDLib refuses, sends them again on
+    /// the next Ready.
     pub(crate) fn maybe_seed_storage_limits(&mut self) -> Result<(), ConnectSendError> {
-        if self.session.settings.data_storage.storage_limits_seeded {
+        let settings = &self.session.settings;
+        if settings.data_storage.storage_limits_seeded || settings.storage_limits_seed_sent {
             return Ok(());
         }
-        if !self.session.settings.storage_limits.chosen() {
+        if !settings.storage_limits.chosen() {
             self.set_storage_limits(
                 Some(crate::storage_limits::DEFAULT_SIZE),
                 Some(crate::storage_limits::DEFAULT_KEEP),
             )?;
+            self.session.settings.storage_limits_seed_sent = true;
+        }
+        self.note_storage_limits_seeded();
+        Ok(())
+    }
+
+    /// After an ingest: TDLib's options say the account has limits (the
+    /// `updateOption` echo of `use_storage_optimizer`, or an earlier
+    /// choice), so it counts as seeded from now on.
+    pub(crate) fn note_storage_limits_seeded(&mut self) {
+        let settings = &self.session.settings;
+        if settings.data_storage.storage_limits_seeded || !settings.storage_limits.chosen() {
+            return;
         }
         self.session.settings.data_storage.storage_limits_seeded = true;
         let _ = self.save_data_storage_prefs();
-        Ok(())
     }
 
     /// Slice S4: persist the per-network auto-download settings

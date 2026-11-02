@@ -84,24 +84,26 @@ impl QuillApp {
     }
 
     /// The toast `host`'s window shows this frame (`None`: the main
-    /// window). It shows in the window the last input happened in, where a
-    /// kit dialog would open, so a note answers the window that asked.
+    /// window). A note toasts in the window the input that set it happened
+    /// in, so it answers the window that asked and stays there.
     pub(in crate::ui) fn status_toast_in(
         &mut self,
         host: Option<ChatId>,
         cx: &mut Context<Self>,
     ) -> Option<StatusNote> {
         let note = self.status_toast_visible(cx)?;
-        (self.windows.last_input == host).then_some(note)
+        (self.connection.toasts.visible_host() == Some(host)).then_some(note)
     }
 
     /// A chat window's toast. Put in the box around its compose field, it
     /// sits [`TOAST_GAP`] above that box, centred over the conversation;
-    /// with the media viewer open, put in the window's body, it sits above
-    /// the viewer's bar.
+    /// `in_body`, put in the window's body, it sits above the media
+    /// viewer's bar, or [`TOAST_GAP`] above the bottom of a window that
+    /// shows only the topic list.
     pub(in crate::ui) fn chat_window_toast(
         &mut self,
         note: &StatusNote,
+        in_body: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
@@ -114,6 +116,9 @@ impl QuillApp {
             right: px(0.),
             bottom: px(TOAST_GAP),
         };
+        if in_body {
+            return self.status_toast_layer(note, insets, cx);
+        }
         div()
             .absolute()
             .left_0()

@@ -200,6 +200,30 @@ fn leaving_a_full_disk_reconnects_once(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn space_freed_during_a_held_call_keeps_the_call_client(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let start = shown(&app, &mut vcx).2;
+    fill(&app, &mut vcx, Some(0));
+    app.update_in(&mut vcx, |app, _, _| app.disk.held_for_call = true);
+    read(&app, &mut vcx, Some(FLOORS.warn_clear));
+    assert_eq!(
+        shown(&app, &mut vcx),
+        (false, false, start),
+        "the client in the call was never closed, so it is not replaced"
+    );
+    fill(&app, &mut vcx, Some(0));
+    app.update_in(&mut vcx, |app, _, _| app.disk.held_for_call = true);
+    app.update_in(&mut vcx, |app, _, _| app.account.passcode.locked = true);
+    read(&app, &mut vcx, Some(FLOORS.warn_clear));
+    app.read_with(&vcx, |app, _| {
+        assert!(
+            !app.account.passcode.deferred_connect,
+            "nothing waits for the unlock"
+        );
+    });
+}
+
+#[gpui_kit::test]
 fn a_refused_open_holds_the_screen_until_the_open_floor(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
     let start = shown(&app, &mut vcx).2;
@@ -378,6 +402,15 @@ fn each_time_the_disk_fills_sends_one_notice(cx: &mut TestAppContext) {
     assert_eq!(notices(&app, &mut vcx), 2, "the screen was up already");
 }
 
+#[test]
+fn the_full_disk_notice_offers_no_reply_or_mark_as_read() {
+    for unwritable in [false, true] {
+        let notice = super::full_disk_notice(unwritable);
+        assert!(!notice.offers_actions(false), "{notice:?}");
+        assert!(quill::notify::action_buttons(&notice, false).is_empty());
+    }
+}
+
 #[gpui_kit::test]
 fn the_full_screen_links_to_the_cached_files(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_demo_app(cx, "wait-phone", 800.);
@@ -390,6 +423,14 @@ fn the_full_screen_links_to_the_cached_files(cx: &mut TestAppContext) {
     fill(&app, &mut vcx, Some(0));
     vcx.update(|window, cx| window.render_frame(cx));
     assert!(vcx.update(|window, _| window.try_find("disk-full-reveal").is_some()));
+    quill::platform::script_next_os_open(quill::platform::OsOpen::Answered(false));
+    vcx.update(|window, cx| window.click("disk-full-reveal", cx));
+    let note = app.read_with(&vcx, |app, _| app.connection.note().text().to_string());
+    assert_eq!(
+        note,
+        tr(keys::Q_AV_COULDNT_OPEN_THE_FOLDER),
+        "a failed reveal says so"
+    );
     app.update_in(&mut vcx, |app, _, _| app.disk.cache_folder = None);
     vcx.update(|window, cx| window.render_frame(cx));
     assert!(
@@ -449,4 +490,62 @@ fn manage_local_storage_shows_the_message_database_size(cx: &mut TestAppContext)
     vcx.run_until_parked();
     vcx.update(|window, cx| window.render_frame(cx));
     assert!(vcx.debug_bounds("storage-database-size").is_some());
+}
+
+#[gpui_kit::test]
+fn a_switch_drops_the_previous_accounts_storage_figures(cx: &mut TestAppContext) {
+    use quill::ids::AccountKey;
+    let (app, mut vcx) = new_app(cx);
+    let files = |account: &AccountKey, bytes: u64| super::AccountFiles {
+        account: account.clone(),
+        cache_folder: None,
+        database_bytes: Some(bytes),
+    };
+    let first = AccountKey::primary();
+    let second = AccountKey("second".into());
+    let bytes = |app: &Entity<QuillApp>, vcx: &mut VisualTestContext| {
+        app.read_with(vcx, |app, _| app.disk.database_bytes)
+    };
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.note_account_files(files(&first, 7 << 20), cx)
+    });
+    assert_eq!(bytes(&app, &mut vcx), Some(7 << 20));
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.disk_account_switched(second.clone(), cx)
+    });
+    assert_eq!(bytes(&app, &mut vcx), None, "not the previous account's");
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.note_account_files(files(&first, 7 << 20), cx)
+    });
+    assert_eq!(bytes(&app, &mut vcx), None, "a read from before the switch");
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.note_account_files(files(&second, 3 << 20), cx)
+    });
+    assert_eq!(bytes(&app, &mut vcx), Some(3 << 20));
+}
+
+#[gpui_kit::test]
+fn a_running_update_download_waits_for_space_and_starts_again(cx: &mut TestAppContext) {
+    use quill::updater::{DownloadProgress, ReleaseInfo, UpdateState};
+    let (app, mut vcx) = new_app(cx);
+    let release = ReleaseInfo {
+        version: "99.0.0".into(),
+        notes: String::new(),
+        url: String::new(),
+        asset: None,
+    };
+    let progress = DownloadProgress::default();
+    app.update_in(&mut vcx, |app, _, _| {
+        app.settings.update_state = UpdateState::Downloading(release.clone(), progress.clone());
+    });
+    read(&app, &mut vcx, Some(FLOORS.warn - 1));
+    assert!(progress.is_held(), "the low disk stops the download");
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.finish_update_download(release.clone(), &progress, Err("stopped"), cx);
+        assert_eq!(
+            app.settings.update_state,
+            UpdateState::Available(release.clone()),
+            "it waits, it did not fail"
+        );
+    });
 }

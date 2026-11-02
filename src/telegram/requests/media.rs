@@ -96,6 +96,21 @@ pub fn add_file_to_downloads(
     .to_string()
 }
 
+/// `searchFileDownloads` (schema line 15086) for the active downloads
+/// only, paused ones included (answer: `foundFileDownloads`).
+pub fn search_active_file_downloads(extra: RequestId, limit: i32) -> String {
+    json!({
+        "@type": "searchFileDownloads",
+        "@extra": extra.as_extra(),
+        "query": "",
+        "only_active": true,
+        "only_completed": false,
+        "offset": "",
+        "limit": limit,
+    })
+    .to_string()
+}
+
 /// `toggleDownloadIsPaused` (TDLib 1.8.67, schema :14041-14044): pause or
 /// resume a file in the persistent download list.
 pub fn toggle_download_is_paused(extra: RequestId, file_id: FileId, is_paused: bool) -> String {
