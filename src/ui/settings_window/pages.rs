@@ -66,15 +66,32 @@ impl QuillApp {
             Page::Chats => column
                 .children(cards([self.media_settings_section(cx).into_any_element()]))
                 .children(cards([
-                    self.appearance_send_key_section(cx),
+                    self.setting_spot(
+                        &["chats.send_key"],
+                        self.appearance_send_key_section(cx),
+                        cx,
+                    ),
                     self.appearance_spellcheck_section(cx),
                     self.appearance_suggest_emoji_section(cx),
                 ]))
                 .child(group(
                     Some(tr(keys::Q_SETTINGS_CHATS_SEC_EMOJI)),
                     [
-                        self.sticker_suggest_section(cx),
-                        self.nav_row(Nav::ArchivedStickers, tr(keys::STICKERS_YOU_HAVE), None, cx),
+                        self.setting_spot(
+                            &["chats.sticker_suggestions"],
+                            self.sticker_suggest_section(cx),
+                            cx,
+                        ),
+                        self.setting_spot(
+                            &["chats.archived_stickers"],
+                            self.nav_row(
+                                Nav::ArchivedStickers,
+                                tr(keys::STICKERS_YOU_HAVE),
+                                None,
+                                cx,
+                            ),
+                            cx,
+                        ),
                     ],
                 )),
             Page::Appearance => {

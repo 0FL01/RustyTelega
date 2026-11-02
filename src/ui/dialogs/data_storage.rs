@@ -280,14 +280,9 @@ impl QuillApp {
             ),
         );
         // --- Automatic downloads ---
-        // The data saver and the per-chat-type grid sit on the Chats page;
-        // the size caps are in the per-network editor.
+        // The size caps are in the per-network editor.
         body = body.child(self.setting_spot(
-            &[
-                "data.max_file_size",
-                "data.data_saver",
-                "data.auto_download_chat_types",
-            ],
+            &["data.max_file_size"],
             section_header(tr(keys::Q_OPS_AUTOMATIC_DOWNLOADS)),
             cx,
         ));

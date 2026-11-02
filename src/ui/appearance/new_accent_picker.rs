@@ -479,11 +479,25 @@ impl QuillApp {
                         this.sync_spellcheck(&text, cx);
                     })),
             );
-        let mut control = div().flex().flex_col().gap_2().child(row);
+        let languages_shown = checked && !self.spell.info.available.is_empty();
+        let dictionaries_shown = checked && self.dictionary_manager_available();
+        let row = self.setting_stand_in(
+            !languages_shown,
+            &["chats.spellcheck_languages"],
+            row.into_any_element(),
+            cx,
+        );
+        let row = self.setting_stand_in(!dictionaries_shown, &["chats.dictionaries"], row, cx);
+        let mut control = div().flex().flex_col().gap_2().child(self.setting_spot(
+            &["chats.spellcheck"],
+            row,
+            cx,
+        ));
         if cfg!(target_os = "macos") {
-            control = control.child(self.system_text_replace_row(cx));
+            let row = self.system_text_replace_row(cx);
+            control = control.child(self.setting_spot(&["chats.system_text_replace"], row, cx));
         }
-        if checked && !self.spell.info.available.is_empty() {
+        if languages_shown {
             let active = self.spell.info.active.clone();
             let mut chips = div().flex().flex_wrap().gap_2().child(self.appearance_chip(
                 "spell-lang-auto",
@@ -516,10 +530,11 @@ impl QuillApp {
                     },
                 ));
             }
-            control = control.child(chips);
+            control = control.child(self.setting_spot(&["chats.spellcheck_languages"], chips, cx));
         }
-        if checked && self.dictionary_manager_available() {
-            control = control.child(self.dictionary_manager_section(cx));
+        if dictionaries_shown {
+            let section = self.dictionary_manager_section(cx);
+            control = control.child(self.setting_spot(&["chats.dictionaries"], section, cx));
         }
         self.appearance_section(
             cx,
@@ -671,15 +686,16 @@ impl QuillApp {
                         this.set_chat_prefs(cx, |c| c.replace_emoji = on);
                     })),
             );
+        let set_row = self.emoji_set_settings_row(cx);
         let control = div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(suggest)
+            .child(self.setting_spot(&["chats.suggest_emoji"], suggest, cx))
             .child(highlight)
             .children(self.emoji_word_blocklist_row(cx))
-            .child(replace)
-            .child(self.emoji_set_settings_row(cx))
+            .child(self.setting_spot(&["chats.replace_emoji"], replace, cx))
+            .child(self.setting_spot(&["chats.emoji_set"], set_row, cx))
             .into_any_element();
         // tdesktop Chat settings "Large emoji": one to three emoji alone in
         // a message show as big glyphs (the history renderer reads the same
@@ -714,6 +730,7 @@ impl QuillApp {
                         this.set_media_pref(|prefs| prefs.big_emoji = on, cx)
                     })),
             );
+        let large = self.setting_spot(&["chats.large_emoji"], large, cx);
         let control = div().flex().flex_col().gap_2().child(large).child(control);
         self.appearance_section(cx, tr(keys::Q_PREFS_EMOJI), "", control.into_any_element())
     }
