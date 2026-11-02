@@ -56,10 +56,12 @@ pub struct ChatPrefs {
     /// default on): `:name` in the composer offers matching emoji.
     #[serde(default = "default_true")]
     pub suggest_emoji: bool,
-    /// Quill's own (default on): words in the composer that have an
+    /// Quill's own (default off): words in the composer that have an
     /// emoji get a soft highlight, and pointing at one offers its emoji
-    /// (`emoji_words`). Only with `suggest_emoji` on.
-    #[serde(default = "default_true")]
+    /// (`emoji_words`). Only with `suggest_emoji` on. Stored under a new
+    /// key: the old one was on by default and written by every save, so
+    /// a stored `true` never meant the user chose it.
+    #[serde(default, rename = "emoji_word_highlights")]
     pub highlight_emoji_words: bool,
     /// Words the user said not to highlight ("Don't Suggest Emoji for
     /// This Word"), normalized; managed in Settings › Chats.
@@ -97,7 +99,7 @@ impl Default for ChatPrefs {
             // Telegram Desktop ships spellcheck on; match that.
             spellcheck_enabled: true,
             suggest_emoji: true,
-            highlight_emoji_words: true,
+            highlight_emoji_words: false,
             emoji_word_blocklist: Vec::new(),
             replace_emoji: true,
             system_text_replace: true,

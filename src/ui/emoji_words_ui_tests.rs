@@ -38,6 +38,9 @@ fn new_app(cx: &mut TestAppContext) -> (Entity<QuillApp>, VisualTestContext) {
         }
     });
     vcx.run_until_parked();
+    app.update(&mut vcx, |app, _| {
+        app.chat_prefs.highlight_emoji_words = true
+    });
     vcx.update(|window, cx| {
         app.update(cx, |app, cx| {
             app.composer.update(cx, |input, cx| input.focus(window, cx));

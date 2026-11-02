@@ -3,8 +3,15 @@
 Idan asked for this on 2026-10-29. The composer gives a soft highlight to
 every finished word that has an emoji. Pointing at one shows the bar `:word`
 would show, and a click swaps the word for the emoji. Settings, Chat, Emoji
-has a toggle, "Highlight words with emoji". It is on by default, and it only
+has a toggle, "Highlight words with emoji". It is off by default, and it only
 works while "Suggest emoji replacements" is on.
+
+It shipped on by default, and Idan changed that to off on 2026-11-02. Chat
+prefs are saved whole, so the old `highlight_emoji_words` key held `true` for
+anyone who had changed any chat setting, and a stored `true` could not be told
+from a choice. The setting now lives under `emoji_word_highlights` and the old
+key is ignored, so everyone starts from off once. A person who turned it off
+and back on before this also starts from off.
 
 Telegram Desktop has nothing like it. Quill does not invent features that
 tdesktop lacks unless Idan asks for them, and he asked for this one.
