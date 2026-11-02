@@ -395,7 +395,7 @@ impl QuillApp {
                     let reply = self.reply_for_send(cx);
                     // MED1: the grouping toggle applies to the demo too.
                     let albumable = attachments.len() >= 2
-                        && attachments.iter().any(|att| {
+                        && attachments.iter().all(|att| {
                             matches!(att.kind, AttachmentKind::Photo | AttachmentKind::Video)
                         });
                     let messages = if albumable && self.composer_group_media_effective() {
