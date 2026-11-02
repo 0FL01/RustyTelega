@@ -147,6 +147,10 @@ impl State {
         width: Pixels,
         number: u64,
     ) -> bool {
+        // No paint measured the history yet: the first width is no resize.
+        if width == Pixels::ZERO {
+            return false;
+        }
         let entry = self.history_widths.entry(window).or_insert((width, 0));
         if entry.0 != width {
             *entry = (width, number);
@@ -389,6 +393,13 @@ mod tests {
         let mut state = State::default();
         assert!(!state.note_history_width(MAIN, px(800.), 1));
         assert!(state.note_history_width(MAIN, px(792.), 2));
+    }
+
+    #[test]
+    fn the_first_measured_width_is_not_resizing() {
+        let mut state = State::default();
+        assert!(!state.note_history_width(MAIN, Pixels::ZERO, 1));
+        assert!(!state.note_history_width(MAIN, px(800.), 2));
     }
 
     #[test]

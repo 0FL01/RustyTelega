@@ -28,10 +28,7 @@ impl Render for CountedList {
     }
 }
 
-fn drawn(
-    cx: &mut TestAppContext,
-    rows: usize,
-) -> (ListState, Rc<Cell<usize>>, VisualTestContext) {
+fn drawn(cx: &mut TestAppContext, rows: usize) -> (ListState, Rc<Cell<usize>>, VisualTestContext) {
     let state = ListState::new(rows, ListAlignment::Top, px(10.));
     let renders = Rc::new(Cell::new(0));
     let (_, vcx) = cx.add_window_view(|_, _| CountedList {
