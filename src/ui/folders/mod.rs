@@ -406,8 +406,9 @@ impl QuillApp {
                 );
             }
             let tabs_settings = this.folder_tabs_settings(cx);
+            let recommended_shown = !recommended.is_empty();
             let mut recommended_section = div().flex().flex_col().gap_1();
-            if !recommended.is_empty() {
+            if recommended_shown {
                 recommended_section = recommended_section.child(
                     div()
                         .text_xs()
@@ -462,34 +463,47 @@ impl QuillApp {
                         ),
                 );
             }
+            let list = this.setting_spot(&["folders.manage"], list, cx);
+            let list =
+                this.setting_stand_in(!recommended_shown, &["folders.recommended"], list, cx);
+            let recommended_section =
+                this.setting_spot(&["folders.recommended"], recommended_section, cx);
             div()
                 .flex()
                 .flex_col()
                 .gap_2()
                 .child(list)
-                .child(recommended_section)
+                .children(recommended_shown.then_some(recommended_section))
                 .child(
-                    div().flex().items_center().gap_2().child(
-                        // Phase 6: kit Checkbox (was: ghost button with ☑/☐ label).
-                        Checkbox::new("folder-tags-toggle")
-                            .checked(tags_enabled)
-                            .label(tr(keys::FILTERS_ENABLE_TAGS))
-                            .on_click(cx.listener(move |this, &on, _, cx| {
-                                if on != tags_enabled {
-                                    this.toggle_folder_tags_ui(cx);
-                                }
-                            })),
+                    this.setting_spot(
+                        &["folders.folder_tags"],
+                        div().flex().items_center().gap_2().child(
+                            // Phase 6: kit Checkbox (was: ghost button with ☑/☐ label).
+                            Checkbox::new("folder-tags-toggle")
+                                .checked(tags_enabled)
+                                .label(tr(keys::FILTERS_ENABLE_TAGS))
+                                .on_click(cx.listener(move |this, &on, _, cx| {
+                                    if on != tags_enabled {
+                                        this.toggle_folder_tags_ui(cx);
+                                    }
+                                })),
+                        ),
+                        cx,
                     ),
                 )
                 .child(
-                    div().flex().child(
-                        Button::new("folder-create")
-                            .icon(gpui_kit::assets::IconName::Plus)
-                            .label(tr(keys::FILTERS_NEW))
-                            .outline()
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_folder_create(window, cx);
-                            })),
+                    this.setting_spot(
+                        &["folders.new_folder"],
+                        div().flex().child(
+                            Button::new("folder-create")
+                                .icon(gpui_kit::assets::IconName::Plus)
+                                .label(tr(keys::FILTERS_NEW))
+                                .outline()
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_folder_create(window, cx);
+                                })),
+                        ),
+                        cx,
                     ),
                 )
                 .child(tabs_settings)
