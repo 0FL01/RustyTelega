@@ -150,13 +150,18 @@ pub fn poll_row(poll: &Poll, index: usize, option: &crate::telegram::PollOption)
     }
 }
 
-/// Whether an option reads right to left: by its own text, or, for an option
-/// of digits or emoji with no direction of its own, by the question's.
-pub fn option_is_rtl(text: &str, question: &str) -> bool {
-    match unicode_bidi::get_base_direction_full(text) {
+/// Whether a poll's rows run from the right: every row keeps to one side,
+/// the one its first option's text reads from. An option of digits or emoji
+/// has no direction of its own, so the question decides.
+pub fn poll_is_rtl(poll: &Poll) -> bool {
+    let first = poll
+        .options
+        .first()
+        .map_or("", |option| option.text.as_str());
+    match unicode_bidi::get_base_direction_full(first) {
         unicode_bidi::Direction::Rtl => true,
         unicode_bidi::Direction::Ltr => false,
-        unicode_bidi::Direction::Mixed => crate::text::is_rtl_text(question),
+        unicode_bidi::Direction::Mixed => crate::text::is_rtl_text(&poll.question),
     }
 }
 
@@ -620,13 +625,20 @@ mod tests {
         assert_eq!(mark(&right, 1), Some(PollMark::Correct));
     }
 
+    fn poll_with(question: &str, first: &str) -> Poll {
+        let mut poll = regular_poll(&[], false, true, false);
+        poll.question = question.to_string();
+        poll.options[0].text = first.to_string();
+        poll
+    }
+
     #[test]
-    fn an_option_reads_in_its_own_direction() {
-        assert!(option_is_rtl("סושי", "What to eat?"));
-        assert!(!option_is_rtl("Sushi", "מה נאכל?"));
+    fn the_first_option_sets_the_side_of_every_row() {
+        assert!(poll_is_rtl(&poll_with("What to eat?", "סושי")));
+        assert!(!poll_is_rtl(&poll_with("מה נאכל?", "Sushi")));
         // No letters: the question decides.
-        assert!(option_is_rtl("2026", "מה נאכל?"));
-        assert!(!option_is_rtl("2026", "What to eat?"));
+        assert!(poll_is_rtl(&poll_with("מה נאכל?", "2026")));
+        assert!(!poll_is_rtl(&poll_with("What to eat?", "2026")));
     }
 
     #[test]
