@@ -23,6 +23,8 @@ pub(crate) struct SettingsUi {
     pub(super) arrival: Option<super::settings_window::Arrival>,
     /// Scrolls every page without a handle of its own.
     pub(super) page_scroll: ScrollHandle,
+    /// Scrolls the screen in `sub`.
+    pub(super) sub_scroll: ScrollHandle,
     /// Holds focus inside the settings window, so Esc steps back.
     pub(super) focus: FocusHandle,
     /// Parity slice (platform-custom-keybindings): the rebindable action id
@@ -112,6 +114,7 @@ impl SettingsUi {
             search: Default::default(),
             arrival: None,
             page_scroll: ScrollHandle::new(),
+            sub_scroll: ScrollHandle::new(),
             focus: cx.focus_handle(),
             keybinding_capture: None,
             keybinding_error: None,

@@ -26,14 +26,7 @@ impl QuillApp {
             .child(self.performance_section(cx))
             .child(
                 self.setting_spot(
-                    &[
-                        "advanced.experimental",
-                        "advanced.split_profile_media",
-                        "advanced.fast_buttons",
-                        "advanced.restore_defaults",
-                        "advanced.export_settings",
-                        "advanced.import_settings",
-                    ],
+                    &["advanced.experimental"],
                     super::nav_row::nav_row(
                         "settings-experimental",
                         tr(keys::SETTINGS_EXPERIMENTAL),
@@ -86,7 +79,7 @@ impl QuillApp {
             )
             .child(
                 self.setting_spot(
-                    &["system.hardware_decoding"],
+                    &["advanced.hardware_decoding"],
                     div()
                         .flex()
                         .items_center()
@@ -231,13 +224,21 @@ impl QuillApp {
             .read_from_clipboard()
             .and_then(|item| item.text())
             .unwrap_or_default();
-        let mut page = div().flex().flex_col().gap_4().child(
-            div()
-                .id("experimental-about")
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child(experimental::ABOUT),
+        let about = div()
+            .id("experimental-about")
+            .text_sm()
+            .text_color(cx.theme().muted_foreground)
+            .child(experimental::ABOUT)
+            .into_any_element();
+        let about =
+            self.setting_stand_in(!values.changed(), &["advanced.restore_defaults"], about, cx);
+        let about = self.setting_stand_in(
+            !values.fast_buttons_mode,
+            &["advanced.fast_buttons"],
+            about,
+            cx,
         );
+        let mut page = div().flex().flex_col().gap_4().child(about);
         if values.changed() {
             page = page.child(
                 self.setting_spot(
@@ -282,7 +283,8 @@ impl QuillApp {
                 ),
             ),
         );
-        if experimental::is_importable(&clipboard) {
+        let importable = experimental::is_importable(&clipboard);
+        if importable {
             actions = actions.child(
                 div().flex_none().child(
                     self.setting_spot(
@@ -297,7 +299,13 @@ impl QuillApp {
                 ),
             );
         }
-        page.child(actions).into_any_element()
+        page.child(self.setting_stand_in(
+            !importable,
+            &["advanced.import_settings"],
+            actions.into_any_element(),
+            cx,
+        ))
+        .into_any_element()
     }
 
     fn import_experimental(&mut self, cx: &mut Context<Self>) {

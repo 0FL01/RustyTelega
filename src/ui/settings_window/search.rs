@@ -177,10 +177,14 @@ impl QuillApp {
         quill::settings::save_settings_search_recent(&QuillApp::appearance_paths(), &recent);
         self.settings.search.pending_clear = true;
         self.show_settings_page(target.page(), cx);
-        self.settings.arrival = match target {
-            Target::Page(_) => None,
-            Target::Entry(entry) => Some(super::Arrival::new(entry.id)),
-        };
+        if let Target::Entry(entry) = target {
+            if entry.experimental {
+                self.show_settings_sub(super::SubPage::Experimental, cx);
+            }
+            self.settings.arrival = Some(super::Arrival::new(entry.id));
+        } else {
+            self.settings.arrival = None;
+        }
     }
 
     /// Esc in the field: clear it and give the page back.

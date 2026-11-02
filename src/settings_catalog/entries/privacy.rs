@@ -134,16 +134,6 @@ pub(super) const ENTRIES: &[Entry] = &[
     )
     .section(keys::Q_PREFS_SECURITY_AND_CONTENT)
     .keywords(&["extensions", "ip reveal", "whitelist"]),
-    Entry::new("privacy.auto_delete", P, keys::Q_PREFS_AUTO_DELETE_MESSAGES)
-        .section(keys::Q_SETTINGS_PRIVACY_SEC_DATA)
-        .keywords(&["ttl", "self-destruct", "timer"]),
-    Entry::new(
-        "privacy.account_ttl",
-        P,
-        keys::Q_PREFS_DELETE_MY_ACCOUNT_IF_AWAY,
-    )
-    .section(keys::Q_SETTINGS_PRIVACY_SEC_DATA)
-    .keywords(&["inactivity", "self-destruct"]),
     Entry::new(
         "privacy.clear_payment",
         P,

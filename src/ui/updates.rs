@@ -298,9 +298,9 @@ impl QuillApp {
             .child(
                 self.setting_stand_in(
                     self.known_release().is_none(),
-                    &["about.release_notes"],
+                    &["system.release_notes"],
                     self.setting_spot(
-                        &["about.check_updates"],
+                        &["system.check_updates"],
                         div()
                             .flex()
                             .gap_2()
@@ -327,7 +327,7 @@ impl QuillApp {
             )
             .children(
                 self.update_release_notes(cx)
-                    .map(|notes| self.setting_spot(&["about.release_notes"], notes, cx)),
+                    .map(|notes| self.setting_spot(&["system.release_notes"], notes, cx)),
             );
         if matches!(self.settings.update_state, UpdateState::Installed(_)) {
             section = section.child(

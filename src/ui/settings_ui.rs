@@ -772,35 +772,41 @@ impl QuillApp {
                     .child(tr(keys::Q_PREFS_AUTO_DOWNLOAD)),
             )
             .child(
-                // Phase 6: kit Switch (was: clickable row with a ●/○ bullet).
-                div()
-                    .id("media-pref-data-saver")
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .px_2()
-                    .py_1()
-                    .rounded_md()
-                    .child(
-                        Switch::new("media-pref-data-saver-switch")
-                            .checked(prefs.data_saver)
-                            .accessibility_label(tr(keys::Q_PREFS_DATA_SAVER))
-                            .on_click(cx.listener(|this, &on, _, cx| {
-                                this.set_media_pref(|prefs| prefs.data_saver = on, cx);
-                            })),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .child(div().text_sm().child(tr(keys::Q_PREFS_DATA_SAVER)))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(tr(keys::Q_PREFS_PAUSE_ALL_AUTOMATIC_MEDIA_DOWNLOADS)),
-                            ),
-                    ),
+                self.setting_spot(
+                    &["chats.data_saver"],
+                    // Phase 6: kit Switch (was: clickable row with a ●/○ bullet).
+                    div()
+                        .id("media-pref-data-saver")
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .child(
+                            Switch::new("media-pref-data-saver-switch")
+                                .checked(prefs.data_saver)
+                                .accessibility_label(tr(keys::Q_PREFS_DATA_SAVER))
+                                .on_click(cx.listener(|this, &on, _, cx| {
+                                    this.set_media_pref(|prefs| prefs.data_saver = on, cx);
+                                })),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .child(div().text_sm().child(tr(keys::Q_PREFS_DATA_SAVER)))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(tr(
+                                            keys::Q_PREFS_PAUSE_ALL_AUTOMATIC_MEDIA_DOWNLOADS,
+                                        )),
+                                ),
+                        ),
+                    cx,
+                ),
             );
         const ROWS: [(quill::lang::Key, u8); 7] = [
             (keys::Q_PREFS_PHOTOS, AUTO_DOWNLOAD_PHOTO),
@@ -873,7 +879,7 @@ impl QuillApp {
             }
             grid = grid.child(row);
         }
-        section.child(grid)
+        section.child(self.setting_spot(&["chats.auto_download_chat_types"], grid, cx))
     }
 }
 

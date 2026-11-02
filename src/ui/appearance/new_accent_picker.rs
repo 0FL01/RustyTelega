@@ -297,7 +297,7 @@ impl QuillApp {
                 }
             }));
         self.setting_spot(
-            &["chats.chat_list_action"],
+            &["appearance.chat_list_action"],
             self.appearance_section(
                 cx,
                 tr(keys::SETTINGS_QUICK_DIALOG_ACTION_TITLE),

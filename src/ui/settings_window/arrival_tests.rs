@@ -43,44 +43,6 @@ fn land(app: &Entity<QuillApp>, vcx: &mut VisualTestContext, id: &str) {
     }
 }
 
-/// Catalog entries whose row is not on the page the catalog names.
-const NO_ROW_ON_ITS_PAGE: &[(&str, &str)] = &[
-    ("privacy.auto_delete", "only in the account deletion dialog"),
-    ("privacy.account_ttl", "only in the account deletion dialog"),
-    (
-        "chats.chat_list_action",
-        "the row is on the Appearance page",
-    ),
-    ("chats.dynamic_pack_order", "no row anywhere"),
-    (
-        "folders.archive_main_menu",
-        "only in the archive context menu",
-    ),
-    (
-        "folders.archive_collapsed",
-        "only in the archive context menu",
-    ),
-    ("data.data_saver", "the row is on the Chats page"),
-    (
-        "data.auto_download_chat_types",
-        "the row is on the Chats page",
-    ),
-    (
-        "calls.noise_suppression",
-        "only in the group call settings dialog",
-    ),
-    ("calls.input_device", "only in the in-call device menu"),
-    ("calls.output_device", "only in the in-call device menu"),
-    (
-        "system.hardware_decoding",
-        "the row is on the Advanced page",
-    ),
-    ("system.touch_bar", "Quill has no Touch Bar row"),
-    ("about.check_updates", "the row is on the System page"),
-    ("about.release_notes", "the row is on the System page"),
-    ("advanced.debug_logs", "only in the debug logs dialog"),
-];
-
 #[gpui_kit::test]
 fn a_result_centers_its_row_on_the_page(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
@@ -113,10 +75,7 @@ fn every_setting_has_a_place_to_land(cx: &mut TestAppContext) {
     let vcx = &mut vcx;
     let mut lost = Vec::new();
     for entry in settings_catalog::all() {
-        if !entry.platforms.contains(Platforms::current())
-            || !Target::Entry(entry).shown(false)
-            || NO_ROW_ON_ITS_PAGE.iter().any(|(id, _)| *id == entry.id)
-        {
+        if !entry.platforms.contains(Platforms::current()) || !Target::Entry(entry).shown(false) {
             continue;
         }
         land(&app, vcx, entry.id);

@@ -175,6 +175,8 @@ pub struct Entry {
     /// Extra English words people search with ("dark" for night mode).
     pub keywords: &'static [&'static str],
     pub platforms: Platforms,
+    /// The row sits on the Experimental screen of its page.
+    pub experimental: bool,
 }
 
 impl Entry {
@@ -186,6 +188,7 @@ impl Entry {
             title,
             keywords: &[],
             platforms: Platforms::ALL,
+            experimental: false,
         }
     }
 
@@ -201,6 +204,11 @@ impl Entry {
 
     pub const fn only(mut self, platforms: Platforms) -> Entry {
         self.platforms = platforms;
+        self
+    }
+
+    pub const fn experimental(mut self) -> Entry {
+        self.experimental = true;
         self
     }
 

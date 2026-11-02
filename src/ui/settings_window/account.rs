@@ -191,7 +191,11 @@ impl QuillApp {
                 Some(tr(keys::Q_SETTINGS_ACCOUNT_SEC_SESSION)),
                 [
                     self.setting_spot(
-                        &["account.delete_account"],
+                        &[
+                            "account.delete_account",
+                            "account.auto_delete",
+                            "account.account_ttl",
+                        ],
                         self.account_nav_row(
                             Nav::Account,
                             tr(keys::Q_NAVIGATION_ACCOUNT_DELETION_AND_INACTIVITY),

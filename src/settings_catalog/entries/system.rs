@@ -50,12 +50,8 @@ pub(super) const ENTRIES: &[Entry] = &[
     )
     .keywords(&["explorer", "context menu"])
     .only(Platforms::WINDOWS),
-    Entry::new("system.hardware_decoding", P, keys::SETTINGS_ENABLE_HWACCEL).keywords(&[
-        "gpu",
-        "video performance",
-        "acceleration",
-    ]),
-    Entry::new("system.touch_bar", P, keys::Q_SETTINGS_SYSTEM_TOUCH_BAR)
-        .keywords(&["macbook", "function row"])
-        .only(Platforms::MACOS),
+    Entry::new("system.check_updates", P, keys::Q_OPS_CHECK_FOR_UPDATES)
+        .section(keys::Q_OPS_QUILL_UPDATES)
+        .keywords(&["upgrade", "new version"]),
+    Entry::new("system.release_notes", P, keys::Q_OPS_RELEASE_NOTES).keywords(&["changelog"]),
 ];

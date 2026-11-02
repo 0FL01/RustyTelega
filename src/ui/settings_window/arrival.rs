@@ -78,9 +78,12 @@ impl Arrival {
 }
 
 impl QuillApp {
-    /// What scrolls `page`. Two pages keep their own handle for the scrolls
-    /// and paging they do themselves.
-    pub(super) fn settings_page_scroll(&self, page: Page) -> &ScrollHandle {
+    /// What scrolls `page`, or the screen open over it. Two pages keep their
+    /// own handle for the scrolls and paging they do themselves.
+    pub(super) fn settings_scroll(&self, page: Page) -> &ScrollHandle {
+        if self.settings.sub.is_some() {
+            return &self.settings.sub_scroll;
+        }
         match page {
             Page::AgentAccess => &self.agent_ui.page.scroll,
             Page::DataStorage => &self.settings.storage_scroll.page,
@@ -103,7 +106,7 @@ impl QuillApp {
             (None, None) => return,
             (None, Some(row)) => {
                 if let Some(page) = self.settings.page {
-                    let scroll = self.settings_page_scroll(page);
+                    let scroll = self.settings_scroll(page);
                     let viewport = scroll.bounds();
                     let offset = scroll.offset();
                     let top = row.top() - viewport.top() - offset.y;

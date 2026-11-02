@@ -136,6 +136,7 @@ impl QuillApp {
     pub(super) fn show_settings_sub(&mut self, sub: SubPage, cx: &mut Context<Self>) {
         self.settings.page = Some(sub.parent());
         self.settings.sub = Some(sub);
+        self.settings.sub_scroll.set_offset(point(px(0.), px(0.)));
         cx.notify();
     }
 
@@ -274,9 +275,7 @@ impl QuillApp {
             div()
                 .id(SharedString::from(format!("settings-page-{}", page.id())))
                 .debug_selector(move || format!("settings-page-{}", page.id()))
-                .when(sub.is_none(), |this| {
-                    this.track_scroll(self.settings_page_scroll(page))
-                })
+                .track_scroll(self.settings_scroll(page))
                 .size_full()
                 .overflow_y_scroll()
                 .child(

@@ -89,4 +89,10 @@ pub(super) const ENTRIES: &[Entry] = &[
     )
     .section(keys::Q_PREFS_CHAT_LIST_ROWS)
     .keywords(&["bold", "italic", "markdown"]),
+    Entry::new(
+        "appearance.chat_list_action",
+        P,
+        keys::SETTINGS_QUICK_DIALOG_ACTION_TITLE,
+    )
+    .keywords(&["swipe", "middle click", "archive", "pin"]),
 ];

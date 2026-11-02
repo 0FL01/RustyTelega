@@ -21,18 +21,4 @@ pub(super) const ENTRIES: &[Entry] = &[
     Entry::new("folders.tabs_appearance", P, keys::FILTERS_TABS_SUBTITLE)
         .section(keys::Q_SETTINGS_FOLDERS_SEC_TABS)
         .keywords(&["icons", "text", "labels"]),
-    Entry::new(
-        "folders.archive_main_menu",
-        P,
-        keys::CONTEXT_ARCHIVE_TO_MENU,
-    )
-    .section(keys::Q_CHAT_ARCHIVE)
-    .keywords(&["archived chats", "hide archive"]),
-    Entry::new(
-        "folders.archive_collapsed",
-        P,
-        keys::Q_SETTINGS_FOLDERS_ARCHIVE_COLLAPSED,
-    )
-    .section(keys::Q_CHAT_ARCHIVE)
-    .keywords(&["archived chats", "hide archive"]),
 ];

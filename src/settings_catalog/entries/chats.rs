@@ -36,12 +36,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         keys::SETTINGS_PULL_TO_NEXT_CHANNEL,
     )
     .keywords(&["pull", "next channel", "scroll"]),
-    Entry::new(
-        "chats.chat_list_action",
-        P,
-        keys::SETTINGS_QUICK_DIALOG_ACTION_TITLE,
-    )
-    .keywords(&["swipe", "middle click", "archive", "pin"]),
     Entry::new("chats.autoplay_gifs", P, keys::Q_PREFS_AUTOPLAY_GIFS)
         .section(keys::MEDIA_TYPE_MEDIA)
         .keywords(&["animations"]),
@@ -84,13 +78,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         .section(keys::Q_SETTINGS_CHATS_SEC_EMOJI)
         .keywords(&["custom emoji", "packs"]),
     Entry::new(
-        "chats.dynamic_pack_order",
-        P,
-        keys::Q_MEDIA_DYNAMIC_EMOJI_PACK_ORDER,
-    )
-    .section(keys::Q_SETTINGS_CHATS_SEC_EMOJI)
-    .keywords(&["recent first"]),
-    Entry::new(
         "chats.sticker_suggestions",
         P,
         keys::Q_MEDIA_SUGGEST_STICKERS_BY_EMOJI,
@@ -121,4 +108,14 @@ pub(super) const ENTRIES: &[Entry] = &[
     Entry::new("chats.dictionaries", P, keys::SETTINGS_MANAGE_DICTIONARIES)
         .section(keys::Q_PREFS_SPELLING)
         .keywords(&["hunspell", "download"]),
+    Entry::new("chats.data_saver", P, keys::Q_PREFS_DATA_SAVER)
+        .section(keys::Q_OPS_AUTOMATIC_DOWNLOADS)
+        .keywords(&["low data", "pause downloads"]),
+    Entry::new(
+        "chats.auto_download_chat_types",
+        P,
+        keys::Q_PREFS_AUTO_DOWNLOAD,
+    )
+    .section(keys::Q_OPS_AUTOMATIC_DOWNLOADS)
+    .keywords(&["private", "groups", "channels", "gifs", "music"]),
 ];
