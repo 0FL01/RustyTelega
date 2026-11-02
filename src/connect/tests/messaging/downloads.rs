@@ -506,6 +506,49 @@ fn a_low_disk_pauses_only_the_listed_downloads_that_would_not_fit() {
 }
 
 #[test]
+fn a_full_disk_held_open_for_a_call_pauses_every_listed_download() {
+    const MIB: u64 = 1 << 20;
+    let store = MemorySecretStore::new();
+    let (dir, prepared) = prepared_tmp(&store);
+    let sink: Arc<dyn DiagnosticSink> = Arc::new(MemorySink::new());
+    let recorder = Arc::new(RecordingSender::new());
+    let session = Session::new(AccountKey::primary(), sink.clone());
+    let mut driver = ConnectDriver::new(session, recorder.clone(), test_credentials(), prepared);
+    let seq = AtomicU64::new(0);
+    let ingest = |driver: &mut ConnectDriver<Arc<RecordingSender>>, json: &str| {
+        driver
+            .ingest(copy_and_parse(json, &seq, &sink).unwrap())
+            .unwrap();
+    };
+    ingest(
+        &mut driver,
+        r#"{"@type":"updateAuthorizationState","authorization_state":{"@type":"authorizationStateReady"}}"#,
+    );
+    driver
+        .download_user_file(FileId(52), Some((ChatId(7), 98)))
+        .unwrap();
+    ingest(&mut driver, &file_update(52, 10 * MIB as i64, 0));
+    let base = recorder.snapshot().len();
+    driver
+        .note_disk(DiskState::Full, Some(FLOORS.close / 2), &FLOORS)
+        .unwrap();
+    let sent = recorder.snapshot();
+    assert_eq!(
+        sent.len(),
+        base + 1,
+        "even a small file is paused: {sent:?}"
+    );
+    let pause: Value = serde_json::from_str(&sent[base]).unwrap();
+    assert_eq!(pause["file_id"], 52);
+    assert_eq!(pause["is_paused"], true);
+    assert!(
+        !driver.download_fits_disk(FileId(52)),
+        "a resume is refused"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_download_resumed_on_a_low_disk_is_paused_again_and_said_so() {
     const MIB: u64 = 1 << 20;
     let store = MemorySecretStore::new();
