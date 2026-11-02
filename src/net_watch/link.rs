@@ -3,7 +3,9 @@
 //! home routers on 192.168.0.1), and TDLib's connections do not survive the
 //! move between them. The gateway's link-layer address tells them apart.
 
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr, SocketAddrV6};
+
+const DISCARD_PORT: u16 = 9;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) struct Link {
@@ -23,7 +25,7 @@ pub(super) fn of(local: IpAddr, to: IpAddr) -> Link {
 /// Makes the system look up `gateway`'s link-layer address now rather than
 /// on the next packet that happens to pass it: one empty datagram to the
 /// discard port. Windows already resolves in [`of`].
-pub(super) fn resolve(gateway: IpAddr) {
+pub(super) fn resolve(gateway: IpAddr, interface: u32) {
     if cfg!(windows) {
         return;
     }
@@ -33,11 +35,22 @@ pub(super) fn resolve(gateway: IpAddr) {
         std::net::Ipv4Addr::UNSPECIFIED.into()
     };
     if let Ok(socket) = std::net::UdpSocket::bind((any, 0)) {
-        let _ = socket.send_to(&[], (gateway, 9));
+        let _ = socket.send_to(&[], discard_port_of(gateway, interface));
     }
     #[cfg(target_os = "macos")]
     if gateway.is_ipv6() {
         look_for_the_answer(gateway);
+    }
+}
+
+/// A link-local address means nothing without its interface: the kernel
+/// refuses to send to one without a scope, and IPv6 routers are link-local.
+fn discard_port_of(gateway: IpAddr, interface: u32) -> SocketAddr {
+    match gateway {
+        IpAddr::V6(v6) if v6.is_unicast_link_local() => {
+            SocketAddrV6::new(v6, DISCARD_PORT, 0, interface).into()
+        }
+        _ => (gateway, DISCARD_PORT).into(),
     }
 }
 
@@ -467,5 +480,25 @@ mod tests {
         assert_eq!(super::hardware_from_text("0:1b:63:a:bc"), None);
         assert_eq!(super::hardware_from_text("0:1b:63:a:bc:de:f"), None);
         assert_eq!(super::hardware_from_text("0:1b:63:a:bc:xyz"), None);
+    }
+}
+
+#[cfg(test)]
+mod lookup_tests {
+    use super::discard_port_of;
+    use std::net::{IpAddr, SocketAddr};
+
+    #[test]
+    fn a_link_local_router_is_asked_on_its_interface() {
+        let router: IpAddr = "fe80::1".parse().expect("an address");
+        let SocketAddr::V6(asked) = discard_port_of(router, 7) else {
+            panic!("an IPv6 address");
+        };
+        assert_eq!(asked.scope_id(), 7);
+        let global: IpAddr = "2001:db8::1".parse().expect("an address");
+        let SocketAddr::V6(asked) = discard_port_of(global, 7) else {
+            panic!("an IPv6 address");
+        };
+        assert_eq!(asked.scope_id(), 0);
     }
 }

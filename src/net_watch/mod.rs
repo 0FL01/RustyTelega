@@ -127,6 +127,17 @@ impl Route {
         }
     }
 
+    /// The interface that reaches `gateway`; 0 when none does.
+    fn interface_to(self, gateway: IpAddr) -> u32 {
+        [self.v4, self.v6]
+            .into_iter()
+            .find_map(|path| match path {
+                Path::Via(hop) if hop.link.gateway == Some(gateway) => Some(hop.link.interface),
+                _ => None,
+            })
+            .unwrap_or(0)
+    }
+
     #[cfg(target_os = "linux")]
     fn gateways(self) -> impl Iterator<Item = IpAddr> {
         [self.v4, self.v6]
@@ -278,7 +289,9 @@ fn network_changed() {
     // The answer comes back as a neighbour change (Linux), from the
     // background resolve `link::of` starts (Windows), or from looks at the
     // NDP table (macOS IPv6). configd reports it on macOS IPv4.
-    resolve.into_iter().for_each(link::resolve);
+    for gateway in resolve {
+        link::resolve(gateway, route.interface_to(gateway));
+    }
     if moved {
         crate::wake::UPDATES.poke();
     }
