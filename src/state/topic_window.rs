@@ -296,6 +296,8 @@ impl Session {
     /// Returns whether the topic is loaded.
     pub(crate) fn reset_topic_window(&mut self, chat_id: ChatId, topic: i32) -> bool {
         self.drop_topic_pages_past(chat_id, topic, &[WindowEnd::Oldest, WindowEnd::Newest]);
+        // An older page that failed is no reason to hold back the latest.
+        self.clear_topic_load_failed(chat_id, topic);
         match self.threads.topic_histories.get_mut(&(chat_id.0, topic)) {
             Some(history) => {
                 history.reset_window();

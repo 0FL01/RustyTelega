@@ -321,3 +321,27 @@ fn closing_short_topic_drops_newer_page_in_flight() {
         "reopened, the topic opens at its latest page, not a middle chunk"
     );
 }
+
+#[test]
+fn jumping_to_the_latest_after_an_older_page_failed_loads_the_latest() {
+    let (mut session, sink, seq) = read_back(100_000 - 2 * CAP);
+    let older = page_request(&mut session, RequestPurpose::GetTopicHistory);
+    apply_json(
+        &mut session,
+        &seq,
+        &sink,
+        &format!(
+            r#"{{"@type":"error","@extra":"{}","code":500,"message":"Timeout"}}"#,
+            older.0
+        ),
+    );
+    assert!(
+        !session.topic_history_load_failed(ChatId(CHAT), TOPIC),
+        "rows still show"
+    );
+    assert!(session.reset_topic_window(ChatId(CHAT), TOPIC));
+    assert!(
+        !session.topic_history_load_failed(ChatId(CHAT), TOPIC),
+        "the latest page loads instead of a Retry row"
+    );
+}
