@@ -45,6 +45,8 @@ pub(crate) enum CallPicture {
 const PREVIEW_SIZE: (f32, f32) = (160., 110.);
 const PREVIEW_RIGHT: f32 = 12.;
 const PREVIEW_BOTTOM: f32 = 99.;
+/// Below the window controls, which sit at 12 px in a transparent title bar.
+pub(in crate::ui) const WINDOW_CONTROLS: f32 = 40.;
 const PREVIEW_RADIUS: f32 = 10.;
 
 /// The feed `picture` shows in `call` now, `None` for nothing: the
@@ -268,6 +270,7 @@ impl Render for CallWindowRoot {
             window.remove_window();
             return div().into_any_element();
         };
+        let disk_bar = owner.update(cx, |app, cx| app.disk_low_overlay(px(WINDOW_CONTROLS), cx));
         let (drawn, ground) = owner.update(cx, |app, cx| {
             // The players follow the call before anything reads them.
             let remote = app.call_picture_player(CallPicture::Remote, cx);
@@ -325,6 +328,7 @@ impl Render for CallWindowRoot {
                     .inset_0()
                     .child(self.panel.clone().cached(cached())),
             )
+            .children(disk_bar)
             .into_any_element()
     }
 }

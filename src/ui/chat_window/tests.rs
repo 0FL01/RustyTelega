@@ -1306,3 +1306,27 @@ fn a_narrow_forum_window_showing_its_topics_draws_the_toast(cx: &mut TestAppCont
     });
     assert!(status_toast_drawn(chat_window, cx));
 }
+
+#[gpui_kit::test]
+fn a_low_disk_shows_its_bar_in_a_chat_window_until_space_returns(cx: &mut TestAppContext) {
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    let bar = |cx: &mut TestAppContext| {
+        cx.update_window(chat_window, |_, window, cx| {
+            window.render_frame(cx);
+            window.try_find("disk-low-storage").is_some()
+        })
+        .unwrap()
+    };
+    assert!(!bar(cx));
+    h.app.update(cx, |app, cx| {
+        app.apply_disk_reading(Some(quill::disk_guard::FLOORS.warn - 1), cx);
+    });
+    cx.run_until_parked();
+    assert!(bar(cx), "the warning is in the chat window too");
+    h.app.update(cx, |app, cx| {
+        app.apply_disk_reading(Some(quill::disk_guard::FLOORS.warn_clear), cx);
+    });
+    cx.run_until_parked();
+    assert!(!bar(cx), "and goes once space returns");
+}

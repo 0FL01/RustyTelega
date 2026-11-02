@@ -375,9 +375,34 @@ impl QuillApp {
         )
     }
 
+    /// The low-disk bar laid over the top of a call or voice chat window,
+    /// `top` below its edge (clear of the window controls). Every window
+    /// shows the bar until space returns, so a user working away from the
+    /// main window sees it too.
+    pub(in crate::ui) fn disk_low_overlay(
+        &self,
+        top: gpui_kit::Pixels,
+        cx: &Context<Self>,
+    ) -> Option<gpui_kit::AnyElement> {
+        let bar = self.disk_low_banner(cx)?;
+        Some(
+            gpui_kit::div()
+                .absolute()
+                .top(top)
+                .left_0()
+                .right_0()
+                .child(bar)
+                .into_any_element(),
+        )
+    }
+
     /// The kit's banner has no action slot, so the row around it carries the
-    /// tint and the button.
-    pub(super) fn disk_low_banner(&self, cx: &Context<Self>) -> Option<gpui_kit::AnyElement> {
+    /// tint and the button. Drawn in every window (`disk_low_overlay`); the
+    /// button opens the storage list in the main window and brings it up.
+    pub(in crate::ui) fn disk_low_banner(
+        &self,
+        cx: &Context<Self>,
+    ) -> Option<gpui_kit::AnyElement> {
         let held = self.disk.is_full() && self.disk.held_for_call;
         let low = self.disk.state == DiskState::Low && !self.disk.shows_screen();
         (low || held).then(|| {
@@ -409,7 +434,10 @@ impl QuillApp {
                             .label(tr(keys::SETTINGS_MANAGE_LOCAL_STORAGE))
                             .outline()
                             .small()
-                            .on_click(cx.listener(|this, _, _, cx| this.open_local_storage(cx))),
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.open_local_storage(cx);
+                                this.bring_main_window_forward(cx);
+                            })),
                     )
                 })
                 .into_any_element()
