@@ -174,3 +174,6 @@ once (sweep bundle B13, N42):
   by `RecoveryTimers`), so a window that adopted the fallback or opened on
   it looks for the GPU as well (sweep bundle B13, N45). The clients make the
   shared context with `GpuContext::default()`.
+- `src/linux/wayland/clipboard.rs`: `send_bytes` logs a source the event
+  loop refuses instead of unwrapping. The refused source closes the pipe, so
+  the app reading the paste gets an empty one (sweep X14).

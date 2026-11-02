@@ -238,7 +238,10 @@ impl Clipboard {
 
     pub fn send_bytes(&self, fd: OwnedFd, bytes: Vec<u8>) {
         let mut written = 0;
-        self.loop_handle
+        // Quill: on a refused source the pipe closes with it, and the app
+        // reading the paste sees an empty one.
+        let inserted = self
+            .loop_handle
             .insert_source(
                 calloop::generic::Generic::new(
                     File::from(fd),
@@ -261,8 +264,10 @@ impl Clipboard {
                         }
                     }
                 },
-            )
-            .unwrap();
+            );
+        if let Err(err) = inserted {
+            log::error!("cannot send the clipboard: {}", err.error);
+        }
     }
 }
 
