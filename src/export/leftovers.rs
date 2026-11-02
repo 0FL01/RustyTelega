@@ -84,10 +84,17 @@ impl Leftovers {
             if item.file_name().to_string_lossy().starts_with(&mine) {
                 continue;
             }
-            if let Some(part) = fs::read(item.path()).ok().and_then(part_path) {
-                let _ = fs::remove_file(part);
+            let removed = fs::read(item.path())
+                .ok()
+                .and_then(part_path)
+                .map_or(Ok(()), fs::remove_file);
+            // One something still holds is tried again on the next start.
+            match removed {
+                Err(err) if err.kind() != std::io::ErrorKind::NotFound => {}
+                _ => {
+                    let _ = fs::remove_file(item.path());
+                }
             }
-            let _ = fs::remove_file(item.path());
         }
     }
 
@@ -194,5 +201,24 @@ mod tests {
         drop(copying);
         assert_eq!(std::fs::read_dir(journal.join(PARTS)).unwrap().count(), 0);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_part_that_could_not_be_removed_stays_listed() {
+        let dir = crate::scratch::unique_dir("quill-export-held-part");
+        let journal = dir.join("journal");
+        // Removing a folder as a file fails everywhere, as a held file does.
+        let held = dir.join("held.mp4.part");
+        fs::create_dir_all(&held).unwrap();
+        std::mem::forget(Leftovers::new(journal.clone(), 1).copying(&held));
+        let next = Leftovers::new(journal.clone(), 2);
+        next.sweep_parts();
+        let listed = fs::read_dir(journal.join(PARTS)).unwrap().count();
+        assert_eq!(listed, 1, "it is tried again on the next start");
+        fs::remove_dir(&held).unwrap();
+        next.sweep_parts();
+        let listed = fs::read_dir(journal.join(PARTS)).unwrap().count();
+        assert_eq!(listed, 0, "a part already gone needs no entry");
+        let _ = fs::remove_dir_all(&dir);
     }
 }

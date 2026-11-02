@@ -355,10 +355,9 @@ pub(crate) fn place_into<T: Tdlib>(
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
     }
-    let _listed = tdlib
-        .leftovers()
-        .map(|leftovers| leftovers.copying(&super::copy::part_path(&target)));
-    match copy_stoppable(&file.path, &target, &|| tdlib.is_cancelled())? {
+    let part = super::copy::part_path(&target);
+    let _listed = tdlib.leftovers().map(|leftovers| leftovers.copying(&part));
+    match copy_stoppable(&file.path, &part, &target, &|| tdlib.is_cancelled())? {
         Copied::Done => Ok(()),
         Copied::Stopped => Err(ExportError::Cancelled),
     }

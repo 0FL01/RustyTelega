@@ -3,6 +3,8 @@
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::SystemTime;
 
 const CHUNK: usize = 1 << 20;
 
@@ -13,24 +15,24 @@ pub(crate) enum Copied {
 }
 
 /// Copy `from` to `to`. A volume that clones (APFS, btrfs) shares the
-/// blocks at once. Anywhere else the bytes go through `<to>.part`, `stopped`
+/// blocks at once. Anywhere else the bytes go through `part`, `stopped`
 /// is asked between chunks, and the part takes the final name only once
 /// complete.
 pub(crate) fn copy_stoppable(
     from: &Path,
+    part: &Path,
     to: &Path,
     stopped: &dyn Fn() -> bool,
 ) -> io::Result<Copied> {
     if stopped() {
         return Ok(Copied::Stopped);
     }
-    let part = part_path(to);
-    let copied = if clone(from, &part) {
+    let copied = if clone(from, part) {
         Ok(Copied::Done)
     } else {
-        copy_chunks(from, &part, stopped)
+        copy_chunks(from, part, stopped)
     };
-    settle(&part, to, copied)
+    settle(part, to, copied)
 }
 
 /// Give a complete part its final name, and remove any other. The part
@@ -42,7 +44,7 @@ fn settle(part: &Path, to: &Path, copied: io::Result<Copied>) -> io::Result<Copi
             .write(true)
             .open(part)
             .and_then(|file| file.sync_all())
-            .and_then(|()| fs::rename(part, to))
+            .and_then(|()| crate::fs_retry::rename_retrying(part, to, crate::fs_retry::LONG))
             .inspect_err(|_| {
                 let _ = fs::remove_file(part);
             })
@@ -67,9 +69,17 @@ fn sync_folder(file: &Path) {
     let _ = file;
 }
 
+/// A name for the bytes on their way to `to`, used by nobody else: two
+/// accounts can export to one folder, and a sweep of one's leftovers must
+/// never hit what the other is writing.
 pub(crate) fn part_path(to: &Path) -> PathBuf {
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let serial = NEXT.fetch_add(1, Ordering::Relaxed);
+    let started = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(0, |since| since.subsec_nanos());
     let mut name = to.as_os_str().to_os_string();
-    name.push(".part");
+    name.push(format!(".{serial:x}-{started:x}.part"));
     PathBuf::from(name)
 }
 
@@ -125,6 +135,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn two_copies_to_one_name_never_share_a_part() {
+        let to = Path::new("/export/video.mp4");
+        assert_ne!(part_path(to), part_path(to));
+        assert!(part_path(to).extension().is_some_and(|ext| ext == "part"));
+    }
+
+    #[test]
     fn a_stop_mid_copy_lands_within_one_chunk_and_leaves_no_part() {
         let dir = crate::scratch::unique_dir("quill-export-copy");
         let from = dir.join("video.mp4");
@@ -149,7 +166,10 @@ mod tests {
         fs::write(&from, &bytes).unwrap();
         let to = dir.join("copy.mp4");
 
-        assert_eq!(copy_stoppable(&from, &to, &|| false).unwrap(), Copied::Done);
+        assert_eq!(
+            copy_stoppable(&from, &part_path(&to), &to, &|| false).unwrap(),
+            Copied::Done
+        );
 
         assert_eq!(fs::read(&to).unwrap(), bytes);
         assert!(!dir.join("copy.mp4.part").exists());
@@ -185,12 +205,12 @@ mod tests {
         fs::write(&to, b"last week").unwrap();
         let held = hold(&to);
 
-        let copied = copy_stoppable(&from, &to, &|| false);
+        let copied = copy_stoppable(&from, &part_path(&to), &to, &|| false);
 
         drop(held);
         assert!(copied.is_err(), "{copied:?}");
         assert_eq!(fs::read(&to).unwrap(), b"last week");
-        assert!(!part_path(&to).exists());
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 2, "no part is left");
         let _ = fs::remove_dir_all(&dir);
     }
 }
