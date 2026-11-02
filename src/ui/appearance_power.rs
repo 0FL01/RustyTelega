@@ -51,6 +51,23 @@ fn flag_id(flag: Flag) -> &'static str {
     }
 }
 
+/// The catalog entry a power-saving switch is.
+fn flag_setting(flag: Flag) -> &'static [&'static str] {
+    match flag {
+        Flag::Animations => &["power.interface"],
+        Flag::StickersPanel => &["power.stickers_panel"],
+        Flag::StickersChat => &["power.stickers_chat"],
+        Flag::EmojiPanel => &["power.emoji_panel"],
+        Flag::EmojiReactions => &["power.emoji_reactions"],
+        Flag::EmojiChat => &["power.emoji_chat"],
+        Flag::ChatBackground => &["power.wallpaper_rotation"],
+        Flag::ChatSpoiler => &["power.spoiler_effect"],
+        Flag::Calls => &["power.calls"],
+        Flag::EmojiStatus => &["power.emoji_status"],
+        Flag::ChatEffects => &["power.message_effects"],
+    }
+}
+
 impl QuillApp {
     /// Refresh the operating system's accent color. macOS and Windows read
     /// it right away. On Linux the read runs on a background thread (it
@@ -173,14 +190,15 @@ impl QuillApp {
             }
             for &(flag, label) in group.items {
                 let playing = bits & flag.bit() == 0;
-                block = block.child(self.appearance_switch_row(
+                let row = self.appearance_switch_row(
                     cx,
                     flag_id(flag),
                     label,
                     "",
                     playing,
                     move |prefs, on| prefs.power_saving = with_flag(prefs.power_saving, flag, !on),
-                ));
+                );
+                block = block.child(self.setting_spot(flag_setting(flag), row, cx));
             }
             groups = groups.child(block);
         }
@@ -198,16 +216,17 @@ impl QuillApp {
                     })),
             );
         }
+        let title = div()
+            .font_semibold()
+            .text_sm()
+            .child(tr(keys::SETTINGS_POWER_MENU))
+            .into_any_element();
+        let title = self.setting_stand_in(saver.is_none(), &["power.save_power"], title, cx);
         let mut body = div()
             .flex()
             .flex_col()
             .gap_2()
-            .child(
-                div()
-                    .font_semibold()
-                    .text_sm()
-                    .child(tr(keys::SETTINGS_POWER_MENU)),
-            )
+            .child(title)
             .child(
                 div()
                     .text_xs()
@@ -217,13 +236,17 @@ impl QuillApp {
             .child(groups);
         if saver.is_some() {
             body = body
-                .child(div().mt_2().child(self.appearance_switch_row(
+                .child(div().mt_2().child(self.setting_spot(
+                    &["power.save_power"],
+                    self.appearance_switch_row(
+                        cx,
+                        "power-auto",
+                        tr(keys::SETTINGS_POWER_AUTO),
+                        "",
+                        !self.appearance.ignore_battery_saving,
+                        |prefs, on| prefs.ignore_battery_saving = !on,
+                    ),
                     cx,
-                    "power-auto",
-                    tr(keys::SETTINGS_POWER_AUTO),
-                    "",
-                    !self.appearance.ignore_battery_saving,
-                    |prefs, on| prefs.ignore_battery_saving = !on,
                 )))
                 .child(
                     div()
