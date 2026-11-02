@@ -4,14 +4,11 @@
 //! `getStory` answers land (tdesktop rebuilds on `Stories::sourceChanged`,
 //! `media_stories_controller.cpp:868-874`). The walk across the tray's
 //! posters merges the tray's order the same way, the neighbour posters'
-//! stories are fetched ahead of a jump, and more of the tray loads when
-//! fewer than three posters remain (`kPreloadPeersCount`, :773).
+//! stories are fetched ahead of a jump.
 #![deny(clippy::indexing_slicing)]
 
 use super::*;
 use quill::state::StoryCardState;
-use quill::story_tray_walk::wants_more_tray;
-use quill::telegram::envelope::StoryListView;
 
 impl QuillApp {
     pub(in crate::ui) fn follow_story_tray(&mut self, cx: &mut Context<Self>) {
@@ -61,17 +58,6 @@ impl QuillApp {
         if let Some(live) = self.live.as_mut() {
             for (chat, id) in fetch {
                 let _ = live.driver.get_story(chat, id);
-            }
-            // Only the main list pages (`loadActiveStories(storyListMain)`).
-            if list == StoryListView::Main
-                && wants_more_tray(&sources, poster.0)
-                && live
-                    .driver
-                    .session
-                    .stories
-                    .rearm_active_stories_load(Instant::now())
-            {
-                let _ = live.driver.maybe_load_active_stories();
             }
         }
     }

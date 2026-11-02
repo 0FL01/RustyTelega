@@ -5,15 +5,10 @@
 //! opens on (`LookupShownId`, `media_stories_sibling.cpp:37-46`, and
 //! `StoriesSource::toOpen`, `data_stories.cpp:178-184`, which a tray tap
 //! opens on too), the step across
-//! poster boundaries (`subjumpFor`, :1375-1396) and when to load more of
-//! the tray (`kPreloadPeersCount`, :79 and :773).
+//! poster boundaries (`subjumpFor`, :1375-1396).
 #![deny(clippy::indexing_slicing)]
 
 use crate::telegram::envelope::{ChatActiveStoriesView, StoryListView};
-
-/// tdesktop `kPreloadPeersCount`: load more of the tray once fewer posters
-/// than this remain from the current one (itself included).
-pub const PRELOAD_POSTERS: usize = 3;
 
 /// One tray entry in tray order: who posted and whether any of their
 /// stories is unread.
@@ -115,15 +110,6 @@ pub fn shown_story(entry: &ChatActiveStoriesView, shown: Option<i32>) -> Option<
     shown
         .filter(|shown| entry.stories.iter().any(|info| info.story_id == *shown))
         .or_else(|| story_to_open(entry))
-}
-
-/// Whether to load more of the tray (`loadActiveStories`): fewer than
-/// [`PRELOAD_POSTERS`] posters remain from `current` in tray order.
-pub fn wants_more_tray(sources: &[TraySource], current: i64) -> bool {
-    sources
-        .iter()
-        .position(|source| source.chat_id == current)
-        .is_some_and(|at| sources.len().saturating_sub(at) < PRELOAD_POSTERS)
 }
 
 impl TrayWalk {
@@ -342,14 +328,5 @@ mod tests {
         // A current poster missing from the tray leaves the walk alone.
         assert!(!walk.show(&[src(5, true)], 2, 21));
         assert_eq!(order(&walk), vec![5, 1, 2, 4]);
-    }
-
-    #[test]
-    fn more_of_the_tray_loads_when_fewer_than_three_posters_remain() {
-        let sources = [src(1, true), src(2, true), src(3, true), src(4, true)];
-        assert!(!wants_more_tray(&sources, 2));
-        assert!(wants_more_tray(&sources, 3));
-        assert!(wants_more_tray(&sources, 4));
-        assert!(!wants_more_tray(&sources, 99));
     }
 }

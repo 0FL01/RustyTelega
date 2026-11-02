@@ -4,6 +4,38 @@
 use crate::state::*;
 use std::time::{Duration, Instant};
 
+/// How far `loadActiveStories` got through one story list. TDLib sends
+/// `updateChatActiveStories` only for chats above the point loaded so far
+/// (`send_update_chat_active_stories` skips `public_order_ == 0`), so a list
+/// must page to its 404 before a new story past that point can show.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ActiveStoriesPaging {
+    /// `loadActiveStories` answered 404: the whole list is loaded.
+    pub exhausted: bool,
+    /// After any other failure: no page goes out before this instant, and
+    /// the wait before it, which doubles per failure.
+    pub retry: Option<(Instant, Duration)>,
+}
+
+impl ActiveStoriesPaging {
+    /// Whether the next page may go out at `now`.
+    pub fn may_load(&self, now: Instant) -> bool {
+        !self.exhausted && !self.retry.is_some_and(|(at, _)| now < at)
+    }
+
+    /// `loadActiveStories` failed with `code`: 404 means everything is
+    /// loaded; anything else (a timeout, FLOOD_WAIT, a 500) waits and tries
+    /// again.
+    pub fn failed(&mut self, code: i32, now: Instant) {
+        if code == 404 {
+            self.exhausted = true;
+            self.retry = None;
+        } else {
+            self.retry = Some(next_retry(self.retry, now));
+        }
+    }
+}
+
 pub struct StoriesState {
     /// Phase 9.1: active stories per chat from `updateChatActiveStories` /
     /// `getChatActiveStories` (TDLib 1.8.67, `schema/td_api.tl:6776-6783`),
@@ -90,15 +122,10 @@ pub struct StoriesState {
     pub close_friends: Option<Vec<i64>>,
     /// B14: ids sent by an in-flight `setCloseFriends`, applied on `ok`.
     pub close_friends_pending: Option<Vec<i64>>,
-    /// Phase 9.1: `loadActiveStories(storyListMain)` was issued. A retry is
-    /// allowed (the flag is reset) if the attempt failed.
-    pub stories_active_loaded: bool,
-    /// `loadActiveStories` answered 404: the whole main tray is loaded and
-    /// no more pages are asked for.
-    pub stories_active_exhausted: bool,
-    /// After any other `loadActiveStories` failure: no page goes out before
-    /// this instant, and the wait before it, which doubles per failure.
-    pub stories_active_retry: Option<(Instant, Duration)>,
+    /// Paging of the main story list.
+    pub main_paging: ActiveStoriesPaging,
+    /// Paging of the hidden story list.
+    pub hidden_paging: ActiveStoriesPaging,
     /// Stories `getStory` failed for with an error that may pass (a
     /// timeout, FLOOD_WAIT, a 500): no prefetch asks again before the
     /// instant, and the wait before it, which doubles per failure. A user
@@ -147,9 +174,8 @@ impl StoriesState {
             page_op: None,
             close_friends: None,
             close_friends_pending: None,
-            stories_active_loaded: false,
-            stories_active_exhausted: false,
-            stories_active_retry: None,
+            main_paging: ActiveStoriesPaging::default(),
+            hidden_paging: ActiveStoriesPaging::default(),
             custom_emoji_retry: None,
             custom_emoji_failures: 0,
             story_retry: HashMap::new(),
@@ -177,28 +203,18 @@ fn next_retry(previous: Option<(Instant, Duration)>, now: Instant) -> (Instant, 
 }
 
 impl StoriesState {
-    /// Allow one more `loadActiveStories` page, which the driver otherwise
-    /// sends once per Ready. `false` once the main tray is fully loaded, or
-    /// while waiting out a failed page.
-    pub fn rearm_active_stories_load(&mut self, now: Instant) -> bool {
-        if self.stories_active_exhausted
-            || self.stories_active_retry.is_some_and(|(at, _)| now < at)
-        {
-            return false;
+    pub fn paging(&self, list: StoryListView) -> &ActiveStoriesPaging {
+        match list {
+            StoryListView::Main => &self.main_paging,
+            StoryListView::Archive => &self.hidden_paging,
         }
-        self.stories_active_loaded = false;
-        true
     }
 
-    /// `loadActiveStories` failed with `code`: 404 means everything is
-    /// loaded; anything else (a timeout, FLOOD_WAIT, a 500) waits and tries
-    /// again.
-    pub fn active_stories_failed(&mut self, code: i32, now: Instant) {
-        if code == 404 {
-            self.stories_active_exhausted = true;
-            return;
+    pub fn paging_mut(&mut self, list: StoryListView) -> &mut ActiveStoriesPaging {
+        match list {
+            StoryListView::Main => &mut self.main_paging,
+            StoryListView::Archive => &mut self.hidden_paging,
         }
-        self.stories_active_retry = Some(next_retry(self.stories_active_retry, now));
     }
 
     /// `getStory` for `story` failed with an error that may pass. A card or
@@ -227,12 +243,11 @@ impl StoriesState {
             .is_some_and(|(at, _)| now < *at)
     }
 
-    /// A new Ready pages the tray from the start, and the stories that
+    /// A new Ready pages both lists from the start, and the stories that
     /// failed before it are asked for again at once.
     pub fn reset_active_stories_paging(&mut self) {
-        self.stories_active_loaded = false;
-        self.stories_active_exhausted = false;
-        self.stories_active_retry = None;
+        self.main_paging = ActiveStoriesPaging::default();
+        self.hidden_paging = ActiveStoriesPaging::default();
         self.story_retry.clear();
     }
 }
