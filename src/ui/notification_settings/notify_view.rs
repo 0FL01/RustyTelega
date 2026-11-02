@@ -89,35 +89,47 @@ impl QuillApp {
                 .rounded_md()
                 .border_1()
                 .border_color(cx.theme().border)
-                .child(row(
-                    "notify-view-name",
-                    tr(keys::Q_PREFS_SHOW_SENDER_NAME),
-                    view.shows_name(),
-                    true,
+                .child(self.setting_spot(
+                    &["notifications.sender_name"],
+                    row(
+                        "notify-view-name",
+                        tr(keys::Q_PREFS_SHOW_SENDER_NAME),
+                        view.shows_name(),
+                        true,
+                    ),
+                    cx,
                 ))
-                .child(row(
-                    "notify-view-text",
-                    tr(keys::Q_PREFS_SHOW_MESSAGE_TEXT),
-                    view.shows_text(),
-                    false,
+                .child(self.setting_spot(
+                    &["notifications.message_text"],
+                    row(
+                        "notify-view-text",
+                        tr(keys::Q_PREFS_SHOW_MESSAGE_TEXT),
+                        view.shows_text(),
+                        false,
+                    ),
+                    cx,
                 ))
                 .child(
-                    // The photo is part of the message: hidden with the text.
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(div().text_sm().child(tr(keys::Q_PREFS_SHOW_PHOTO_PREVIEWS)))
-                        .child(
-                            Switch::new("notify-view-photos")
-                                .checked(photos && view.shows_text())
-                                .disabled(!view.shows_text())
-                                .accessibility_label(tr(keys::Q_PREFS_SHOW_PHOTO_PREVIEWS))
-                                .on_click(cx.listener(|this, &on, _, cx| {
-                                    this.set_notify_photo_previews(on, cx);
-                                })),
-                        ),
+                    self.setting_spot(
+                        // The photo is part of the message: hidden with the text.
+                        &["notifications.photo_previews"],
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(div().text_sm().child(tr(keys::Q_PREFS_SHOW_PHOTO_PREVIEWS)))
+                            .child(
+                                Switch::new("notify-view-photos")
+                                    .checked(photos && view.shows_text())
+                                    .disabled(!view.shows_text())
+                                    .accessibility_label(tr(keys::Q_PREFS_SHOW_PHOTO_PREVIEWS))
+                                    .on_click(cx.listener(|this, &on, _, cx| {
+                                        this.set_notify_photo_previews(on, cx);
+                                    })),
+                            ),
+                        cx,
+                    ),
                 )
                 .into_any_element(),
         )

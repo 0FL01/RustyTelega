@@ -10,10 +10,6 @@ pub(super) const ENTRIES: &[Entry] = &[
     Entry::new("about.about_quill", P, keys::Q_OPS_ABOUT_QUILL).keywords(&["disclaimer"]),
     Entry::new("about.whats_new", P, keys::Q_PREFS_WHATS_NEW)
         .keywords(&["changelog", "release notes"]),
-    Entry::new("about.release_notes", P, keys::Q_OPS_RELEASE_NOTES).keywords(&["changelog"]),
-    Entry::new("about.check_updates", P, keys::Q_OPS_CHECK_FOR_UPDATES)
-        .section(keys::Q_OPS_QUILL_UPDATES)
-        .keywords(&["upgrade", "new version"]),
     Entry::new("about.licenses", P, keys::Q_OPS_OPEN_SOURCE_LICENSES).keywords(&[
         "third party",
         "legal",

@@ -2,7 +2,7 @@
 //! sections, the tool rows' buttons change what they say, Reset token asks
 //! first, Revoke and Allow again, and the chat menus' entry. The app data
 //! root is a temp directory.
-use super::{Spot, section_for_entry};
+use super::Spot;
 use crate::ui::agent_state::{TEST_LOCK, reset_for_test, visible_summary};
 use crate::ui::app::QuillApp;
 use crate::ui::keybindings::bind_keys;
@@ -256,22 +256,6 @@ fn the_chat_menu_entry_opens_the_page_at_that_chat(cx: &mut TestAppContext) {
         "Read adds the chat"
     );
     assert!(shown(vcx, &format!("agent-chat-{chat_id}-remove")));
-}
-
-#[test]
-fn every_search_entry_opens_a_section() {
-    let entries: Vec<_> = quill::settings_catalog::all()
-        .filter(|entry| entry.page == Page::AgentAccess)
-        .collect();
-    assert!(!entries.is_empty());
-    for entry in entries {
-        assert!(
-            section_for_entry(entry.id).is_some(),
-            "{} has no section",
-            entry.id
-        );
-    }
-    assert_eq!(section_for_entry("privacy.last_seen"), None);
 }
 
 #[test]

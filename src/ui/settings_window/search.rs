@@ -170,15 +170,24 @@ impl QuillApp {
     }
 
     /// Open what a result points at, remember it, and leave search.
-    fn open_search_target(&mut self, target: Target, cx: &mut Context<Self>) {
+    pub(super) fn open_search_target(&mut self, target: Target, cx: &mut Context<Self>) {
         let recent = self.search_recent();
         recent.record(target.id());
         let recent = recent.clone();
         quill::settings::save_settings_search_recent(&QuillApp::appearance_paths(), &recent);
         self.settings.search.pending_clear = true;
+        // A screen of the page may be covering the row.
+        if self.settings.page == Some(target.page()) {
+            self.leave_settings_page(target.page());
+        }
         self.show_settings_page(target.page(), cx);
-        if let Some(section) = super::agent_page::section_for_entry(target.id()) {
-            self.agent_ui.page.scroll_to = Some(super::agent_page::Spot::Section(section));
+        if let Target::Entry(entry) = target {
+            if entry.experimental {
+                self.show_settings_sub(super::SubPage::Experimental, cx);
+            }
+            self.settings.arrival = Some(super::Arrival::new(entry.id));
+        } else {
+            self.settings.arrival = None;
         }
     }
 

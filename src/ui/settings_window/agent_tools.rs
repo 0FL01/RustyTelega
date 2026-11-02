@@ -381,17 +381,20 @@ impl QuillApp {
                     .into_any_element(),
             ];
             match kind {
-                ToolGroup::Raw => rows.push(switch_row(
-                    "agent-raw-calls-switch",
-                    tr(keys::Q_AGENT_PAGE_RAW_SWITCH),
-                    Some(tr(keys::Q_AGENT_PAGE_RAW_SWITCH_HINT)),
-                    summary.raw_calls,
-                    cx.listener(|_, &next: &bool, _, cx| {
-                        access::set_raw_calls(next);
-                        cx.notify();
-                    }),
-                    cx,
-                )),
+                ToolGroup::Raw => {
+                    let raw = switch_row(
+                        "agent-raw-calls-switch",
+                        tr(keys::Q_AGENT_PAGE_RAW_SWITCH),
+                        Some(tr(keys::Q_AGENT_PAGE_RAW_SWITCH_HINT)),
+                        summary.raw_calls,
+                        cx.listener(|_, &next: &bool, _, cx| {
+                            access::set_raw_calls(next);
+                            cx.notify();
+                        }),
+                        cx,
+                    );
+                    rows.push(self.setting_spot(&["agent_access.raw_calls"], raw, cx));
+                }
                 ToolGroup::Window => rows.push(switch_row(
                     "agent-tools-window-switch",
                     tr(keys::Q_AGENT_UI_DRIVER),
@@ -417,12 +420,13 @@ impl QuillApp {
                 .debug_selector(move || format!("agent-tools-{}", kind.as_str()))
                 .child(group(Some(title), rows))
         });
-        div()
+        let section = div()
             .flex()
             .flex_col()
             .gap_4()
             .children(groups)
-            .into_any_element()
+            .into_any_element();
+        self.setting_spot(&["agent_access.tools"], section, cx)
     }
 
     fn agent_tool_row(&self, tool: &Tool, cx: &mut Context<Self>) -> AnyElement {
@@ -557,7 +561,11 @@ impl QuillApp {
                 div()
                     .id("agent-always-asks")
                     .debug_selector(|| "agent-always-asks".to_string())
-                    .child(group(None, asks)),
+                    .child(self.setting_spot(
+                        &["agent_access.always_asks"],
+                        group(None, asks).into_any_element(),
+                        cx,
+                    )),
             )
             .child(
                 div()

@@ -56,61 +56,73 @@ impl QuillApp {
         let mut body = Vec::new();
         if options.tray_icon {
             body.push(
-                self.appearance_toggle_section(
+                self.setting_spot(
+                    &["system.tray_icon"],
+                    self.appearance_toggle_section(
+                        cx,
+                        tr(keys::SETTINGS_WORKMODE_TRAY),
+                        tr(keys::Q_MISC_KEEP_QUILL_IN_THE_SYSTEM),
+                        Switch::new("general-show-tray-icon")
+                            .checked(self.appearance.show_tray_icon)
+                            .accessibility_label(tr(keys::Q_MISC_SHOW_THE_QUILL_TRAY_ICON))
+                            .on_click(cx.listener(|this, &on, window, cx| {
+                                let (tray, taskbar) =
+                                    work_mode::toggle_tray(this.tray_switch_pair(), on);
+                                this.set_appearance(cx, |a| {
+                                    a.show_tray_icon = tray;
+                                    a.show_taskbar_icon = taskbar;
+                                });
+                                this.apply_taskbar_icon(window);
+                            }))
+                            .into_any_element(),
+                    ),
                     cx,
-                    tr(keys::SETTINGS_WORKMODE_TRAY),
-                    tr(keys::Q_MISC_KEEP_QUILL_IN_THE_SYSTEM),
-                    Switch::new("general-show-tray-icon")
-                        .checked(self.appearance.show_tray_icon)
-                        .accessibility_label(tr(keys::Q_MISC_SHOW_THE_QUILL_TRAY_ICON))
-                        .on_click(cx.listener(|this, &on, window, cx| {
-                            let (tray, taskbar) =
-                                work_mode::toggle_tray(this.tray_switch_pair(), on);
-                            this.set_appearance(cx, |a| {
-                                a.show_tray_icon = tray;
-                                a.show_taskbar_icon = taskbar;
-                            });
-                            this.apply_taskbar_icon(window);
-                        }))
-                        .into_any_element(),
                 ),
             );
         }
         if options.taskbar_icon {
             body.push(
-                self.appearance_toggle_section(
+                self.setting_spot(
+                    &["system.taskbar_icon"],
+                    self.appearance_toggle_section(
+                        cx,
+                        tr(keys::Q_MISC_SHOW_TASKBAR_ICON),
+                        tr(keys::Q_MISC_OFF_KEEPS_QUILL_OUT_OF),
+                        Switch::new("general-show-taskbar-icon")
+                            .checked(self.appearance.show_taskbar_icon)
+                            .accessibility_label(tr(keys::Q_MISC_SHOW_QUILL_IN_THE_TASKBAR))
+                            .on_click(cx.listener(|this, &on, window, cx| {
+                                let (tray, taskbar) =
+                                    work_mode::toggle_taskbar(this.tray_switch_pair(), on);
+                                this.set_appearance(cx, |a| {
+                                    a.show_tray_icon = tray;
+                                    a.show_taskbar_icon = taskbar;
+                                });
+                                this.apply_taskbar_icon(window);
+                            }))
+                            .into_any_element(),
+                    ),
                     cx,
-                    tr(keys::Q_MISC_SHOW_TASKBAR_ICON),
-                    tr(keys::Q_MISC_OFF_KEEPS_QUILL_OUT_OF),
-                    Switch::new("general-show-taskbar-icon")
-                        .checked(self.appearance.show_taskbar_icon)
-                        .accessibility_label(tr(keys::Q_MISC_SHOW_QUILL_IN_THE_TASKBAR))
-                        .on_click(cx.listener(|this, &on, window, cx| {
-                            let (tray, taskbar) =
-                                work_mode::toggle_taskbar(this.tray_switch_pair(), on);
-                            this.set_appearance(cx, |a| {
-                                a.show_tray_icon = tray;
-                                a.show_taskbar_icon = taskbar;
-                            });
-                            this.apply_taskbar_icon(window);
-                        }))
-                        .into_any_element(),
                 ),
             );
         }
         if options.monochrome_icon {
             body.push(
-                self.appearance_toggle_section(
+                self.setting_spot(
+                    &["system.monochrome_icon"],
+                    self.appearance_toggle_section(
+                        cx,
+                        tr(keys::Q_MISC_USE_MONOCHROME_ICON),
+                        tr(keys::Q_MISC_DRAW_THE_TRAY_ICON_IN),
+                        Switch::new("general-tray-monochrome")
+                            .checked(self.appearance.tray_icon_monochrome)
+                            .accessibility_label(tr(keys::Q_MISC_USE_A_MONOCHROME_TRAY_ICON))
+                            .on_click(cx.listener(|this, &on, _, cx| {
+                                this.set_appearance(cx, |a| a.tray_icon_monochrome = on)
+                            }))
+                            .into_any_element(),
+                    ),
                     cx,
-                    tr(keys::Q_MISC_USE_MONOCHROME_ICON),
-                    tr(keys::Q_MISC_DRAW_THE_TRAY_ICON_IN),
-                    Switch::new("general-tray-monochrome")
-                        .checked(self.appearance.tray_icon_monochrome)
-                        .accessibility_label(tr(keys::Q_MISC_USE_A_MONOCHROME_TRAY_ICON))
-                        .on_click(cx.listener(|this, &on, _, cx| {
-                            this.set_appearance(cx, |a| a.tray_icon_monochrome = on)
-                        }))
-                        .into_any_element(),
                 ),
             );
         }

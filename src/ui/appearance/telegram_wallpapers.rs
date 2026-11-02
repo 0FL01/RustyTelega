@@ -99,23 +99,31 @@ impl QuillApp {
             ),
         );
         // tdesktop shows "Tile background" only for photo wallpapers.
-        if self.appearance.telegram_wallpaper
+        let tile_shown = self.appearance.telegram_wallpaper
             && matches!(
                 self.account_telegram_wallpaper(dark),
                 Some(Wallpaper::Image { .. })
-            )
-        {
+            );
+        if tile_shown {
             body = body.child(
-                Checkbox::new("appearance-tg-wallpaper-tile")
-                    .checked(self.appearance.wallpaper_tile(dark))
-                    .label(tr(keys::Q_PREFS_TILE_BACKGROUND))
-                    .on_click(cx.listener(move |this, &on, _, cx| {
-                        this.set_appearance(cx, |a| a.set_wallpaper_tile(dark, on));
-                    })),
+                self.setting_spot(
+                    &["appearance.tile_background"],
+                    Checkbox::new("appearance-tg-wallpaper-tile")
+                        .checked(self.appearance.wallpaper_tile(dark))
+                        .label(tr(keys::Q_PREFS_TILE_BACKGROUND))
+                        .on_click(cx.listener(move |this, &on, _, cx| {
+                            this.set_appearance(cx, |a| a.set_wallpaper_tile(dark, on));
+                        })),
+                    cx,
+                ),
             );
         }
         // tdesktop puts "Adaptive layout for wide screens" right under it.
-        body = body.children(self.adaptive_wide_checkbox(cx));
+        let adaptive = self.adaptive_wide_checkbox(cx);
+        let adaptive_shown = adaptive.is_some();
+        body = body.children(
+            adaptive.map(|row| self.setting_spot(&["appearance.adaptive_wide"], row, cx)),
+        );
         if let Some(error) = error {
             body = body.child(
                 div()
@@ -128,12 +136,16 @@ impl QuillApp {
                     )),
             );
         }
-        self.appearance_section(
+        let section = self.appearance_section(
             cx,
             tr(keys::Q_PREFS_TELEGRAM_WALLPAPERS),
             tr(keys::Q_PREFS_YOUR_INSTALLED_WALLPAPERS_COLORS_GRADIENTS),
             body.into_any_element(),
-        )
+        );
+        let section = self.setting_spot(&["appearance.telegram_wallpapers"], section, cx);
+        let section =
+            self.setting_stand_in(!tile_shown, &["appearance.tile_background"], section, cx);
+        self.setting_stand_in(!adaptive_shown, &["appearance.adaptive_wide"], section, cx)
     }
 
     /// tdesktop `lng_background_sure_delete`, inline under the gallery.

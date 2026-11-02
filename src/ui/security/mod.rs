@@ -165,49 +165,57 @@ impl QuillApp {
             }
             if this.privacy.device_login_qr.is_some() {
                 body = body.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(
-                            div()
-                                .id("device-login-consent")
-                                .role(Role::Label)
-                                .aria_label(tr(keys::Q_PREFS_ALLOW_THE_DEVICE_DISPLAYING_THIS))
-                                .child(tr(keys::Q_PREFS_ALLOW_THE_DEVICE_DISPLAYING_THIS)),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .gap_2()
-                                .child(
-                                    Button::new("confirm-device-login")
-                                        .label(tr(keys::Q_PREFS_LINK_DEVICE))
-                                        .disabled(mutating)
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.confirm_scanned_device(cx)
-                                        })),
-                                )
-                                .child(
-                                    Button::new("cancel-device-login")
-                                        .label(tr(keys::CANCEL))
-                                        .ghost()
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.clear_device_qr();
-                                            cx.notify();
-                                        })),
-                                ),
-                        ),
+                    this.setting_spot(
+                        &["devices.link_device"],
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .id("device-login-consent")
+                                    .role(Role::Label)
+                                    .aria_label(tr(keys::Q_PREFS_ALLOW_THE_DEVICE_DISPLAYING_THIS))
+                                    .child(tr(keys::Q_PREFS_ALLOW_THE_DEVICE_DISPLAYING_THIS)),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap_2()
+                                    .child(
+                                        Button::new("confirm-device-login")
+                                            .label(tr(keys::Q_PREFS_LINK_DEVICE))
+                                            .disabled(mutating)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.confirm_scanned_device(cx)
+                                            })),
+                                    )
+                                    .child(
+                                        Button::new("cancel-device-login")
+                                            .label(tr(keys::CANCEL))
+                                            .ghost()
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.clear_device_qr();
+                                                cx.notify();
+                                            })),
+                                    ),
+                            ),
+                        cx,
+                    ),
                 );
             } else if this.privacy.device_qr_scanner.is_some() {
                 body = body.child(
-                    Button::new("cancel-device-scan")
-                        .label(tr(keys::Q_PREFS_CANCEL_CAMERA_SCAN))
-                        .ghost()
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.clear_device_qr();
-                            cx.notify();
-                        })),
+                    this.setting_spot(
+                        &["devices.link_device"],
+                        Button::new("cancel-device-scan")
+                            .label(tr(keys::Q_PREFS_CANCEL_CAMERA_SCAN))
+                            .ghost()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.clear_device_qr();
+                                cx.notify();
+                            })),
+                        cx,
+                    ),
                 );
             } else {
                 // Cross-platform: paste the `tg://login?token=...` link that
@@ -222,14 +230,18 @@ impl QuillApp {
                     );
                 }
                 body = body.child(
-                    row.child(
-                        Button::new("paste-device-login")
-                            .label(tr(keys::Q_PREFS_LINK_DEVICE_FROM_PASTED_LINK))
-                            .ghost()
-                            .disabled(mutating)
-                            .on_click(
-                                cx.listener(|this, _, _, cx| this.paste_device_login_link(cx)),
-                            ),
+                    this.setting_spot(
+                        &["devices.link_device"],
+                        row.child(
+                            Button::new("paste-device-login")
+                                .label(tr(keys::Q_PREFS_LINK_DEVICE_FROM_PASTED_LINK))
+                                .ghost()
+                                .disabled(mutating)
+                                .on_click(
+                                    cx.listener(|this, _, _, cx| this.paste_device_login_link(cx)),
+                                ),
+                        ),
+                        cx,
                     ),
                 );
             }
@@ -247,21 +259,37 @@ impl QuillApp {
             }
             if sessions.is_empty() {
                 body = body.child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(if loading {
-                            tr(keys::Q_PREFS_LOADING)
-                        } else {
-                            tr(keys::Q_PREFS_NO_SESSION_DATA_YET)
-                        }),
+                    this.setting_spot(
+                        &[
+                            "devices.sessions",
+                            "devices.current_session",
+                            "devices.accept_secret_chats",
+                            "devices.accept_calls",
+                            "devices.rename_device",
+                            "devices.incomplete_logins",
+                            "devices.terminate_session",
+                            "devices.terminate_others",
+                        ],
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(if loading {
+                                tr(keys::Q_PREFS_LOADING)
+                            } else {
+                                tr(keys::Q_PREFS_NO_SESSION_DATA_YET)
+                            }),
+                        cx,
+                    ),
                 );
             } else {
+                // The list shows several kinds of session, each with the
+                // controls the catalog names.
+                let mut list = div().flex().flex_col().gap_2();
                 // A terminate just landed: the old list stays visible while
                 // the authoritative refetch is in flight (never an optimistic
                 // delete).
                 if stale && loading {
-                    body = body.child(
+                    list = list.child(
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground)
@@ -270,8 +298,12 @@ impl QuillApp {
                 }
                 // Phase 6: each session group is a one-column kit Table
                 // hosting the rich session rows (was: bare rows).
+                let has_current = current.is_some();
                 if let Some(current) = current {
-                    body = body
+                    let group = div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
                         .child(
                             div()
                                 .text_xs()
@@ -288,9 +320,30 @@ impl QuillApp {
                                     Self::table_cell(this.session_row(current, mutating, true, cx)),
                                 ))),
                         );
+                    list = list.child(this.setting_spot(
+                        &[
+                            "devices.current_session",
+                            "devices.accept_secret_chats",
+                            "devices.accept_calls",
+                            "devices.rename_device",
+                        ],
+                        group,
+                        cx,
+                    ));
                 }
-                if !incomplete.is_empty() {
-                    body = body
+                let has_incomplete = !incomplete.is_empty();
+                if has_incomplete {
+                    let mut incomplete_body = TableBody::new();
+                    for s in incomplete {
+                        incomplete_body = incomplete_body.child(
+                            TableRow::new()
+                                .child(Self::table_cell(this.session_row(s, mutating, false, cx))),
+                        );
+                    }
+                    let group = div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
                         .child(
                             div()
                                 .text_xs()
@@ -303,30 +356,18 @@ impl QuillApp {
                                 .text_xs()
                                 .text_color(cx.theme().muted_foreground)
                                 .child(tr(keys::Q_PREFS_THESE_DEVICES_HAVE_NO_ACCESS)),
+                        )
+                        .child(
+                            Table::new()
+                                .with_ix(1)
+                                .accessibility_label(tr(keys::Q_PREFS_INCOMPLETE_LOGIN_ATTEMPTS_2))
+                                .w_full()
+                                .child(incomplete_body),
                         );
-                    let mut incomplete_body = TableBody::new();
-                    for s in incomplete {
-                        incomplete_body = incomplete_body.child(
-                            TableRow::new()
-                                .child(Self::table_cell(this.session_row(s, mutating, false, cx))),
-                        );
-                    }
-                    body = body.child(
-                        Table::new()
-                            .with_ix(1)
-                            .accessibility_label(tr(keys::Q_PREFS_INCOMPLETE_LOGIN_ATTEMPTS_2))
-                            .w_full()
-                            .child(incomplete_body),
-                    );
+                    list = list.child(this.setting_spot(&["devices.incomplete_logins"], group, cx));
                 }
-                if !others.is_empty() {
-                    body = body.child(
-                        div()
-                            .text_xs()
-                            .font_medium()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::Q_PREFS_OTHER_SESSIONS)),
-                    );
+                let has_others = !others.is_empty();
+                if has_others {
                     let mut others_body = TableBody::new();
                     for s in others {
                         others_body = others_body.child(
@@ -334,24 +375,61 @@ impl QuillApp {
                                 .child(Self::table_cell(this.session_row(s, mutating, true, cx))),
                         );
                     }
-                    body = body.child(
-                        Table::new()
-                            .with_ix(2)
-                            .accessibility_label(tr(keys::Q_PREFS_OTHER_SESSIONS))
-                            .w_full()
-                            .child(others_body),
-                    );
+                    let group = div()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_medium()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(keys::Q_PREFS_OTHER_SESSIONS)),
+                        )
+                        .child(
+                            Table::new()
+                                .with_ix(2)
+                                .accessibility_label(tr(keys::Q_PREFS_OTHER_SESSIONS))
+                                .w_full()
+                                .child(others_body),
+                        );
+                    list = list.child(this.setting_spot(&["devices.terminate_session"], group, cx));
                 }
+                let list = this.setting_spot(&["devices.sessions"], list, cx);
+                let list = this.setting_stand_in(
+                    !has_current,
+                    &[
+                        "devices.current_session",
+                        "devices.accept_secret_chats",
+                        "devices.accept_calls",
+                        "devices.rename_device",
+                    ],
+                    list,
+                    cx,
+                );
+                let list = this.setting_stand_in(
+                    !has_incomplete,
+                    &["devices.incomplete_logins"],
+                    list,
+                    cx,
+                );
+                let list =
+                    this.setting_stand_in(!has_others, &["devices.terminate_session"], list, cx);
+                body = body.child(list);
                 let any_other = sessions.iter().any(|s| !s.is_current);
                 body = body.child(
-                    div().flex().justify_end().child(
-                        Button::new("terminate-all-sessions")
-                            .label(tr(keys::SESSIONS_TERMINATE_ALL))
-                            .danger()
-                            .disabled(!any_other || mutating)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.begin_terminate_all_sessions(cx);
-                            })),
+                    this.setting_spot(
+                        &["devices.terminate_others"],
+                        div().flex().justify_end().child(
+                            Button::new("terminate-all-sessions")
+                                .label(tr(keys::SESSIONS_TERMINATE_ALL))
+                                .danger()
+                                .disabled(!any_other || mutating)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.begin_terminate_all_sessions(cx);
+                                })),
+                        ),
+                        cx,
                     ),
                 );
             }
@@ -364,7 +442,8 @@ impl QuillApp {
                 .map(|s| this.session_details_body(s, mutating, cx));
             if details.is_none() {
                 this.privacy.extra.session_details = None;
-                body = body.child(this.sessions_ttl_section(cx));
+                let ttl = this.sessions_ttl_section(cx);
+                body = body.child(this.setting_spot(&["devices.terminate_old"], ttl, cx));
             }
             match details {
                 Some(details) => div()
@@ -386,162 +465,6 @@ impl QuillApp {
                     .into_any_element(),
             }
         }
-    }
-
-    /// kit Phase 2 (redo): connected websites hosted in a kit `Dialog`
-    /// via `window.open_dialog`. Esc / backdrop / ✕ clear state via `on_close`.
-    pub(super) fn build_websites_dialog(
-        app: &Entity<QuillApp>,
-        shell: &Entity<QuillShell>,
-        dialog: Dialog,
-        cx: &mut App,
-    ) -> Dialog {
-        let on_close =
-            QuillShell::on_close_kind(app, shell, DialogKind::Websites, |this, _, cx| {
-                this.close_websites(cx);
-            });
-        app.update(cx, |this, cx| {
-            let session = this.session();
-            let has_websites = session
-                .as_ref()
-                .is_some_and(|s| s.settings.connected_websites.is_some());
-            let mut websites = session
-                .as_ref()
-                .and_then(|s| s.settings.connected_websites.clone())
-                .unwrap_or_default();
-            websites.sort_by_key(|a| std::cmp::Reverse(a.last_active_date));
-            let loading = session.is_some_and(|s| s.settings.connected_websites_loading);
-            let mutating = session.is_some_and(|s| s.settings.websites_mutating);
-            let stale = session.is_some_and(|s| s.settings.websites_stale);
-            let error = session
-                .as_ref()
-                .and_then(|s| s.settings.websites_error.clone());
-
-            let mut body = div().flex().flex_col().gap_2();
-            if let Some(line) = error {
-                body = body.child(
-                    div()
-                        .text_xs()
-                        .text_color(danger())
-                        .child(tr_with(keys::Q_PREFS_ERROR, &[("line", &line.to_string())])),
-                );
-            }
-            if let Some(confirm) = this.privacy.websites_confirm {
-                body = body.child(this.websites_confirm_banner(confirm, &websites, mutating, cx));
-            }
-            if websites.is_empty() {
-                body = body.child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(if loading {
-                            tr(keys::Q_PREFS_LOADING)
-                        } else if has_websites {
-                            tr(keys::Q_PREFS_NO_ACTIVE_LOGINS_YOU_CAN)
-                        } else {
-                            tr(keys::Q_PREFS_NO_WEBSITE_DATA_YET)
-                        }),
-                );
-            } else {
-                if stale && loading {
-                    body = body.child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::Q_PREFS_REFRESHING)),
-                    );
-                }
-                body = body
-                    .child(
-                        div().flex().justify_end().child(
-                            Button::new("disconnect-all-websites")
-                                .label(tr(keys::SETTINGS_DISCONNECT_ALL))
-                                .danger()
-                                .disabled(mutating)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.begin_disconnect_all_websites(cx);
-                                    this.close_kit_dialog_if_done(DialogKind::Websites, window, cx);
-                                })),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::SETTINGS_LOGGED_IN_DESCRIPTION)),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_medium()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::SETTINGS_LOGGED_IN)),
-                    );
-                // Phase 6: a one-column kit Table hosting the rich
-                // website rows (was: bare rows).
-                let mut websites_body = TableBody::new();
-                for w in &websites {
-                    websites_body = websites_body.child(
-                        TableRow::new().child(Self::table_cell(this.website_row(w, mutating, cx))),
-                    );
-                }
-                body = body.child(
-                    Table::new()
-                        .with_ix(3)
-                        .accessibility_label(tr(keys::SETTINGS_LOGGED_IN))
-                        .w_full()
-                        .child(websites_body),
-                );
-                body = body.child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(tr(keys::Q_PREFS_TAP_TO_DISCONNECT_FROM_YOUR)),
-                );
-            }
-            let footer = div()
-                .flex()
-                .justify_end()
-                .gap_2()
-                .child(
-                    Button::new("websites-refresh")
-                        .label(tr(keys::Q_PREFS_REFRESH))
-                        .ghost()
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.refresh_websites(cx);
-                            this.close_kit_dialog_if_done(DialogKind::Websites, window, cx);
-                        })),
-                )
-                .child(
-                    Button::new("close-websites")
-                        .label(tr(keys::CLOSE))
-                        .ghost()
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.close_websites(cx);
-                            this.close_kit_dialog_if_done(DialogKind::Websites, window, cx);
-                        })),
-                );
-            dialog
-                .overlay(true)
-                // TGX `WebSessionsTitle`, verbatim.
-                .title(crate::ui::shell::dialog_title(tr(
-                    keys::SETTINGS_LOGGED_IN_TITLE,
-                )))
-                .content(crate::ui::shell::scrollable_dialog_content({
-                    // `content` needs an `Fn` closure, but the body is built once
-                    // per dialog render — hand it over through a one-shot cell.
-                    let body = Rc::new(RefCell::new(Some(body.into_any_element())));
-                    move |content, _, _| {
-                        let body = body
-                            .borrow_mut()
-                            .take()
-                            .unwrap_or_else(|| div().into_any_element());
-                        content.child(body)
-                    }
-                }))
-                .footer(footer)
-                .on_close(on_close)
-        })
     }
 
     /// info panel — the 12×12 fingerprint grid from `secretChat.key_hash`
@@ -956,3 +879,4 @@ mod passkey_ceremony;
 mod passkey_login;
 pub(in crate::ui) mod passkeys;
 mod twofa_status_body;
+mod websites_dialog;

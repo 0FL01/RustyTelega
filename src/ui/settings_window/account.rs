@@ -59,34 +59,56 @@ impl QuillApp {
     pub(super) fn account_page(&mut self, cx: &mut Context<Self>) -> Div {
         let profile = self.account_profile().unwrap_or_default();
         let add = || SharedString::from(tr(keys::SETTINGS_CHANNEL_ADD));
+        let suggestion = self.settings_phone_suggestion(cx);
+        let phone_ids: &'static [&'static str] = if suggestion.is_some() {
+            &["account.phone_number", "account.change_number"]
+        } else {
+            &[
+                "account.phone_number",
+                "account.change_number",
+                "account.phone_suggestion",
+            ]
+        };
         let info_rows = vec![
-            link_row(
-                "settings-row-name",
-                tr(keys::SETTINGS_NAME_LABEL),
-                Some(profile.name.clone().into()),
-                Self::edit_profile_listener(cx),
+            self.setting_spot(
+                &["account.first_name", "account.last_name"],
+                link_row(
+                    "settings-row-name",
+                    tr(keys::SETTINGS_NAME_LABEL),
+                    Some(profile.name.clone().into()),
+                    Self::edit_profile_listener(cx),
+                    cx,
+                ),
                 cx,
             ),
-            link_row(
-                "settings-row-bio",
-                tr(keys::BIO_PLACEHOLDER),
-                Some(if profile.bio.is_empty() {
-                    add()
-                } else {
-                    profile.bio.replace('\n', " ").into()
-                }),
-                Self::edit_profile_listener(cx),
+            self.setting_spot(
+                &["account.bio"],
+                link_row(
+                    "settings-row-bio",
+                    tr(keys::BIO_PLACEHOLDER),
+                    Some(if profile.bio.is_empty() {
+                        add()
+                    } else {
+                        profile.bio.replace('\n', " ").into()
+                    }),
+                    Self::edit_profile_listener(cx),
+                    cx,
+                ),
                 cx,
             ),
-            link_row(
-                "settings-row-username",
-                tr(keys::SETTINGS_USERNAME_LABEL),
-                Some(if profile.username.is_empty() {
-                    tr(keys::SETTINGS_USERNAME_ADD).into()
-                } else {
-                    format!("@{}", profile.username).into()
-                }),
-                Self::edit_profile_listener(cx),
+            self.setting_spot(
+                &["account.username", "account.collectible_usernames"],
+                link_row(
+                    "settings-row-username",
+                    tr(keys::SETTINGS_USERNAME_LABEL),
+                    Some(if profile.username.is_empty() {
+                        tr(keys::SETTINGS_USERNAME_ADD).into()
+                    } else {
+                        format!("@{}", profile.username).into()
+                    }),
+                    Self::edit_profile_listener(cx),
+                    cx,
+                ),
                 cx,
             ),
             link_row(
@@ -96,34 +118,50 @@ impl QuillApp {
                 cx.listener(|this, _, _, cx| this.open_own_qr_box(cx)),
                 cx,
             ),
-            link_row(
-                "settings-row-phone",
-                tr(keys::SETTINGS_PHONE_LABEL),
-                Some(profile.phone.clone().into()),
-                cx.listener(|this, _, _, cx| this.open_change_phone_dialog(cx)),
+            self.setting_spot(
+                phone_ids,
+                link_row(
+                    "settings-row-phone",
+                    tr(keys::SETTINGS_PHONE_LABEL),
+                    Some(profile.phone.clone().into()),
+                    cx.listener(|this, _, _, cx| this.open_change_phone_dialog(cx)),
+                    cx,
+                ),
                 cx,
             ),
-            link_row(
-                "settings-row-birthday",
-                tr(keys::SETTINGS_BIRTHDAY_LABEL),
-                Some(profile.birthday.clone().map_or_else(add, Into::into)),
-                cx.listener(|this, _, window, cx| this.open_birthday_dialog(window, cx)),
+            self.setting_spot(
+                &["account.birthday"],
+                link_row(
+                    "settings-row-birthday",
+                    tr(keys::SETTINGS_BIRTHDAY_LABEL),
+                    Some(profile.birthday.clone().map_or_else(add, Into::into)),
+                    cx.listener(|this, _, window, cx| this.open_birthday_dialog(window, cx)),
+                    cx,
+                ),
                 cx,
             ),
-            link_row(
-                "settings-row-personal-channel",
-                tr(keys::SETTINGS_CHANNEL_LABEL),
-                Some(profile.channel.clone().map_or_else(add, Into::into)),
-                cx.listener(|this, _, _, cx| this.open_personal_channel_dialog(cx)),
+            self.setting_spot(
+                &["account.personal_channel"],
+                link_row(
+                    "settings-row-personal-channel",
+                    tr(keys::SETTINGS_CHANNEL_LABEL),
+                    Some(profile.channel.clone().map_or_else(add, Into::into)),
+                    cx.listener(|this, _, _, cx| this.open_personal_channel_dialog(cx)),
+                    cx,
+                ),
                 cx,
             ),
-            link_row(
-                "settings-row-name-color",
-                tr(keys::SETTINGS_THEME_NAME_COLOR),
-                None,
-                cx.listener(|this, _, _, cx| {
-                    this.open_peer_color_dialog(PeerColorTab::Profile, cx)
-                }),
+            self.setting_spot(
+                &["account.name_color"],
+                link_row(
+                    "settings-row-name-color",
+                    tr(keys::SETTINGS_THEME_NAME_COLOR),
+                    None,
+                    cx.listener(|this, _, _, cx| {
+                        this.open_peer_color_dialog(PeerColorTab::Profile, cx)
+                    }),
+                    cx,
+                ),
                 cx,
             ),
         ];
@@ -132,33 +170,53 @@ impl QuillApp {
             .flex_col()
             .gap_6()
             .w_full()
-            .child(self.account_header(&profile, cx))
-            .children(self.settings_phone_suggestion(cx))
+            .child(self.setting_spot(&["account.photo"], self.account_header(&profile, cx), cx))
+            .children(suggestion.map(|card| {
+                div()
+                    .mb_2()
+                    .child(self.setting_spot(&["account.phone_suggestion"], card, cx))
+            }))
             .child(group(None, info_rows))
             .child(group(
                 Some(tr(keys::Q_SETTINGS_ACCOUNT_SEC_ACCOUNTS)),
-                [self.account_nav_row(Nav::Accounts, tr(keys::Q_NAVIGATION_ACCOUNTS), cx)],
+                [self.setting_spot(
+                    &["account.accounts", "account.add_account"],
+                    self.account_nav_row(Nav::Accounts, tr(keys::Q_NAVIGATION_ACCOUNTS), cx),
+                    cx,
+                )],
             ))
             .child(self.account_contacts(cx))
             .children(self.birthday_contacts_block(cx))
             .child(group(
                 Some(tr(keys::Q_SETTINGS_ACCOUNT_SEC_SESSION)),
                 [
-                    self.account_nav_row(
-                        Nav::Account,
-                        tr(keys::Q_NAVIGATION_ACCOUNT_DELETION_AND_INACTIVITY),
+                    self.setting_spot(
+                        &[
+                            "account.delete_account",
+                            "account.auto_delete",
+                            "account.account_ttl",
+                        ],
+                        self.account_nav_row(
+                            Nav::Account,
+                            tr(keys::Q_NAVIGATION_ACCOUNT_DELETION_AND_INACTIVITY),
+                            cx,
+                        ),
                         cx,
                     ),
                     // Log out ends the Account page (owner, 2026-10-21: here,
                     // not pinned to the sidebar).
-                    danger_row(
-                        "settings-row-log-out",
-                        IconName::LogOut,
-                        tr(keys::Q_PREFS_LOG_OUT),
-                        cx.listener(|this, _, _, cx| {
-                            this.settings.log_out_confirm = true;
-                            cx.notify();
-                        }),
+                    self.setting_spot(
+                        &["account.log_out"],
+                        danger_row(
+                            "settings-row-log-out",
+                            IconName::LogOut,
+                            tr(keys::Q_PREFS_LOG_OUT),
+                            cx.listener(|this, _, _, cx| {
+                                this.settings.log_out_confirm = true;
+                                cx.notify();
+                            }),
+                            cx,
+                        ),
                         cx,
                     ),
                 ],
@@ -183,34 +241,46 @@ impl QuillApp {
                 [
                     // Desktop has no address book: the switch keeps the
                     // Contacts tab up to date with the servers.
-                    switch_row(
-                        "contacts-sync-toggle",
-                        tr(keys::Q_PREFS_SYNC_CONTACTS),
-                        Some(tr(keys::Q_PREFS_KEEPS_THE_CONTACTS_TAB_UP)),
-                        sync_on,
-                        cx.listener(|this, &on, _, cx| this.set_contact_sync(on, cx)),
+                    self.setting_spot(
+                        &["account.sync_contacts"],
+                        switch_row(
+                            "contacts-sync-toggle",
+                            tr(keys::Q_PREFS_SYNC_CONTACTS),
+                            Some(tr(keys::Q_PREFS_KEEPS_THE_CONTACTS_TAB_UP)),
+                            sync_on,
+                            cx.listener(|this, &on, _, cx| this.set_contact_sync(on, cx)),
+                            cx,
+                        ),
                         cx,
                     ),
-                    link_row(
-                        "contacts-import-open",
-                        tr(keys::Q_PREFS_IMPORT_CONTACTS),
-                        None,
-                        cx.listener(|this, _, window, cx| {
-                            this.open_import_contacts_dialog(window, cx)
-                        }),
+                    self.setting_spot(
+                        &["account.import_contacts"],
+                        link_row(
+                            "contacts-import-open",
+                            tr(keys::Q_PREFS_IMPORT_CONTACTS),
+                            None,
+                            cx.listener(|this, _, window, cx| {
+                                this.open_import_contacts_dialog(window, cx)
+                            }),
+                            cx,
+                        ),
                         cx,
                     ),
-                    danger_row(
-                        "contacts-delete-synced",
-                        IconName::Delete,
-                        tr(keys::Q_PREFS_DELETE_SYNCED_CONTACTS),
-                        cx.listener(|this, _, _, cx| {
-                            this.open_group_confirm(
-                                quill::ids::ChatId(0),
-                                crate::ui::GroupConfirmAction::DeleteSyncedContacts,
-                                cx,
-                            );
-                        }),
+                    self.setting_spot(
+                        &["account.delete_synced_contacts"],
+                        danger_row(
+                            "contacts-delete-synced",
+                            IconName::Delete,
+                            tr(keys::Q_PREFS_DELETE_SYNCED_CONTACTS),
+                            cx.listener(|this, _, _, cx| {
+                                this.open_group_confirm(
+                                    quill::ids::ChatId(0),
+                                    crate::ui::GroupConfirmAction::DeleteSyncedContacts,
+                                    cx,
+                                );
+                            }),
+                            cx,
+                        ),
                         cx,
                     ),
                 ],

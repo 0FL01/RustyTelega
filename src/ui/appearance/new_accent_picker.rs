@@ -62,11 +62,15 @@ impl QuillApp {
                 move |this, cx| this.set_appearance(cx, |a| a.interface_scale_pct = pct),
             ));
         }
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.interface_scale"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_PREFS_INTERFACE_SCALE),
+                tr(keys::Q_PREFS_SCALES_THE_WHOLE_INTERFACE_APPLIED),
+                row.into_any_element(),
+            ),
             cx,
-            tr(keys::Q_PREFS_INTERFACE_SCALE),
-            tr(keys::Q_PREFS_SCALES_THE_WHOLE_INTERFACE_APPLIED),
-            row.into_any_element(),
         )
     }
 
@@ -106,11 +110,15 @@ impl QuillApp {
                 },
             ));
         }
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.wallpaper"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_PREFS_CHAT_WALLPAPER),
+                tr(keys::Q_PREFS_SOLID_COLOR_BEHIND_THE_MESSAGE),
+                row.into_any_element(),
+            ),
             cx,
-            tr(keys::Q_PREFS_CHAT_WALLPAPER),
-            tr(keys::Q_PREFS_SOLID_COLOR_BEHIND_THE_MESSAGE),
-            row.into_any_element(),
         )
     }
 
@@ -139,11 +147,15 @@ impl QuillApp {
                     .ghost()
                     .on_click(cx.listener(|this, _, _, cx| this.bump_font_size(cx, 1))),
             );
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.text_size"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_PREFS_MESSAGE_TEXT_SIZE),
+                tr(keys::Q_PREFS_CHAT_MESSAGE_TEXT_12_20),
+                control.into_any_element(),
+            ),
             cx,
-            tr(keys::Q_PREFS_MESSAGE_TEXT_SIZE),
-            tr(keys::Q_PREFS_CHAT_MESSAGE_TEXT_12_20),
-            control.into_any_element(),
         )
     }
 
@@ -159,11 +171,15 @@ impl QuillApp {
             .on_click(cx.listener(|this, &ix, _, cx| {
                 this.set_appearance(cx, |a| a.bubbles = ix == 0);
             }));
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.chat_style"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_PREFS_CHAT_STYLE),
+                tr(keys::Q_PREFS_BUBBLES_OR_PLAIN_ROWS_WITHOUT),
+                control.into_any_element(),
+            ),
             cx,
-            tr(keys::Q_PREFS_CHAT_STYLE),
-            tr(keys::Q_PREFS_BUBBLES_OR_PLAIN_ROWS_WITHOUT),
-            control.into_any_element(),
         )
     }
 
@@ -225,31 +241,39 @@ impl QuillApp {
                     a.preview_lines = if ix == 0 { 2 } else { 3 };
                 });
             }));
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(self.appearance_section(
+        let mut body = div().flex().flex_col().gap_2().child(self.setting_spot(
+            &["appearance.chat_list_rows"],
+            self.appearance_section(
                 cx,
                 tr(keys::Q_PREFS_CHAT_LIST_ROWS),
                 tr(keys::Q_PREFS_TWO_LINES_SHOWS_THE_TITLE),
                 control.into_any_element(),
-            ));
-        body = body.child(self.appearance_switch_row(
+            ),
             cx,
-            "appearance-chat-list-media-icons",
-            tr(keys::Q_PREFS_MEDIA_ICONS),
-            tr(keys::Q_PREFS_SHOW_A_PHOTO_VIDEO_OR),
-            self.appearance.chat_list_media_icons,
-            |a, on| a.chat_list_media_icons = on,
         ));
-        body = body.child(self.appearance_switch_row(
+        body = body.child(self.setting_spot(
+            &["appearance.media_icons"],
+            self.appearance_switch_row(
+                cx,
+                "appearance-chat-list-media-icons",
+                tr(keys::Q_PREFS_MEDIA_ICONS),
+                tr(keys::Q_PREFS_SHOW_A_PHOTO_VIDEO_OR),
+                self.appearance.chat_list_media_icons,
+                |a, on| a.chat_list_media_icons = on,
+            ),
             cx,
-            "appearance-chat-list-rich-preview",
-            tr(keys::Q_PREFS_FORMATTED_PREVIEW_TEXT),
-            tr(keys::Q_PREFS_SHOW_BOLD_ITALIC_AND_OTHER),
-            self.appearance.chat_list_rich_preview,
-            |a, on| a.chat_list_rich_preview = on,
+        ));
+        body = body.child(self.setting_spot(
+            &["appearance.rich_preview"],
+            self.appearance_switch_row(
+                cx,
+                "appearance-chat-list-rich-preview",
+                tr(keys::Q_PREFS_FORMATTED_PREVIEW_TEXT),
+                tr(keys::Q_PREFS_SHOW_BOLD_ITALIC_AND_OTHER),
+                self.appearance.chat_list_rich_preview,
+                |a, on| a.chat_list_rich_preview = on,
+            ),
+            cx,
         ));
         body = body.child(self.appearance_swipe_action_section(cx));
         body.into_any_element()
@@ -272,11 +296,15 @@ impl QuillApp {
                     this.set_appearance(cx, |a| a.swipe_action = action);
                 }
             }));
-        self.appearance_section(
+        self.setting_spot(
+            &["appearance.chat_list_action"],
+            self.appearance_section(
+                cx,
+                tr(keys::SETTINGS_QUICK_DIALOG_ACTION_TITLE),
+                tr(keys::Q_PREFS_MIDDLE_CLICK_A_CHAT_OR),
+                control.into_any_element(),
+            ),
             cx,
-            tr(keys::SETTINGS_QUICK_DIALOG_ACTION_TITLE),
-            tr(keys::Q_PREFS_MIDDLE_CLICK_A_CHAT_OR),
-            control.into_any_element(),
         )
     }
 
@@ -289,12 +317,13 @@ impl QuillApp {
     /// platforms render an explanatory line instead of the switch.
     pub(in crate::ui) fn general_autostart_section(&self, cx: &mut Context<Self>) -> AnyElement {
         if !quill::autostart::supported() {
-            return self.appearance_section(
+            let note = self.appearance_section(
                 cx,
                 tr(keys::Q_PREFS_LAUNCH_AT_LOGIN),
                 tr(keys::Q_PREFS_AUTOSTART_IS_NOT_AVAILABLE_ON),
                 div().into_any_element(),
             );
+            return self.setting_spot(&["system.launch_at_login"], note, cx);
         }
         let on = quill::autostart::is_enabled();
         let control = Switch::new("general-autostart-switch")
@@ -306,12 +335,13 @@ impl QuillApp {
                 }
                 cx.notify();
             }));
-        self.appearance_toggle_section(
+        let row = self.appearance_toggle_section(
             cx,
             tr(keys::Q_PREFS_LAUNCH_AT_LOGIN),
             tr(keys::Q_PREFS_START_QUILL_AUTOMATICALLY_WHEN_YOU),
             control.into_any_element(),
-        )
+        );
+        self.setting_spot(&["system.launch_at_login"], row, cx)
     }
 
     /// The handler is read on a thread (Linux): draw again when it lands.
@@ -401,12 +431,13 @@ impl QuillApp {
                 }))
                 .into_any_element(),
         };
-        self.appearance_toggle_section(
+        let row = self.appearance_toggle_section(
             cx,
             tr(keys::Q_PREFS_OPEN_TELEGRAM_LINKS_WITH_QUILL),
             &hint,
             control,
-        )
+        );
+        self.setting_spot(&["system.open_links"], row, cx)
     }
 
     pub(in crate::ui) fn appearance_send_key_section(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -479,11 +510,25 @@ impl QuillApp {
                         this.sync_spellcheck(&text, cx);
                     })),
             );
-        let mut control = div().flex().flex_col().gap_2().child(row);
+        let languages_shown = checked && !self.spell.info.available.is_empty();
+        let dictionaries_shown = checked && self.dictionary_manager_available();
+        let row = self.setting_stand_in(
+            !languages_shown,
+            &["chats.spellcheck_languages"],
+            row.into_any_element(),
+            cx,
+        );
+        let row = self.setting_stand_in(!dictionaries_shown, &["chats.dictionaries"], row, cx);
+        let mut control = div().flex().flex_col().gap_2().child(self.setting_spot(
+            &["chats.spellcheck"],
+            row,
+            cx,
+        ));
         if cfg!(target_os = "macos") {
-            control = control.child(self.system_text_replace_row(cx));
+            let row = self.system_text_replace_row(cx);
+            control = control.child(self.setting_spot(&["chats.system_text_replace"], row, cx));
         }
-        if checked && !self.spell.info.available.is_empty() {
+        if languages_shown {
             let active = self.spell.info.active.clone();
             let mut chips = div().flex().flex_wrap().gap_2().child(self.appearance_chip(
                 "spell-lang-auto",
@@ -516,10 +561,11 @@ impl QuillApp {
                     },
                 ));
             }
-            control = control.child(chips);
+            control = control.child(self.setting_spot(&["chats.spellcheck_languages"], chips, cx));
         }
-        if checked && self.dictionary_manager_available() {
-            control = control.child(self.dictionary_manager_section(cx));
+        if dictionaries_shown {
+            let section = self.dictionary_manager_section(cx);
+            control = control.child(self.setting_spot(&["chats.dictionaries"], section, cx));
         }
         self.appearance_section(
             cx,
@@ -671,15 +717,16 @@ impl QuillApp {
                         this.set_chat_prefs(cx, |c| c.replace_emoji = on);
                     })),
             );
+        let set_row = self.emoji_set_settings_row(cx);
         let control = div()
             .flex()
             .flex_col()
             .gap_3()
-            .child(suggest)
+            .child(self.setting_spot(&["chats.suggest_emoji"], suggest, cx))
             .child(highlight)
             .children(self.emoji_word_blocklist_row(cx))
-            .child(replace)
-            .child(self.emoji_set_settings_row(cx))
+            .child(self.setting_spot(&["chats.replace_emoji"], replace, cx))
+            .child(self.setting_spot(&["chats.emoji_set"], set_row, cx))
             .into_any_element();
         // tdesktop Chat settings "Large emoji": one to three emoji alone in
         // a message show as big glyphs (the history renderer reads the same
@@ -714,6 +761,7 @@ impl QuillApp {
                         this.set_media_pref(|prefs| prefs.big_emoji = on, cx)
                     })),
             );
+        let large = self.setting_spot(&["chats.large_emoji"], large, cx);
         let control = div().flex().flex_col().gap_2().child(large).child(control);
         self.appearance_section(cx, tr(keys::Q_PREFS_EMOJI), "", control.into_any_element())
     }

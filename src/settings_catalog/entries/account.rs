@@ -72,4 +72,15 @@ pub(super) const ENTRIES: &[Entry] = &[
     )
     .section(keys::Q_SETTINGS_ACCOUNT_SEC_SESSION)
     .keywords(&["remove account", "deactivate", "erase"]),
+    Entry::new("account.auto_delete", P, keys::Q_PREFS_AUTO_DELETE_MESSAGES).keywords(&[
+        "ttl",
+        "self-destruct",
+        "timer",
+    ]),
+    Entry::new(
+        "account.account_ttl",
+        P,
+        keys::Q_PREFS_DELETE_MY_ACCOUNT_IF_AWAY,
+    )
+    .keywords(&["inactivity", "self-destruct"]),
 ];

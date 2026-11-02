@@ -143,38 +143,45 @@ impl QuillApp {
         } else {
             tr(keys::Q_MISC_LIGHT_THEMES_SHOW_WHILE_NIGHT)
         };
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap_3()
-            .child(self.appearance_section(
-                cx,
-                tr(keys::Q_MISC_THEMES),
-                hint,
-                tiles.into_any_element(),
-            ));
-        if self.applied_builtin_theme().is_some() {
+        let themes = self.setting_spot(
+            &["appearance.themes", "appearance.omarchy"],
+            self.appearance_section(cx, tr(keys::Q_MISC_THEMES), hint, tiles.into_any_element()),
+            cx,
+        );
+        let themes = self.setting_stand_in(
+            !(self.applied_builtin_theme().is_some()),
+            &["appearance.accent_color", "appearance.system_accent"],
+            themes,
+            cx,
+        );
+        let mut body = div().flex().flex_col().gap_3().child(themes);
+        let accent_shown = self.applied_builtin_theme().is_some();
+        if accent_shown {
             body = body.child(self.appearance_accent_section(cx));
         }
         body = body.child(self.custom_themes_section(cx));
         body = body.child(
-            self.appearance_section(
+            self.setting_spot(
+                &["appearance.high_contrast"],
+                self.appearance_section(
+                    cx,
+                    tr(keys::Q_MISC_HIGH_CONTRAST),
+                    tr(keys::Q_MISC_BLACK_SURFACES_AND_WHITE_TEXT),
+                    Switch::new("appearance-high-contrast")
+                        .checked(self.appearance.theme == ThemeChoice::HighContrast)
+                        .accessibility_label(tr(keys::Q_MISC_HIGH_CONTRAST))
+                        .on_click(cx.listener(|this, &on, _, cx| {
+                            this.set_appearance(cx, |a| {
+                                a.theme = if on {
+                                    ThemeChoice::HighContrast
+                                } else {
+                                    ThemeChoice::Light
+                                }
+                            })
+                        }))
+                        .into_any_element(),
+                ),
                 cx,
-                tr(keys::Q_MISC_HIGH_CONTRAST),
-                tr(keys::Q_MISC_BLACK_SURFACES_AND_WHITE_TEXT),
-                Switch::new("appearance-high-contrast")
-                    .checked(self.appearance.theme == ThemeChoice::HighContrast)
-                    .accessibility_label(tr(keys::Q_MISC_HIGH_CONTRAST))
-                    .on_click(cx.listener(|this, &on, _, cx| {
-                        this.set_appearance(cx, |a| {
-                            a.theme = if on {
-                                ThemeChoice::HighContrast
-                            } else {
-                                ThemeChoice::Light
-                            }
-                        })
-                    }))
-                    .into_any_element(),
             ),
         );
         body.into_any_element()
@@ -242,23 +249,27 @@ impl QuillApp {
         let mut body = div().flex().flex_col().gap_2().child(row);
         if self.settings.system_accent.is_some() {
             body = body.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(
-                        Switch::new("app-accent-system")
-                            .checked(system.is_some())
-                            .accessibility_label(tr(keys::SETTINGS_THEME_SYSTEM_ACCENT_COLOR))
-                            .on_click(cx.listener(|this, &on, _, cx| {
-                                this.set_appearance(cx, |a| a.system_accent = on)
-                            })),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(tr(keys::SETTINGS_THEME_SYSTEM_ACCENT_COLOR)),
-                    ),
+                self.setting_spot(
+                    &["appearance.system_accent"],
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .child(
+                            Switch::new("app-accent-system")
+                                .checked(system.is_some())
+                                .accessibility_label(tr(keys::SETTINGS_THEME_SYSTEM_ACCENT_COLOR))
+                                .on_click(cx.listener(|this, &on, _, cx| {
+                                    this.set_appearance(cx, |a| a.system_accent = on)
+                                })),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .child(tr(keys::SETTINGS_THEME_SYSTEM_ACCENT_COLOR)),
+                        ),
+                    cx,
+                ),
             );
         }
         let hint = if theme.is_quill() {
@@ -266,11 +277,18 @@ impl QuillApp {
         } else {
             tr(keys::Q_MISC_RECOLORS_THE_THEME_AROUND_THE)
         };
-        self.appearance_section(
+        let section = self.appearance_section(
             cx,
             tr(keys::Q_MISC_ACCENT_COLOR),
             hint,
             body.into_any_element(),
+        );
+        let section = self.setting_spot(&["appearance.accent_color"], section, cx);
+        self.setting_stand_in(
+            self.settings.system_accent.is_none(),
+            &["appearance.system_accent"],
+            section,
+            cx,
         )
     }
 
@@ -362,12 +380,20 @@ impl QuillApp {
             .flex_col()
             .gap_3()
             .when(!themes.is_empty(), |this| this.child(tiles))
-            .child(actions);
-        self.appearance_section(
+            .child(self.setting_spot(
+                &["appearance.import_theme", "appearance.create_theme"],
+                actions,
+                cx,
+            ));
+        self.setting_spot(
+            &["appearance.custom_themes"],
+            self.appearance_section(
+                cx,
+                tr(keys::Q_MISC_CUSTOM_THEMES),
+                tr(keys::Q_MISC_THEME_FILES_IN_THE_TDESKTOP),
+                control.into_any_element(),
+            ),
             cx,
-            tr(keys::Q_MISC_CUSTOM_THEMES),
-            tr(keys::Q_MISC_THEME_FILES_IN_THE_TDESKTOP),
-            control.into_any_element(),
         )
     }
 

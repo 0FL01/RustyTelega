@@ -24,20 +24,37 @@ impl QuillApp {
             .flex_col()
             .gap_4()
             .child(self.performance_section(cx))
-            .child(super::nav_row::nav_row(
-                "settings-experimental",
-                tr(keys::SETTINGS_EXPERIMENTAL),
-                cx,
-                |this, _, cx| {
-                    this.show_settings_sub(super::settings_window::SubPage::Experimental, cx);
-                },
-            ))
-            .child(super::nav_row::nav_row(
-                "settings-replay-intro",
-                tr(keys::Q_FIRST_RUN_REPLAY),
-                cx,
-                |this, window, cx| this.replay_first_run(window, cx),
-            ))
+            .child(
+                self.setting_spot(
+                    &["advanced.experimental"],
+                    super::nav_row::nav_row(
+                        "settings-experimental",
+                        tr(keys::SETTINGS_EXPERIMENTAL),
+                        cx,
+                        |this, _, cx| {
+                            this.show_settings_sub(
+                                super::settings_window::SubPage::Experimental,
+                                cx,
+                            );
+                        },
+                    )
+                    .into_any_element(),
+                    cx,
+                ),
+            )
+            .child(
+                self.setting_spot(
+                    &["advanced.welcome_intro"],
+                    super::nav_row::nav_row(
+                        "settings-replay-intro",
+                        tr(keys::Q_FIRST_RUN_REPLAY),
+                        cx,
+                        |this, window, cx| this.replay_first_run(window, cx),
+                    )
+                    .into_any_element(),
+                    cx,
+                ),
+            )
             .children(self.agent_access_advanced_row(cx))
             .into_any_element()
     }
@@ -61,21 +78,26 @@ impl QuillApp {
                     .child(tr(keys::SETTINGS_PERFORMANCE)),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child(div().flex_1().min_w_0().text_sm().child(label))
-                    .child(
-                        Switch::new("advanced-hardware-video")
-                            .checked(hardware_video::enabled())
-                            .accessibility_label(label)
-                            .on_click(cx.listener(|_, &on: &bool, _, cx| {
-                                hardware_video::set_enabled(on);
-                                cx.notify();
-                            })),
-                    ),
+                self.setting_spot(
+                    &["advanced.hardware_decoding"],
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(div().flex_1().min_w_0().text_sm().child(label))
+                        .child(
+                            Switch::new("advanced-hardware-video")
+                                .checked(hardware_video::enabled())
+                                .accessibility_label(label)
+                                .on_click(cx.listener(|_, &on: &bool, _, cx| {
+                                    hardware_video::set_enabled(on);
+                                    cx.notify();
+                                })),
+                        )
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .into_any_element()
     }
@@ -126,7 +148,7 @@ impl QuillApp {
 
     fn experimental_row(&self, spec: OptionSpec, on: bool, cx: &mut Context<Self>) -> AnyElement {
         let id = spec.id;
-        div()
+        let row = div()
             .flex()
             .items_center()
             .justify_between()
@@ -155,7 +177,14 @@ impl QuillApp {
                         this.set_experimental_option(id, next, cx)
                     })),
             )
-            .into_any_element()
+            .into_any_element();
+        match id {
+            experimental::SPLIT_MEDIA_ID => {
+                self.setting_spot(&["advanced.split_profile_media"], row, cx)
+            }
+            experimental::FAST_BUTTONS_ID => self.setting_spot(&["advanced.fast_buttons"], row, cx),
+            _ => row,
+        }
     }
 
     fn experimental_category(
@@ -195,21 +224,34 @@ impl QuillApp {
             .read_from_clipboard()
             .and_then(|item| item.text())
             .unwrap_or_default();
-        let mut page = div().flex().flex_col().gap_4().child(
-            div()
-                .id("experimental-about")
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child(experimental::ABOUT),
+        let about = div()
+            .id("experimental-about")
+            .text_sm()
+            .text_color(cx.theme().muted_foreground)
+            .child(experimental::ABOUT)
+            .into_any_element();
+        let about =
+            self.setting_stand_in(!values.changed(), &["advanced.restore_defaults"], about, cx);
+        let about = self.setting_stand_in(
+            !values.fast_buttons_mode,
+            &["advanced.fast_buttons"],
+            about,
+            cx,
         );
+        let mut page = div().flex().flex_col().gap_4().child(about);
         if values.changed() {
             page = page.child(
-                Button::new("experimental-restore")
-                    .label(experimental::RESTORE_LABEL)
-                    .ghost()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.apply_experimental_values(Values::default(), cx)
-                    })),
+                self.setting_spot(
+                    &["advanced.restore_defaults"],
+                    Button::new("experimental-restore")
+                        .label(experimental::RESTORE_LABEL)
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.apply_experimental_values(Values::default(), cx)
+                        }))
+                        .into_any_element(),
+                    cx,
+                ),
             );
         }
         page = page.child(self.experimental_category(experimental::PROFILE, values, cx));
@@ -223,26 +265,47 @@ impl QuillApp {
             page = page.child(self.experimental_category(experimental::OTHER, values, cx));
         }
         let mut actions = div().flex().gap_2().child(
-            Button::new("experimental-export")
-                .label(tr(keys::Q_PREFS_EXPORT))
-                .ghost()
-                .on_click(cx.listener(|this, _, _, cx| {
-                    let code = experimental::encode_export(this.experimental_values());
-                    cx.write_to_clipboard(ClipboardItem::new_string(code));
-                    this.connection
-                        .set_note(StatusNote::info(experimental::EXPORTED_TOAST));
-                    cx.notify();
-                })),
+            div().flex_none().child(
+                self.setting_spot(
+                    &["advanced.export_settings"],
+                    Button::new("experimental-export")
+                        .label(tr(keys::Q_PREFS_EXPORT))
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let code = experimental::encode_export(this.experimental_values());
+                            cx.write_to_clipboard(ClipboardItem::new_string(code));
+                            this.connection
+                                .set_note(StatusNote::info(experimental::EXPORTED_TOAST));
+                            cx.notify();
+                        }))
+                        .into_any_element(),
+                    cx,
+                ),
+            ),
         );
-        if experimental::is_importable(&clipboard) {
+        let importable = experimental::is_importable(&clipboard);
+        if importable {
             actions = actions.child(
-                Button::new("experimental-import")
-                    .label(tr(keys::Q_PREFS_IMPORT))
-                    .ghost()
-                    .on_click(cx.listener(|this, _, _, cx| this.import_experimental(cx))),
+                div().flex_none().child(
+                    self.setting_spot(
+                        &["advanced.import_settings"],
+                        Button::new("experimental-import")
+                            .label(tr(keys::Q_PREFS_IMPORT))
+                            .ghost()
+                            .on_click(cx.listener(|this, _, _, cx| this.import_experimental(cx)))
+                            .into_any_element(),
+                        cx,
+                    ),
+                ),
             );
         }
-        page.child(actions).into_any_element()
+        page.child(self.setting_stand_in(
+            !importable,
+            &["advanced.import_settings"],
+            actions.into_any_element(),
+            cx,
+        ))
+        .into_any_element()
     }
 
     fn import_experimental(&mut self, cx: &mut Context<Self>) {

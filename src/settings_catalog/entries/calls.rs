@@ -35,18 +35,4 @@ pub(super) const ENTRIES: &[Entry] = &[
     )
     .keywords(&["audio settings"])
     .only(Platforms::MACOS.or(Platforms::WINDOWS)),
-    Entry::new(
-        "calls.noise_suppression",
-        P,
-        keys::GROUP_CALL_NOISE_SUPPRESSION,
-    )
-    .keywords(&["denoise", "background noise"]),
-    Entry::new("calls.input_device", P, keys::Q_SETTINGS_CALLS_INPUT_DEVICE)
-        .keywords(&["input", "mic"]),
-    Entry::new(
-        "calls.output_device",
-        P,
-        keys::Q_SETTINGS_CALLS_OUTPUT_DEVICE,
-    )
-    .keywords(&["output", "headphones", "speakers"]),
 ];

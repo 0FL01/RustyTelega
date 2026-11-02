@@ -180,7 +180,11 @@ impl QuillApp {
             cx,
             tr(keys::Q_PREFS_KEYBOARD_SHORTCUTS),
             tr(keys::Q_PREFS_REBIND_THE_SHORTCUTS_BELOW_CHANGES),
-            div().flex().flex_col().children(rows).into_any_element(),
+            self.setting_spot(
+                &["shortcuts.rebind"],
+                div().flex().flex_col().children(rows).into_any_element(),
+                cx,
+            ),
         )
     }
 

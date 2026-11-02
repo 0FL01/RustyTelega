@@ -262,41 +262,63 @@ impl QuillApp {
             );
         }
         body = body.child(
-            div().flex().child(
-                Button::new("account-export-open")
-                    .label(if running.is_some() {
-                        tr(keys::Q_OPS_SHOW_EXPORT_PROGRESS)
-                    } else {
-                        tr(keys::Q_OPS_EXPORT_TELEGRAM_DATA)
-                    })
-                    .outline()
-                    .small()
-                    .disabled(self.live.is_none())
-                    .on_click(cx.listener(|this, _, _, cx| this.open_account_export(cx))),
+            self.setting_spot(
+                &["data.export"],
+                div().flex().child(
+                    Button::new("account-export-open")
+                        .label(if running.is_some() {
+                            tr(keys::Q_OPS_SHOW_EXPORT_PROGRESS)
+                        } else {
+                            tr(keys::Q_OPS_EXPORT_TELEGRAM_DATA)
+                        })
+                        .outline()
+                        .small()
+                        .disabled(self.live.is_none())
+                        .on_click(cx.listener(|this, _, _, cx| this.open_account_export(cx))),
+                ),
+                cx,
             ),
         );
         // --- Automatic downloads ---
-        body = body.child(section_header(tr(keys::Q_OPS_AUTOMATIC_DOWNLOADS)));
+        // The size caps are in the per-network editor.
+        body = body.child(self.setting_spot(
+            &["data.max_file_size"],
+            section_header(tr(keys::Q_OPS_AUTOMATIC_DOWNLOADS)),
+            cx,
+        ));
         let prefs = session.as_ref().map(|s| &s.settings.data_storage);
         if !prefs.is_some_and(|p| p.seeded) {
             let loading = session.is_some_and(|s| s.settings.auto_download_presets_loading);
             body = body.child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(if loading {
-                        tr(keys::Q_OPS_LOADING_DOWNLOAD_SETTINGS)
-                    } else {
-                        tr(keys::Q_OPS_DOWNLOAD_SETTINGS_UNAVAILABLE)
-                    }),
+                self.setting_spot(
+                    &[
+                        "data.auto_download_mobile",
+                        "data.auto_download_wifi",
+                        "data.auto_download_roaming",
+                        "data.less_data_calls",
+                    ],
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(if loading {
+                            tr(keys::Q_OPS_LOADING_DOWNLOAD_SETTINGS)
+                        } else {
+                            tr(keys::Q_OPS_DOWNLOAD_SETTINGS_UNAVAILABLE)
+                        }),
+                    cx,
+                ),
             );
         } else if let Some(prefs) = prefs {
             for network in NetworkKind::ALL {
-                body = body.child(self.data_storage_network_row(
-                    cx,
-                    network,
-                    &prefs.network_summary(network),
-                ));
+                let ids: &'static [&'static str] = match network {
+                    NetworkKind::Mobile => &["data.auto_download_mobile"],
+                    NetworkKind::Roaming => &["data.auto_download_roaming"],
+                    NetworkKind::WiFi => &["data.auto_download_wifi"],
+                };
+                let row = self
+                    .data_storage_network_row(cx, network, &prefs.network_summary(network))
+                    .into_any_element();
+                body = body.child(self.setting_spot(ids, row, cx));
             }
             // One toggle drives all three networks' `use_less_data_for_calls`
             // (TGX keeps a single switch); each network keeps its own caps.
@@ -304,62 +326,74 @@ impl QuillApp {
                 .iter()
                 .all(|n| prefs.for_network(*n).use_less_data_for_calls);
             body = body.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .py_1()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .child(tr(keys::Q_OPS_USE_LESS_DATA_FOR_CALLS)),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(tr(keys::Q_OPS_LOWER_DATA_USAGE_DURING_TELEGRAM)),
-                            ),
-                    )
-                    .child(
-                        Switch::new("data-storage-less-data-calls")
-                            .checked(all_on)
-                            .accessibility_label(tr(keys::Q_OPS_USE_LESS_DATA_FOR_CALLS))
-                            .on_click(cx.listener(move |this, &on, _, cx| {
-                                if let Some(live) = this.live.as_mut() {
-                                    // Send failures land on
-                                    // `data_storage_error`, shown on
-                                    // this dialog (the S3 pattern).
-                                    let _ = live.driver.set_less_data_for_calls(on);
-                                } else if let Some(demo) = this.demo_session.as_mut() {
-                                    for n in NetworkKind::ALL {
-                                        demo.settings
-                                            .data_storage
-                                            .for_network_mut(n)
-                                            .use_less_data_for_calls = on;
+                self.setting_spot(
+                    &["data.less_data_calls"],
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .py_1()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .child(tr(keys::Q_OPS_USE_LESS_DATA_FOR_CALLS)),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(tr(keys::Q_OPS_LOWER_DATA_USAGE_DURING_TELEGRAM)),
+                                ),
+                        )
+                        .child(
+                            Switch::new("data-storage-less-data-calls")
+                                .checked(all_on)
+                                .accessibility_label(tr(keys::Q_OPS_USE_LESS_DATA_FOR_CALLS))
+                                .on_click(cx.listener(move |this, &on, _, cx| {
+                                    if let Some(live) = this.live.as_mut() {
+                                        // Send failures land on
+                                        // `data_storage_error`, shown on
+                                        // this dialog (the S3 pattern).
+                                        let _ = live.driver.set_less_data_for_calls(on);
+                                    } else if let Some(demo) = this.demo_session.as_mut() {
+                                        for n in NetworkKind::ALL {
+                                            demo.settings
+                                                .data_storage
+                                                .for_network_mut(n)
+                                                .use_less_data_for_calls = on;
+                                        }
                                     }
-                                }
-                                cx.notify();
-                            })),
-                    ),
+                                    cx.notify();
+                                })),
+                        ),
+                    cx,
+                ),
             );
         }
         // --- Download folder (B13) ---
         body = body.child(self.download_folder_section(cx));
         // --- Storage usage ---
-        body = body.child(
+        let stats = session
+            .as_ref()
+            .and_then(|s| s.settings.storage_stats.clone());
+        let usage = self.setting_spot(
+            &["data.storage_usage"],
             div()
                 .id("storage-usage")
                 .anchor_scroll(Some(self.settings.storage_scroll.usage.clone()))
                 .child(section_header(tr(keys::Q_OPS_STORAGE_USAGE))),
+            cx,
         );
-        let stats = session
-            .as_ref()
-            .and_then(|s| s.settings.storage_stats.clone());
+        body = body.child(self.setting_stand_in(
+            stats.is_none(),
+            &["data.clear_cache", "data.size_limit", "data.clear_older"],
+            usage,
+            cx,
+        ));
         let loading = session.is_some_and(|s| s.settings.storage_stats_loading);
         match stats {
             None => {

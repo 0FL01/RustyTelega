@@ -374,66 +374,84 @@ impl QuillApp {
                 self.group_call.global_ptt.state(),
                 HookState::NeedsPermission
             ) || !quill::calls::ptt_global::permission_granted());
-        let mut section = div().flex().flex_col().gap_1().child(
-            div()
-                .id("call-pref-ptt")
-                .flex()
-                .items_center()
-                .gap_2()
-                .px_2()
-                .py_1()
-                .rounded_md()
-                .child(
-                    Switch::new("call-pref-ptt-switch")
-                        .checked(config.enabled)
-                        .accessibility_label(tr(keys::Q_AV_PUSH_TO_TALK))
-                        .on_click(cx.listener(|this, &on, _, cx| {
-                            this.group_call.ptt_capture = false;
-                            this.set_call_pref(|prefs| prefs.push_to_talk.enabled = on, cx);
-                        })),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .child(div().text_sm().child(tr(keys::Q_AV_PUSH_TO_TALK)))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(muted)
-                                .child(tr(keys::Q_AV_HOLD_A_KEY_TO_TALK)),
-                        ),
-                ),
+        let ptt_row = div()
+            .id("call-pref-ptt")
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_2()
+            .py_1()
+            .rounded_md()
+            .child(
+                Switch::new("call-pref-ptt-switch")
+                    .checked(config.enabled)
+                    .accessibility_label(tr(keys::Q_AV_PUSH_TO_TALK))
+                    .on_click(cx.listener(|this, &on, _, cx| {
+                        this.group_call.ptt_capture = false;
+                        this.set_call_pref(|prefs| prefs.push_to_talk.enabled = on, cx);
+                    })),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(div().text_sm().child(tr(keys::Q_AV_PUSH_TO_TALK)))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted)
+                            .child(tr(keys::Q_AV_HOLD_A_KEY_TO_TALK)),
+                    ),
+            );
+        // The shortcut and delay rows show while push-to-talk is on.
+        let ptt_row = self.setting_stand_in(
+            !config.enabled,
+            &["calls.ptt_shortcut", "calls.ptt_delay"],
+            ptt_row.into_any_element(),
+            cx,
         );
+        let mut section = div().flex().flex_col().gap_1().child(self.setting_spot(
+            &["calls.push_to_talk"],
+            ptt_row,
+            cx,
+        ));
         if config.enabled {
             section = section
                 .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px_2()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::MEDIUM)
-                                .child(tr(keys::Q_AV_SHORTCUT)),
-                        )
-                        .child(
-                            Button::new("call-pref-ptt-key")
-                                .label(if capturing {
-                                    tr(keys::Q_AV_PRESS_A_KEY).to_string()
-                                } else {
-                                    ptt_key_label(&config.key)
-                                })
-                                .small()
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.group_call.ptt_capture = !this.group_call.ptt_capture;
-                                    cx.notify();
-                                })),
-                        ),
+                    self.setting_spot(
+                        &["calls.ptt_shortcut"],
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .px_2()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(tr(keys::Q_AV_SHORTCUT)),
+                            )
+                            .child(
+                                Button::new("call-pref-ptt-key")
+                                    .label(if capturing {
+                                        tr(keys::Q_AV_PRESS_A_KEY).to_string()
+                                    } else {
+                                        ptt_key_label(&config.key)
+                                    })
+                                    .small()
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.group_call.ptt_capture = !this.group_call.ptt_capture;
+                                        cx.notify();
+                                    })),
+                            ),
+                        cx,
+                    ),
                 )
-                .child(self.ptt_delay_row(config.release_delay_ms, cx))
+                .child(self.setting_spot(
+                    &["calls.ptt_delay"],
+                    self.ptt_delay_row(config.release_delay_ms, cx),
+                    cx,
+                ))
                 .child(div().text_xs().text_color(muted).px_2().child(
                     quill::calls::ptt_global::status_note(
                         self.group_call.global_ptt.state(),

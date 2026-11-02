@@ -19,36 +19,59 @@ impl QuillApp {
             .gap_2()
             .mt_2()
             .child(
-                Button::new("settings-faq")
-                    .label(tr(keys::SETTINGS_FAQ))
-                    .ghost()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.open_link(quill::settings_account::FAQ_URL, cx)
-                    })),
+                self.setting_spot(
+                    &["about.faq"],
+                    Button::new("settings-faq")
+                        .label(tr(keys::SETTINGS_FAQ))
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.open_link(quill::settings_account::FAQ_URL, cx)
+                        }))
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .child(
-                Button::new("settings-features")
-                    .label(tr(keys::SETTINGS_FEATURES))
-                    .ghost()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.open_link(quill::settings_account::FEATURES_URL, cx)
-                    })),
+                self.setting_spot(
+                    &["about.features"],
+                    Button::new("settings-features")
+                        .label(tr(keys::SETTINGS_FEATURES))
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.open_link(quill::settings_account::FEATURES_URL, cx)
+                        }))
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .child(
-                Button::new("settings-privacy-policy")
-                    .label(tr(keys::Q_PREFS_PRIVACY_POLICY))
-                    .ghost()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.open_link(quill::settings_account::PRIVACY_POLICY_URL, cx)
-                    })),
+                self.setting_spot(
+                    &["about.privacy_policy"],
+                    Button::new("settings-privacy-policy")
+                        .label(tr(keys::Q_PREFS_PRIVACY_POLICY))
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.open_link(quill::settings_account::PRIVACY_POLICY_URL, cx)
+                        }))
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .child(
-                Button::new("settings-ask-question")
-                    .label(tr(keys::SETTINGS_ASK_QUESTION))
-                    .ghost()
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.show_settings_sub(super::settings_window::SubPage::AskQuestion, cx);
-                    })),
+                self.setting_spot(
+                    &["about.ask_question"],
+                    Button::new("settings-ask-question")
+                        .label(tr(keys::SETTINGS_ASK_QUESTION))
+                        .ghost()
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.show_settings_sub(
+                                super::settings_window::SubPage::AskQuestion,
+                                cx,
+                            );
+                        }))
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .child(
                 div()

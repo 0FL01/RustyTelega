@@ -12,9 +12,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         "json",
         "html",
     ]),
-    Entry::new("data.data_saver", P, keys::Q_PREFS_DATA_SAVER)
-        .section(keys::Q_OPS_AUTOMATIC_DOWNLOADS)
-        .keywords(&["low data", "pause downloads"]),
     Entry::new(
         "data.auto_download_mobile",
         P,
@@ -39,13 +36,6 @@ pub(super) const ENTRIES: &[Entry] = &[
     Entry::new("data.max_file_size", P, keys::Q_OPS_MAXIMUM_FILE_SIZE)
         .section(keys::Q_OPS_AUTOMATIC_DOWNLOADS)
         .keywords(&["photos", "videos", "limit"]),
-    Entry::new(
-        "data.auto_download_chat_types",
-        P,
-        keys::Q_PREFS_AUTO_DOWNLOAD,
-    )
-    .section(keys::Q_OPS_AUTOMATIC_DOWNLOADS)
-    .keywords(&["private", "groups", "channels", "gifs", "music"]),
     Entry::new(
         "data.less_data_calls",
         P,

@@ -47,7 +47,7 @@ impl QuillApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let window = &summary.window;
-        let mut rows = vec![switch_row(
+        let driver = switch_row(
             "agent-ui-driver-switch",
             tr(keys::Q_AGENT_UI_DRIVER),
             Some(tr(keys::Q_AGENT_UI_DRIVER_HINT)),
@@ -57,7 +57,14 @@ impl QuillApp {
                 cx.notify();
             }),
             cx,
-        )];
+        );
+        let driver = self.setting_stand_in(
+            !window.switch,
+            &["agent_access.takeover_effect"],
+            driver,
+            cx,
+        );
+        let mut rows = vec![self.setting_spot(&["agent_access.window"], driver, cx)];
         let sees = tr(match window.view {
             WindowView::Nothing => keys::Q_AGENT_PAGE_SEES_NOTHING,
             WindowView::GrantedChats => keys::Q_AGENT_PAGE_SEES_GRANTED,
@@ -77,7 +84,8 @@ impl QuillApp {
         );
         if window.switch {
             rows.push(self.agent_window_state_row(&window.state, cx));
-            rows.push(takeover_effect_row(cx));
+            let effect = takeover_effect_row(cx);
+            rows.push(self.setting_spot(&["agent_access.takeover_effect"], effect, cx));
         }
         div()
             .flex()
@@ -172,15 +180,19 @@ impl QuillApp {
             .gap_2()
             .child(group(
                 None,
-                [switch_row(
-                    "agent-confirm-switch",
-                    tr(keys::Q_AGENT_CONFIRM_SENDS),
-                    Some(tr(keys::Q_AGENT_CONFIRM_SENDS_HINT)),
-                    summary.confirm_each_send,
-                    cx.listener(|_, &next: &bool, _, cx| {
-                        access::set_confirm_sends(next);
-                        cx.notify();
-                    }),
+                [self.setting_spot(
+                    &["agent_access.confirm_sends"],
+                    switch_row(
+                        "agent-confirm-switch",
+                        tr(keys::Q_AGENT_CONFIRM_SENDS),
+                        Some(tr(keys::Q_AGENT_CONFIRM_SENDS_HINT)),
+                        summary.confirm_each_send,
+                        cx.listener(|_, &next: &bool, _, cx| {
+                            access::set_confirm_sends(next);
+                            cx.notify();
+                        }),
+                        cx,
+                    ),
                     cx,
                 )],
             ))

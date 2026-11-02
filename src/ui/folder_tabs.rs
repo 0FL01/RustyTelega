@@ -575,7 +575,7 @@ impl QuillApp {
             (FolderTabsView::Left, tr(keys::FILTERS_VERTICAL)),
             (FolderTabsView::Top, tr(keys::FILTERS_HORIZONTAL)),
         ];
-        div()
+        let view_group = div()
             .flex()
             .flex_col()
             .gap_2()
@@ -592,22 +592,31 @@ impl QuillApp {
                             this.set_appearance(cx, |a| a.folder_tabs_view = v);
                         }
                     })),
-            )
-            .child(heading(tr(keys::FILTERS_TABS_SUBTITLE)))
-            .child(
-                RadioGroup::vertical("folder-tabs-mode")
-                    .selected_index(FolderTabsMode::ALL.iter().position(|m| *m == mode))
-                    .children(
-                        FolderTabsMode::ALL.iter().map(|m| {
+            );
+        let mode_group =
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(heading(tr(keys::FILTERS_TABS_SUBTITLE)))
+                .child(
+                    RadioGroup::vertical("folder-tabs-mode")
+                        .selected_index(FolderTabsMode::ALL.iter().position(|m| *m == mode))
+                        .children(FolderTabsMode::ALL.iter().map(|m| {
                             Radio::new(("folder-tabs-mode", *m as usize)).label(m.label())
-                        }),
-                    )
-                    .on_click(cx.listener(|this, &ix: &usize, _, cx| {
-                        if let Some(m) = FolderTabsMode::ALL.get(ix).copied() {
-                            this.set_appearance(cx, |a| a.folder_tabs_mode = m);
-                        }
-                    })),
-            )
+                        }))
+                        .on_click(cx.listener(|this, &ix: &usize, _, cx| {
+                            if let Some(m) = FolderTabsMode::ALL.get(ix).copied() {
+                                this.set_appearance(cx, |a| a.folder_tabs_mode = m);
+                            }
+                        })),
+                );
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(self.setting_spot(&["folders.tabs_view"], view_group, cx))
+            .child(self.setting_spot(&["folders.tabs_appearance"], mode_group, cx))
             .into_any_element()
     }
 }

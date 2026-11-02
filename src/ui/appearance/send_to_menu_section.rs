@@ -36,11 +36,12 @@ impl QuillApp {
                 })
                 .detach();
             }));
-        Some(self.appearance_toggle_section(
+        let row = self.appearance_toggle_section(
             cx,
             tr(keys::Q_PREFS_PLACE_QUILL_IN_SEND_TO),
             tr(keys::Q_PREFS_RIGHT_CLICK_FILES_IN_EXPLORER),
             control.into_any_element(),
-        ))
+        );
+        Some(self.setting_spot(&["system.send_to_menu"], row, cx))
     }
 }

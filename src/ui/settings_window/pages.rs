@@ -66,15 +66,32 @@ impl QuillApp {
             Page::Chats => column
                 .children(cards([self.media_settings_section(cx).into_any_element()]))
                 .children(cards([
-                    self.appearance_send_key_section(cx),
+                    self.setting_spot(
+                        &["chats.send_key"],
+                        self.appearance_send_key_section(cx),
+                        cx,
+                    ),
                     self.appearance_spellcheck_section(cx),
                     self.appearance_suggest_emoji_section(cx),
                 ]))
                 .child(group(
                     Some(tr(keys::Q_SETTINGS_CHATS_SEC_EMOJI)),
                     [
-                        self.sticker_suggest_section(cx),
-                        self.nav_row(Nav::ArchivedStickers, tr(keys::STICKERS_YOU_HAVE), None, cx),
+                        self.setting_spot(
+                            &["chats.sticker_suggestions"],
+                            self.sticker_suggest_section(cx),
+                            cx,
+                        ),
+                        self.setting_spot(
+                            &["chats.archived_stickers"],
+                            self.nav_row(
+                                Nav::ArchivedStickers,
+                                tr(keys::STICKERS_YOU_HAVE),
+                                None,
+                                cx,
+                            ),
+                            cx,
+                        ),
                     ],
                 )),
             Page::Appearance => {
@@ -104,10 +121,42 @@ impl QuillApp {
             }
             Page::Power => column.children(cards([self.appearance_power_section(cx)])),
             Page::System => {
-                let mut system = vec![
-                    self.general_autostart_section(cx),
-                    self.general_link_handler_section(cx),
-                ];
+                let tray_ready = quill::tray::tray_available();
+                let tray_options = self.tray_options(tray_ready);
+                let tray =
+                    quill::tray::tray_setting_switches(tray_ready, self.appearance.show_tray_icon);
+                let autostart = self.general_autostart_section(cx);
+                let autostart = self.setting_stand_in(
+                    !tray_options.tray_icon,
+                    &["system.tray_icon"],
+                    autostart,
+                    cx,
+                );
+                let autostart = self.setting_stand_in(
+                    !tray_options.taskbar_icon,
+                    &["system.taskbar_icon"],
+                    autostart,
+                    cx,
+                );
+                let autostart = self.setting_stand_in(
+                    !tray_options.monochrome_icon,
+                    &["system.monochrome_icon"],
+                    autostart,
+                    cx,
+                );
+                let autostart = self.setting_stand_in(
+                    !tray.start_in_tray,
+                    &["system.start_in_tray"],
+                    autostart,
+                    cx,
+                );
+                let autostart = self.setting_stand_in(
+                    !tray.run_in_background,
+                    &["system.when_closed"],
+                    autostart,
+                    cx,
+                );
+                let mut system = vec![autostart, self.general_link_handler_section(cx)];
                 system.extend(self.general_send_to_section(cx));
                 column
                     .children(cards(system))
@@ -161,32 +210,52 @@ impl QuillApp {
             },
             cx,
         );
+        let has_money = money.is_some();
+        let has_grams = grams.is_some();
+        let gift = self.session().is_some_and(|s| s.premium_possible());
+        let premium_ids: &'static [&'static str] = if gift {
+            &["telegram.premium"]
+        } else {
+            &["telegram.premium", "telegram.send_gift"]
+        };
+        let stars_ids: &'static [&'static str] = match (has_money, has_grams) {
+            (true, true) => &["telegram.stars"],
+            (false, true) => &["telegram.stars", "telegram.money"],
+            (true, false) => &["telegram.stars", "telegram.grams"],
+            (false, false) => &["telegram.stars", "telegram.money", "telegram.grams"],
+        };
+        let premium = self.nav_row(Nav::Premium, tr(keys::PREMIUM_SUMMARY_TITLE), None, cx);
+        let stars = self.nav_row(Nav::Stars, tr(keys::Q_NAVIGATION_STARS), None, cx);
+        let my_gifts = self.nav_row(Nav::MyGifts, tr(keys::GIFT_STARS_TABS_MY), None, cx);
+        let business = self.nav_row(Nav::Business, tr(keys::BUSINESS_TITLE), None, cx);
+        let subscriptions = self.nav_row(
+            Nav::Subscriptions,
+            tr(keys::Q_NAVIGATION_STAR_SUBSCRIPTIONS),
+            None,
+            cx,
+        );
         let mut rows = vec![
-            self.nav_row(Nav::Premium, tr(keys::PREMIUM_SUMMARY_TITLE), None, cx),
-            self.nav_row(Nav::Stars, tr(keys::Q_NAVIGATION_STARS), None, cx),
+            self.setting_spot(premium_ids, premium, cx),
+            self.setting_spot(stars_ids, stars, cx),
         ];
-        rows.extend(money);
-        rows.extend(grams);
+        rows.extend(money.map(|row| self.setting_spot(&["telegram.money"], row, cx)));
+        rows.extend(grams.map(|row| self.setting_spot(&["telegram.grams"], row, cx)));
         rows.extend([
-            self.nav_row(Nav::MyGifts, tr(keys::GIFT_STARS_TABS_MY), None, cx),
-            self.nav_row(Nav::Business, tr(keys::BUSINESS_TITLE), None, cx),
+            self.setting_spot(&["telegram.my_gifts"], my_gifts, cx),
+            self.setting_spot(&["telegram.business"], business, cx),
         ]);
         // tdesktop's "Premium Gifting", where Premium can be bought.
-        if self.session().is_some_and(|s| s.premium_possible()) {
-            rows.push(link_row(
+        if gift {
+            let row = link_row(
                 "settings-row-SendGift",
                 tr(keys::SETTINGS_GIFT_PREMIUM),
                 None,
                 cx.listener(|this, _, window, cx| this.open_gift_recipients(window, cx)),
                 cx,
-            ));
+            );
+            rows.push(self.setting_spot(&["telegram.send_gift"], row, cx));
         }
-        rows.extend([self.nav_row(
-            Nav::Subscriptions,
-            tr(keys::Q_NAVIGATION_STAR_SUBSCRIPTIONS),
-            None,
-            cx,
-        )]);
+        rows.push(self.setting_spot(&["telegram.star_subscriptions"], subscriptions, cx));
         rows
     }
 }

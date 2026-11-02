@@ -72,16 +72,17 @@ impl QuillApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let on = summary.enabled;
-        let mut rows = vec![switch_row(
+        let allow = switch_row(
             "agent-access-switch",
             tr(keys::Q_AGENT_ACCESS_ALLOW),
             Some(tr(keys::Q_AGENT_PAGE_ALLOW_HINT)),
             on,
             cx.listener(|this, &next: &bool, _, cx| this.set_agent_access(next, cx)),
             cx,
-        )];
+        );
+        let mut rows = vec![self.setting_spot(&["agent_access.allow"], allow, cx)];
         if on {
-            rows.push(action_row(
+            let reset = action_row(
                 tr(keys::Q_AGENT_PAGE_RESET),
                 Some(tr(keys::Q_AGENT_PAGE_RESET_HINT).into()),
                 Button::new("agent-reset-token")
@@ -93,7 +94,8 @@ impl QuillApp {
                         cx.notify();
                     })),
                 cx,
-            ));
+            );
+            rows.push(self.setting_spot(&["agent_access.reset_token"], reset, cx));
         }
         let mut section = div().flex().flex_col().gap_4().child(group(None, rows));
         if on {
@@ -111,7 +113,11 @@ impl QuillApp {
                     .map(|(index, agent)| connected_row(index, agent, cx))
                     .collect()
             };
-            section = section.child(group(Some(tr(keys::Q_AGENT_CONNECTED_TITLE)), agents));
+            section = section.child(self.setting_spot(
+                &["agent_access.connected"],
+                group(Some(tr(keys::Q_AGENT_CONNECTED_TITLE)), agents).into_any_element(),
+                cx,
+            ));
             if !summary.refused.is_empty() {
                 let rows: Vec<AnyElement> = summary
                     .refused
@@ -145,7 +151,7 @@ impl QuillApp {
     /// MCP config.
     pub(super) fn agent_connect_section(&self, cx: &mut Context<Self>) -> AnyElement {
         let lines = quill::agent::cli::setup_lines();
-        group(
+        let connect = group(
             None,
             [
                 self.agent_setup_prompt_row(cx),
@@ -179,7 +185,8 @@ impl QuillApp {
                 ),
             ],
         )
-        .into_any_element()
+        .into_any_element();
+        self.setting_spot(&["agent_access.connect"], connect, cx)
     }
 
     /// A titled command in a monospace well, with Copy: one well per shell

@@ -12,7 +12,7 @@ use gpui_kit::component::*;
 use gpui_kit::*;
 use quill::agent::access;
 use quill::lang::{keys, tr};
-use quill::settings_catalog::Page;
+use quill::settings_catalog::{AGENT_SWITCH, Page};
 
 impl QuillApp {
     /// Advanced's "Agent access" row, shown only while access is off.
@@ -25,39 +25,38 @@ impl QuillApp {
         }
         let title = tr(keys::Q_AGENT_ACCESS);
         // The Advanced page's rows share this inset (`advanced_ui.rs`).
-        Some(
-            div()
-                .id("advanced-agent-access")
-                .debug_selector(|| "advanced-agent-access".into())
-                .flex()
-                .items_center()
-                .gap_3()
-                .px_2p5()
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_0p5()
-                        .flex_1()
-                        .min_w_0()
-                        .child(div().text_sm().child(title))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(tr(keys::Q_AGENT_ACCESS_SWITCH_HINT)),
-                        ),
-                )
-                .child(
-                    Switch::new("advanced-agent-access-switch")
-                        .checked(false)
-                        .accessibility_label(title)
-                        .on_click(cx.listener(|this, &on: &bool, _, cx| {
-                            this.set_agent_access(on, cx);
-                        })),
-                )
-                .into_any_element(),
-        )
+        let row = div()
+            .id("advanced-agent-access")
+            .debug_selector(|| "advanced-agent-access".into())
+            .flex()
+            .items_center()
+            .gap_3()
+            .px_2p5()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
+                    .flex_1()
+                    .min_w_0()
+                    .child(div().text_sm().child(title))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(tr(keys::Q_AGENT_ACCESS_SWITCH_HINT)),
+                    ),
+            )
+            .child(
+                Switch::new("advanced-agent-access-switch")
+                    .checked(false)
+                    .accessibility_label(title)
+                    .on_click(cx.listener(|this, &on: &bool, _, cx| {
+                        this.set_agent_access(on, cx);
+                    })),
+            )
+            .into_any_element();
+        Some(self.setting_spot(&[AGENT_SWITCH], row, cx))
     }
 
     /// The master switch, from Advanced or the Agent access page. Settings

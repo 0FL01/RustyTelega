@@ -44,13 +44,61 @@ impl QuillApp {
             .session()
             .map(|s| s.settings.saved_notification_sounds.clone())
             .unwrap_or_default();
+        let view = self.notify_view_section(cx);
+        let options = self.notify_options_section(cx);
+        let all_accounts = self.notify_from_all_section(cx);
+        let desktop = self.desktop_notifications_section(cx);
+        let desktop = self.setting_spot(&["notifications.desktop"], desktop, cx);
+        let desktop = self.setting_stand_in(
+            view.is_none(),
+            &[
+                "notifications.sender_name",
+                "notifications.message_text",
+                "notifications.photo_previews",
+            ],
+            desktop,
+            cx,
+        );
+        let desktop = self.setting_stand_in(
+            options.is_none(),
+            &[
+                "notifications.native",
+                "notifications.native_windows",
+                "notifications.focus_mode",
+                "notifications.display",
+                "notifications.position",
+                "notifications.count",
+            ],
+            desktop,
+            cx,
+        );
+        let sounds = self.inapp_sounds_section(cx);
+        let volume = self.notification_volume_section(cx);
+        let attention = self.attention_section(cx);
+        let attention = self.setting_spot(
+            &[
+                "notifications.attention_dock",
+                "notifications.attention_taskbar",
+                "notifications.attention_window",
+            ],
+            attention,
+            cx,
+        );
+        let attention = self.setting_stand_in(
+            all_accounts.is_none(),
+            &["notifications.all_accounts"],
+            attention,
+            cx,
+        );
         let mut alerts = vec![
-            self.desktop_notifications_section(cx),
-            self.inapp_sounds_section(cx),
-            self.notification_volume_section(cx),
-            self.attention_section(cx),
+            desktop,
+            self.setting_spot(&["notifications.in_app_sounds"], sounds, cx),
+            self.setting_spot(&["notifications.sound_volume"], volume, cx),
+            attention,
         ];
-        alerts.extend(self.notify_from_all_section(cx));
+        alerts.extend(
+            all_accounts.map(|card| self.setting_spot(&["notifications.all_accounts"], card, cx)),
+        );
         let mut chats = vec![
             div()
                 .text_xs()
@@ -62,8 +110,8 @@ impl QuillApp {
             chats.push(self.scope_settings_section(cx, scope, &saved_sounds));
         }
         chats.push(self.reaction_settings_section(cx, &saved_sounds));
-        let mut look: Vec<AnyElement> = self.notify_view_section(cx).into_iter().collect();
-        look.extend(self.notify_options_section(cx));
+        let mut look: Vec<AnyElement> = view.into_iter().collect();
+        look.extend(options);
         let confirm = self.notify.notifications_confirm.map(|confirm| {
             self.notifications_confirm_banner(confirm, cx)
                 .into_any_element()
@@ -80,14 +128,19 @@ impl QuillApp {
             .child(stack(look))
             .child(group(
                 None,
-                [danger_row(
-                    "settings-row-reset-notifications",
-                    IconName::RotateCcw,
-                    tr(keys::Q_PREFS_RESET_ALL),
-                    cx.listener(|this, _, _, cx| {
-                        this.notify.notifications_confirm = Some(NotificationsConfirm::ResetAll);
-                        cx.notify();
-                    }),
+                [self.setting_spot(
+                    &["notifications.reset_all"],
+                    danger_row(
+                        "settings-row-reset-notifications",
+                        IconName::RotateCcw,
+                        tr(keys::Q_PREFS_RESET_ALL),
+                        cx.listener(|this, _, _, cx| {
+                            this.notify.notifications_confirm =
+                                Some(NotificationsConfirm::ResetAll);
+                            cx.notify();
+                        }),
+                        cx,
+                    ),
                     cx,
                 )],
             ))

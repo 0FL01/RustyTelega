@@ -216,82 +216,97 @@ impl QuillApp {
                             }),
                     ),
             );
-        for (kind, label) in [
+        for (kind, label, ids) in [
             (
                 ReactionSourceKind::Message,
                 tr(keys::Q_PREFS_MESSAGE_REACTIONS),
+                &["notifications.message_reactions"],
             ),
-            (ReactionSourceKind::Story, tr(keys::Q_PREFS_STORY_REACTIONS)),
+            (
+                ReactionSourceKind::Story,
+                tr(keys::Q_PREFS_STORY_REACTIONS),
+                &["notifications.story_reactions"],
+            ),
             (
                 ReactionSourceKind::PollVote,
                 tr(keys::NOTIFICATION_REACTIONS_POLL_VOTES),
+                &["notifications.poll_votes"],
             ),
         ] {
-            section = section.child(self.reaction_source_row(cx, kind, label));
+            let row = self.reaction_source_row(cx, kind, label);
+            section = section.child(self.setting_spot(ids, row, cx));
         }
         section = section
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::Q_PREFS_SHOW_SENDER_AND_EMOJI_IN)),
-                    )
-                    .child(
-                        // Phase 6: kit Switch.
-                        Switch::new("reaction-preview")
-                            .checked(settings.show_preview)
-                            .accessibility_label(tr(keys::Q_PREFS_SHOW_SENDER_AND_EMOJI_IN_2))
-                            .on_click(cx.listener(move |this, &on, _, cx| {
-                                this.apply_reaction_preview(on, cx);
-                            })),
-                    ),
+                self.setting_spot(
+                    &["notifications.reaction_sender"],
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(keys::Q_PREFS_SHOW_SENDER_AND_EMOJI_IN)),
+                        )
+                        .child(
+                            // Phase 6: kit Switch.
+                            Switch::new("reaction-preview")
+                                .checked(settings.show_preview)
+                                .accessibility_label(tr(keys::Q_PREFS_SHOW_SENDER_AND_EMOJI_IN_2))
+                                .on_click(cx.listener(move |this, &on, _, cx| {
+                                    this.apply_reaction_preview(on, cx);
+                                })),
+                        ),
+                    cx,
+                ),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr_with(
-                                keys::Q_PREFS_SOUND,
-                                &[("sound_label", &sound_label.to_string())],
-                            )),
-                    )
-                    .child(
-                        Button::new("reaction-sound-toggle")
-                            .small()
-                            .label(
-                                if self.notify.defaults_sound_picker
-                                    == Some(SoundPickerTarget::Reaction)
-                                {
-                                    tr(keys::Q_PREFS_HIDE)
-                                } else {
-                                    tr(keys::Q_PREFS_CHANGE)
-                                },
-                            )
-                            .ghost()
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.notify.defaults_sound_picker =
-                                    if this.notify.defaults_sound_picker
+                self.setting_spot(
+                    &["notifications.reaction_sound"],
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr_with(
+                                    keys::Q_PREFS_SOUND,
+                                    &[("sound_label", &sound_label.to_string())],
+                                )),
+                        )
+                        .child(
+                            Button::new("reaction-sound-toggle")
+                                .small()
+                                .label(
+                                    if self.notify.defaults_sound_picker
                                         == Some(SoundPickerTarget::Reaction)
                                     {
-                                        None
+                                        tr(keys::Q_PREFS_HIDE)
                                     } else {
-                                        Some(SoundPickerTarget::Reaction)
-                                    };
-                                cx.notify();
-                            })),
-                    ),
+                                        tr(keys::Q_PREFS_CHANGE)
+                                    },
+                                )
+                                .ghost()
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.notify.defaults_sound_picker =
+                                        if this.notify.defaults_sound_picker
+                                            == Some(SoundPickerTarget::Reaction)
+                                        {
+                                            None
+                                        } else {
+                                            Some(SoundPickerTarget::Reaction)
+                                        };
+                                    cx.notify();
+                                })),
+                        ),
+                    cx,
+                ),
             );
         if self.notify.defaults_sound_picker == Some(SoundPickerTarget::Reaction) {
             section = section.child(self.notification_sound_picker(
