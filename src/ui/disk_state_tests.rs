@@ -200,6 +200,30 @@ fn leaving_a_full_disk_reconnects_once(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn space_freed_during_a_held_call_keeps_the_call_client(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let start = shown(&app, &mut vcx).2;
+    fill(&app, &mut vcx, Some(0));
+    app.update_in(&mut vcx, |app, _, _| app.disk.held_for_call = true);
+    read(&app, &mut vcx, Some(FLOORS.warn_clear));
+    assert_eq!(
+        shown(&app, &mut vcx),
+        (false, false, start),
+        "the client in the call was never closed, so it is not replaced"
+    );
+    fill(&app, &mut vcx, Some(0));
+    app.update_in(&mut vcx, |app, _, _| app.disk.held_for_call = true);
+    app.update_in(&mut vcx, |app, _, _| app.account.passcode.locked = true);
+    read(&app, &mut vcx, Some(FLOORS.warn_clear));
+    app.read_with(&vcx, |app, _| {
+        assert!(
+            !app.account.passcode.deferred_connect,
+            "nothing waits for the unlock"
+        );
+    });
+}
+
+#[gpui_kit::test]
 fn a_refused_open_holds_the_screen_until_the_open_floor(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
     let start = shown(&app, &mut vcx).2;

@@ -187,6 +187,9 @@ pub enum DiskStep {
     Hold,
     Close,
     Reconnect,
+    /// Leaving Full while a call kept the on-screen client open: that
+    /// client never closed, so only the background accounts start again.
+    ReconnectBackground,
     RetryStarts,
 }
 
@@ -194,6 +197,8 @@ pub enum DiskStep {
 pub struct DiskClients {
     pub running: bool,
     pub retry_starts: bool,
+    /// At Full, a call kept the on-screen client open.
+    pub screen_held: bool,
 }
 
 impl DiskState {
@@ -201,6 +206,7 @@ impl DiskState {
         match (self, after) {
             (Self::Full, Self::Full) if !clients.running => DiskStep::Hold,
             (_, Self::Full) => DiskStep::Close,
+            (Self::Full, _) if clients.screen_held => DiskStep::ReconnectBackground,
             (Self::Full, _) => DiskStep::Reconnect,
             _ if clients.retry_starts => DiskStep::RetryStarts,
             _ => DiskStep::Hold,

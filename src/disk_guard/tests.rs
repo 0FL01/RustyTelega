@@ -10,6 +10,7 @@ const FLOORS: DiskFloors = DiskFloors {
 const NONE: DiskClients = DiskClients {
     running: false,
     retry_starts: false,
+    screen_held: false,
 };
 const RUNNING: DiskClients = DiskClients {
     running: true,
@@ -22,6 +23,7 @@ const RETRY: DiskClients = DiskClients {
 const RUNNING_AND_RETRY: DiskClients = DiskClients {
     running: true,
     retry_starts: true,
+    screen_held: false,
 };
 
 fn walk(start: DiskState, reads: &[Option<u64>]) -> Vec<DiskState> {
@@ -120,6 +122,19 @@ fn going_full_closes_clients_and_leaving_full_reconnects() {
     assert_eq!(Full.step(Full, RUNNING), DiskStep::Close, "one opened");
     assert_eq!(Full.step(Low, NONE), DiskStep::Reconnect);
     assert_eq!(Full.step(Healthy, RETRY), DiskStep::Reconnect);
+}
+
+#[test]
+fn leaving_full_during_a_held_call_restarts_only_the_background() {
+    use DiskState::{Full, Healthy, Low};
+    let held = DiskClients {
+        running: true,
+        screen_held: true,
+        ..NONE
+    };
+    assert_eq!(Full.step(Low, held), DiskStep::ReconnectBackground);
+    assert_eq!(Full.step(Healthy, held), DiskStep::ReconnectBackground);
+    assert_eq!(Full.step(Full, held), DiskStep::Close, "still full");
 }
 
 #[test]

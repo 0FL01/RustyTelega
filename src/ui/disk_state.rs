@@ -225,18 +225,24 @@ impl QuillApp {
         let room = free.is_some_and(|free| free >= floors.open);
         let retry_starts = self.disk.start_refused && room;
         let retry_screen = self.disk.screen_refused && room && after != DiskState::Full;
+        let screen_held = self.disk.held_for_call;
         let before = self.enter_disk_state(after, cx);
         let step = before.step(
             after,
             DiskClients {
                 running,
                 retry_starts,
+                screen_held,
             },
         );
         match step {
             DiskStep::Hold => {}
             DiskStep::Close => self.close_clients_for_full_disk(cx),
             DiskStep::Reconnect => self.reconnect_after_disk(cx),
+            DiskStep::ReconnectBackground => {
+                self.disk.start_refused = false;
+                self.ensure_background_accounts(cx);
+            }
             DiskStep::RetryStarts => {
                 self.disk.start_refused = false;
                 self.ensure_background_accounts(cx);
