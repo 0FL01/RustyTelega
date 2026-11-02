@@ -146,7 +146,7 @@ fn start_directly(target: &Path, args: &[String]) -> std::io::Result<()> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .spawn()
+        .status()
         .map(|_| ())
 }
 
@@ -177,15 +177,10 @@ impl Fixture {
         claim::take_over(&self.plan_path).ok().unwrap()
     }
 
-    /// What the started version got, once it ran (spawned, so polled).
+    /// What the started version got. `start_directly` waits for it to end.
     fn started(&self) -> Option<String> {
-        for _ in 0..100 {
-            if let Ok(args) = fs::read_to_string(self.root.join("opt/started")) {
-                return Some(args.trim().to_string());
-            }
-            std::thread::sleep(Duration::from_millis(20));
-        }
-        None
+        let args = fs::read_to_string(self.root.join("opt/started")).ok()?;
+        Some(args.trim().to_string())
     }
 
     /// No update file is left where plans live.
