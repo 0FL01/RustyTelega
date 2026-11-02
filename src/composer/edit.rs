@@ -199,7 +199,7 @@ impl ComposerEdit {
         }
         let path = pick_send_path(candidate).ok_or(EDIT_MEDIA_INVALID_FILE)?;
         let audio = is_audio_path(&path);
-        let media = media_kind_for(&path);
+        let media = direct_media_kind_for(&path);
         let kind = if self.media_edit.in_album {
             match current.album_type() {
                 AlbumType::PhotoVideo => match media {
@@ -238,7 +238,7 @@ impl ComposerEdit {
     pub fn can_toggle_as_file(&self, replacement: &EditMediaReplacement) -> bool {
         !self.media_edit.in_album
             && replacement.kind != EditMediaKind::Audio
-            && media_kind_for(&replacement.path).is_some()
+            && direct_media_kind_for(&replacement.path).is_some()
     }
 
     /// Whether the (possibly replaced) media carries the caption-position flag.

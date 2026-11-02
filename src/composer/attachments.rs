@@ -32,14 +32,47 @@ pub fn without_sound_track(path: &Path) -> bool {
 }
 
 /// The media kind a file is sent as when dropped or pasted, by extension:
-/// formats Telegram sends as photos or videos. Anything else is a file.
+/// tdesktop `IsVideoFile` for videos, and for photos the formats its
+/// `QImageReader` reads (`CheckForImage`). Anything else is a file. Whether
+/// the file really is one is found out when it joins the tray
+/// (`send_box_media_check.rs`).
 pub fn media_kind_for(path: &Path) -> Option<AttachmentKind> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     match ext.as_str() {
-        "jpg" | "jpeg" | "png" | "webp" => Some(AttachmentKind::Photo),
-        "mp4" | "mov" | "m4v" => Some(AttachmentKind::Video),
+        "jpg" | "jpeg" | "jfif" | "png" | "webp" => Some(AttachmentKind::Photo),
+        "mp4" | "mov" | "m4v" | "webm" => Some(AttachmentKind::Video),
+        _ if photo_needs_jpeg(path) => Some(AttachmentKind::Photo),
         _ => None,
     }
+}
+
+/// [`media_kind_for`] for sends that take the file as it is, with no tray to
+/// convert it first (message edits, covers, poll options).
+pub fn direct_media_kind_for(path: &Path) -> Option<AttachmentKind> {
+    media_kind_for(path).filter(|_| !photo_needs_jpeg(path))
+}
+
+/// A picture Telegram takes as a photo only as a JPEG (tdesktop re-encodes
+/// every photo, `ComputePhotoJpegBytes`).
+pub fn photo_needs_jpeg(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            let ext = ext.to_ascii_lowercase();
+            matches!(
+                ext.as_str(),
+                "heic" | "heif" | "avif" | "jxl" | "bmp" | "tif" | "tiff" | "tga" | "ico"
+            )
+        })
+}
+
+/// tdesktop `ValidateThumbDimensions`: a photo or video with a side more than
+/// 20 times the other goes as a file.
+pub fn media_dimensions_valid(width: u32, height: u32) -> bool {
+    width > 0
+        && height > 0
+        && u64::from(width) <= 20 * u64::from(height)
+        && u64::from(height) <= 20 * u64::from(width)
 }
 
 impl ComposerAttachment {
@@ -56,7 +89,10 @@ impl ComposerAttachment {
                     attachment.spoiler = false;
                     attachment.extras.gif = false;
                 }
-                (false, Some(kind)) if attachment.kind == AttachmentKind::Document => {
+                (false, Some(kind))
+                    if attachment.kind == AttachmentKind::Document
+                        && !attachment.extras.file_only =>
+                {
                     attachment.kind = kind;
                 }
                 (true, None) if gif && attachment.extras.gif => {
@@ -77,8 +113,23 @@ impl ComposerAttachment {
     /// some attachment is a photo, video or GIF file.
     pub fn can_send_as_files(list: &[Self]) -> bool {
         list.iter().any(|attachment| {
-            media_kind_for(&attachment.path).is_some() || is_gif_path(&attachment.path)
+            !attachment.extras.file_only
+                && (media_kind_for(&attachment.path).is_some() || is_gif_path(&attachment.path))
         })
+    }
+
+    /// What was read about the file showed it can only go as a file.
+    pub fn keep_as_file(&mut self) {
+        self.kind = AttachmentKind::Document;
+        self.spoiler = false;
+        self.extras.gif = false;
+        self.extras.file_only = true;
+    }
+
+    /// The picture a photo shows and goes out as: the JPEG made for it, or
+    /// the file itself.
+    pub fn photo_file(&self) -> &Path {
+        self.extras.photo_jpeg.as_deref().unwrap_or(&self.path)
     }
 
     /// tdesktop `modifications.gif = !hasAudio`: an `.mp4` video may be a
@@ -116,9 +167,20 @@ impl ComposerAttachment {
             .iter()
             .partition(|att| att.extras.gif && att.extras.sound_removed);
         let mut groups = Vec::new();
+        let is_media =
+            |att: &&Self| matches!(att.kind, AttachmentKind::Photo | AttachmentKind::Video);
         groups.extend(
             together
-                .chunks(crate::album::ALBUM_MAX_ITEMS)
+                .chunk_by(|a, b| is_media(a) == is_media(b))
+                .flat_map(|run| {
+                    // Files in a media tray go one by one; albums are media.
+                    let size = if run.first().is_some_and(is_media) {
+                        crate::album::ALBUM_MAX_ITEMS
+                    } else {
+                        1
+                    };
+                    run.chunks(size)
+                })
                 .map(|chunk| chunk.iter().map(|att| (*att).clone()).collect()),
         );
         groups.extend(alone.into_iter().map(|att| vec![att.clone()]));
@@ -282,6 +344,80 @@ mod tests {
             spoiler: true,
             extras: AttachmentExtras::default(),
         }
+    }
+
+    #[test]
+    fn media_kinds_follow_tdesktop() {
+        for name in [
+            "a.jpg", "a.JFIF", "a.png", "a.webp", "a.heic", "a.HEIF", "a.avif", "a.jxl",
+        ] {
+            assert_eq!(
+                media_kind_for(Path::new(name)),
+                Some(AttachmentKind::Photo),
+                "{name}"
+            );
+        }
+        for name in ["a.mp4", "a.mov", "a.m4v", "a.webm"] {
+            assert_eq!(
+                media_kind_for(Path::new(name)),
+                Some(AttachmentKind::Video),
+                "{name}"
+            );
+        }
+        for name in ["a.mkv", "a.avi", "a.dng", "a.psd", "a.pdf", "a.gif"] {
+            assert_eq!(media_kind_for(Path::new(name)), None, "{name}");
+        }
+        assert_eq!(direct_media_kind_for(Path::new("a.heic")), None);
+        assert_eq!(
+            direct_media_kind_for(Path::new("a.webm")),
+            Some(AttachmentKind::Video)
+        );
+    }
+
+    #[test]
+    fn narrow_media_stays_a_file() {
+        assert!(media_dimensions_valid(2000, 100));
+        assert!(!media_dimensions_valid(2001, 100));
+        assert!(!media_dimensions_valid(100, 2001));
+        assert!(!media_dimensions_valid(0, 100));
+    }
+
+    #[test]
+    fn a_file_only_attachment_is_not_offered_compression() {
+        let mut list = vec![ComposerAttachment {
+            path: PathBuf::from("/a/moving.webp"),
+            kind: AttachmentKind::Photo,
+            file_name: "moving.webp".into(),
+            spoiler: true,
+            extras: Default::default(),
+        }];
+        assert!(ComposerAttachment::can_send_as_files(&list));
+        list[0].keep_as_file();
+        assert_eq!(list[0].kind, AttachmentKind::Document);
+        assert!(!list[0].spoiler);
+        assert!(!ComposerAttachment::can_send_as_files(&list));
+        ComposerAttachment::set_send_as_files(&mut list, false);
+        assert_eq!(list[0].kind, AttachmentKind::Document);
+    }
+
+    #[test]
+    fn files_and_media_do_not_share_an_album() {
+        let item = |name: &str, kind| ComposerAttachment {
+            path: PathBuf::from(name),
+            kind,
+            file_name: name.into(),
+            spoiler: false,
+            extras: Default::default(),
+        };
+        let list = [
+            item("a.jpg", AttachmentKind::Photo),
+            item("b.mp4", AttachmentKind::Video),
+            item("c.heic", AttachmentKind::Document),
+            item("d.jpg", AttachmentKind::Photo),
+        ];
+        let groups = ComposerAttachment::split_for_send(&list, true);
+        let sizes: Vec<usize> = groups.iter().map(Vec::len).collect();
+        assert_eq!(sizes, [2, 1, 1]);
     }
 
     #[test]

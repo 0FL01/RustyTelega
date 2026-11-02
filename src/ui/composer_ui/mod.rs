@@ -570,7 +570,8 @@ impl QuillApp {
             // HEIC, AVIF or other picture the tile can't read shows the
             // thumbnail made for sending (`send_box_thumbnails.rs`).
             let image_file = attachment.kind == AttachmentKind::Document
-                && quill::composer::media_kind_for(&attachment.path) == Some(AttachmentKind::Photo);
+                && quill::composer::direct_media_kind_for(&attachment.path)
+                    == Some(AttachmentKind::Photo);
             let file_thumbnail = (attachment.kind == AttachmentKind::Document)
                 .then_some(attachment.extras.file_thumbnail.as_ref())
                 .flatten();
@@ -579,7 +580,15 @@ impl QuillApp {
             let previewed = index < quill::album::ALBUM_MAX_ITEMS;
             let media = match (attachment.kind, file_thumbnail) {
                 _ if !previewed => AttachmentMedia::new().child(Icon::new(icon)),
-                (AttachmentKind::Photo, _) => AttachmentMedia::new().src(attachment.path.clone()),
+                // The JPEG of a HEIC or the like is still being made.
+                (AttachmentKind::Photo, _)
+                    if quill::composer::photo_needs_jpeg(attachment.photo_file()) =>
+                {
+                    AttachmentMedia::new().child(Icon::new(icon))
+                }
+                (AttachmentKind::Photo, _) => {
+                    AttachmentMedia::new().src(attachment.photo_file().to_path_buf())
+                }
                 (_, Some(thumb)) => AttachmentMedia::new().src(thumb.path.clone()),
                 _ if image_file => AttachmentMedia::new().src(attachment.path.clone()),
                 _ => AttachmentMedia::new().child(Icon::new(icon)),

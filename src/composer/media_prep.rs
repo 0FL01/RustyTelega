@@ -91,7 +91,7 @@ fn send_path_scaled(
     if attachment.kind != AttachmentKind::Photo {
         return Ok(Some(path));
     }
-    let prepared = super::scaled_photo_for_send(&attachment.path, media.hd_photos)
+    let prepared = super::scaled_photo_for_send(attachment.photo_file(), media.hd_photos)
         .map_err(|PhotoScaleTimedOut| PrepareError::TimedOut)?;
     if prepared == attachment.path {
         Ok(Some(path))

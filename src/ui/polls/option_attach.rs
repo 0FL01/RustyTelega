@@ -17,7 +17,7 @@ use gpui_kit::component::button::*;
 use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::*;
 use gpui_kit::*;
-use quill::composer::{AttachmentKind, media_kind_for};
+use quill::composer::{AttachmentKind, direct_media_kind_for};
 use quill::lang::{keys, tr, tr_with};
 use quill::poll::PollOptionInput;
 use std::path::PathBuf;
@@ -349,7 +349,7 @@ impl QuillApp {
         path: PathBuf,
         cx: &mut Context<Self>,
     ) {
-        let Some(kind) = media_kind_for(&path) else {
+        let Some(kind) = direct_media_kind_for(&path) else {
             self.connection
                 .set_note(StatusNote::silent(tr(keys::Q_MEDIA_CHOOSE_A_PHOTO_OR_A)));
             cx.notify();

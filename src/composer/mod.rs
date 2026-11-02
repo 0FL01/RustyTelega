@@ -34,8 +34,8 @@ mod shortcuts;
 
 pub use actions::{DeleteConfirm, ForwardDraft, cancel_forward_draft};
 pub use attachments::{
-    AttachmentKind, ComposerAttachment, clipboard_image_attachment, media_kind_for,
-    without_sound_track,
+    AttachmentKind, ComposerAttachment, clipboard_image_attachment, direct_media_kind_for,
+    media_dimensions_valid, media_kind_for, photo_needs_jpeg, without_sound_track,
 };
 pub use bar_click::{BarAction, BarClick, BarKind, bar_click_action};
 pub use commands::{

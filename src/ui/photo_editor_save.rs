@@ -5,6 +5,7 @@
 use super::app::QuillApp;
 use super::composer_sends::{SendSlot, TrayItem};
 use super::photo_editor::{EditorPurpose, PhotoEditor};
+use super::send_box_media_check::check_photo;
 use crate::ui::status_note::StatusNote;
 use gpui_kit::*;
 use quill::lang::{keys, tr};
@@ -185,6 +186,8 @@ impl QuillApp {
                 .unwrap_or("photo")
                 .to_string();
             attachment.path = saved.clone();
+            attachment.extras.photo_jpeg = None;
+            attachment.extras.file_only = false;
             attachment.file_name = format!("{stem}.png");
             attachment.kind = quill::composer::AttachmentKind::Photo;
             let held = (!send.renders_an_edit())
@@ -208,7 +211,12 @@ impl QuillApp {
                 }
                 found.unwrap_or_default()
             }
-            (found, Some(_)) => found.unwrap_or_default(),
+            (found, Some(saved)) => {
+                // A PNG: only its header is read, and a held Send goes now.
+                let check = check_photo(&saved);
+                self.composer_ui.send_box.media_checked.insert(saved, check);
+                found.unwrap_or_default()
+            }
         }
     }
 }

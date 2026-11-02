@@ -366,7 +366,7 @@ fn is_playable_video(mime: &str, path: &Path) -> bool {
             .and_then(|ext| ext.to_str())
             .map(|ext| ext.to_ascii_lowercase())
             .as_deref(),
-        Some("mp4" | "mov" | "webm" | "mkv")
+        Some("mp4" | "mov" | "m4v" | "webm" | "mkv")
     )
 }
 

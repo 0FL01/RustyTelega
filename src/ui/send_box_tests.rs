@@ -185,6 +185,34 @@ fn a_soundless_mp4_becomes_a_gif_after_the_background_check(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn the_same_picture_added_again_still_goes_as_its_jpeg(cx: &mut TestAppContext) {
+    let picture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/images/halves.jxl");
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    app.update_in(vcx, |app, _, cx| {
+        app.attach_dropped_files(std::slice::from_ref(&picture), cx);
+        assert!(
+            app.tray_media_checks_pending(),
+            "sending waits for the read"
+        );
+    });
+    vcx.run_until_parked();
+    app.update_in(vcx, |app, _, cx| {
+        assert!(!app.tray_media_checks_pending());
+        let mut again = app.pending_attachments()[0].clone();
+        let jpeg = again.extras.photo_jpeg.take().expect("a JPEG");
+        app.update_pending_send(|send| send.attachments.push(again));
+        app.check_tray_videos(cx);
+        assert_eq!(
+            app.pending_attachments()[1].photo_file(),
+            jpeg.as_path(),
+            "read once, applied to every copy"
+        );
+    });
+}
+
+#[gpui_kit::test]
 fn a_slot_whose_files_are_being_read_says_so_and_other_chats_are_free(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
     let vcx = &mut vcx;

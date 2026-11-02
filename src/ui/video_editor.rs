@@ -569,6 +569,7 @@ impl QuillApp {
                     }
                     return;
                 }
+                self.check_tray_videos(cx);
                 if edits.gif && info.has_audio && several {
                     tr(keys::Q_AV_THE_GIF_LEAVES_THE_ALBUM)
                 } else {
