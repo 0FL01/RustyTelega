@@ -10,6 +10,7 @@ impl Session {
         extra: Option<RequestId>,
         seq: u64,
     ) {
+        self.settle_own_reaction(extra, true);
         if matches!(
             pending.map(|p| p.purpose),
             Some(

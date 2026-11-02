@@ -12,6 +12,24 @@ impl Session {
         self.my_user_id == Some(chat_id.0)
     }
 
+    /// A secret chat: its messages stay between the two devices, so TDLib
+    /// offers no reactions, forwards, edits, pins, links or reports there
+    /// and a delete always reaches both sides.
+    pub fn is_secret_chat(&self, chat_id: ChatId) -> bool {
+        self.chats.get(&chat_id.0).is_some_and(|chat| {
+            matches!(
+                chat.kind,
+                crate::telegram::envelope::ChatKind::Secret { .. }
+            )
+        })
+    }
+
+    /// `message` may get a reaction: it is sent, and its chat has them
+    /// (TDLib `get_dialog_active_reactions` is empty for a secret chat).
+    pub fn can_react_to(&self, message: &HistoryMessage) -> bool {
+        message.can_react() && !self.is_secret_chat(message.chat_id)
+    }
+
     /// Who wrote a chat's last message, for group previews ("Dad: hi",
     /// "You: hi"), as Telegram Desktop shows them. `None` for private
     /// chats and channels, which show the text alone.

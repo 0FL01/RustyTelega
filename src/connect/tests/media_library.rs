@@ -469,3 +469,80 @@ fn closing_the_menu_resets_the_options_and_ignores_the_late_answer() {
         crate::state::MessageReactionsState::Idle
     );
 }
+
+fn chat_with_message(chat_type: &str) -> Harness {
+    let mut h = Harness::ready();
+    h.ingest(&format!(
+        r#"{{"@type":"updateNewChat","chat":{{"id":7,"title":"Alice","type":{chat_type},"unread_count":0}}}}"#
+    ));
+    h.ingest(r#"{"@type":"updateChatPosition","chat_id":7,"position":{"@type":"chatPosition","list":{"@type":"chatListMain"},"order":"9","is_pinned":false}}"#);
+    h.ingest(r#"{"@type":"updateNewMessage","message":{"@type":"message","id":50,"chat_id":7,"is_outgoing":false,"date":1700000000,"content":{"@type":"messageText","text":{"@type":"formattedText","text":"hi","entities":[]}}}}"#);
+    h
+}
+
+const SECRET_CHAT: &str = r#"{"@type":"chatTypeSecret","secret_chat_id":9,"user_id":7}"#;
+const PRIVATE_CHAT: &str = r#"{"@type":"chatTypePrivate","user_id":7}"#;
+
+fn shows_reaction(h: &Harness, emoji: &str) -> bool {
+    let message = &h.driver.session.histories[&7].messages[&50];
+    message.chosen_reaction(&ReactionChoice::Emoji(emoji.into()))
+}
+
+#[test]
+fn a_secret_chat_never_waits_for_reactions_it_cannot_have() {
+    let mut h = chat_with_message(SECRET_CHAT);
+    let asked = h
+        .driver
+        .fetch_message_reactions(ChatId(7), MessageId(50))
+        .unwrap();
+    assert!(asked.is_none());
+    assert!(h.sent("getMessageAvailableReactions").is_empty());
+    let state = &h.driver.session.stickers.message_reaction_options;
+    assert!(!state.is_loading_for(ChatId(7), MessageId(50)));
+}
+
+#[test]
+fn a_secret_chat_refuses_a_reaction_before_it_shows_on_the_bubble() {
+    let mut h = chat_with_message(SECRET_CHAT);
+    let choice = ReactionChoice::Emoji("👍".into());
+    assert!(
+        h.driver
+            .toggle_reaction_choice(ChatId(7), MessageId(50), &choice)
+            .is_err()
+    );
+    assert!(
+        h.driver
+            .toggle_message_reaction(ChatId(7), MessageId(50), "👍")
+            .is_err()
+    );
+    assert!(h.sent("addMessageReaction").is_empty());
+    assert!(!shows_reaction(&h, "👍"));
+}
+
+#[test]
+fn a_reaction_telegram_refuses_leaves_the_bubble() {
+    let mut h = chat_with_message(PRIVATE_CHAT);
+    let choice = ReactionChoice::Emoji("👍".into());
+    let extra = h
+        .driver
+        .toggle_reaction_choice(ChatId(7), MessageId(50), &choice)
+        .unwrap();
+    assert!(shows_reaction(&h, "👍"));
+    h.ingest(&format!(
+        r#"{{"@type":"error","@extra":"{}","code":400,"message":"The reaction isn't available for the message"}}"#,
+        extra.0
+    ));
+    assert!(!shows_reaction(&h, "👍"));
+}
+
+#[test]
+fn an_accepted_reaction_stays_on_the_bubble() {
+    let mut h = chat_with_message(PRIVATE_CHAT);
+    let choice = ReactionChoice::Emoji("👍".into());
+    let extra = h
+        .driver
+        .toggle_reaction_choice(ChatId(7), MessageId(50), &choice)
+        .unwrap();
+    h.ingest(&format!(r#"{{"@type":"ok","@extra":"{}"}}"#, extra.0));
+    assert!(shows_reaction(&h, "👍"));
+}

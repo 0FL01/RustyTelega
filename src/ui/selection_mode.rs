@@ -452,7 +452,10 @@ impl QuillApp {
         let Some(session) = self.session() else {
             return false;
         };
-        if draft.from_chat_id != chat_id || session.is_saved_messages(chat_id) {
+        if draft.from_chat_id != chat_id
+            || session.is_saved_messages(chat_id)
+            || session.is_secret_chat(chat_id)
+        {
             return false;
         }
         let Some(history) = session.histories.get(&chat_id.0) else {
@@ -560,9 +563,10 @@ impl QuillApp {
         let Some(session) = self.session() else {
             return;
         };
+        // A secret chat always deletes for both, so there is nothing to choose.
         let revoke_label =
-            offer_revoke.then(
-                || match session.chats.get(&chat_id.0).map(|chat| &chat.kind) {
+            (offer_revoke && !session.is_secret_chat(chat_id)).then(|| {
+                match session.chats.get(&chat_id.0).map(|chat| &chat.kind) {
                     Some(quill::telegram::envelope::ChatKind::Private { user_id }) => session
                         .user(user_id.0)
                         .map(|user| {
@@ -573,8 +577,8 @@ impl QuillApp {
                         })
                         .unwrap_or_else(|| tr(keys::Q_CHAT_DELETE_FOR_EVERYONE).into()),
                     _ => tr(keys::Q_CHAT_DELETE_FOR_EVERYONE).into(),
-                },
-            );
+                }
+            });
         let question = if ids.len() == 1 {
             tr(keys::SELECTED_DELETE_SURE_THIS).to_string()
         } else {
@@ -675,7 +679,11 @@ impl QuillApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let label = confirm.can_revoke.then(|| {
+        // A secret chat always deletes for both, so there is nothing to choose.
+        let secret = self
+            .session()
+            .is_some_and(|s| s.is_secret_chat(confirm.chat_id));
+        let label = (confirm.can_revoke && !secret).then(|| {
             let session = self.session();
             match session
                 .and_then(|s| s.chats.get(&confirm.chat_id.0))

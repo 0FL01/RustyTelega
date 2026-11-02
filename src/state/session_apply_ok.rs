@@ -6,9 +6,10 @@ impl Session {
     pub(crate) fn apply_ok(
         &mut self,
         pending: Option<&PendingRequest>,
-        _extra: Option<RequestId>,
+        extra: Option<RequestId>,
         _seq: u64,
     ) {
+        self.settle_own_reaction(extra, false);
         if let Some(pending) = pending
             && let RequestPurpose::Bots(BotsPurpose::StopPendingMessage { topic_id, draft_id }) =
                 pending.purpose

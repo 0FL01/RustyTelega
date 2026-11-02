@@ -118,6 +118,9 @@ impl<S: JsonSender> ConnectDriver<S> {
         if !self.chats_path_active() {
             return Err(ConnectSendError::InvalidRequest);
         }
+        if self.session.is_secret_chat(chat_id) {
+            return Ok(None);
+        }
         let _ = self.ensure_earn_app_config();
         if self
             .session
@@ -260,7 +263,7 @@ impl<S: JsonSender> ConnectDriver<S> {
         else {
             return Err(ConnectSendError::InvalidRequest);
         };
-        if !message.can_react() {
+        if !self.session.can_react_to(message) {
             return Err(ConnectSendError::InvalidRequest);
         }
         let reactions = message
@@ -287,7 +290,8 @@ impl<S: JsonSender> ConnectDriver<S> {
             extra, chat_id, message_id, value, !chosen,
         )) {
             Ok(()) => {
-                self.session.set_own_reaction(
+                self.session.set_own_reaction_for(
+                    extra,
                     chat_id,
                     message_id,
                     &choice.reaction_type(),

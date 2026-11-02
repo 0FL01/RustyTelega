@@ -85,6 +85,7 @@ impl QuillApp {
         // A press on a selected row never selects a range (`PrepareDrag`); when
         // the selection cannot be forwarded the drag simply does nothing.
         let forward = click_toggles
+            && self.selection_forwardable(chat)
             && self
                 .share
                 .pending_forward

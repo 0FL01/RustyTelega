@@ -134,7 +134,10 @@ impl QuillApp {
             return;
         };
         let (chat_id, message_id) = (item.chat_id, item.message_id);
-        if self.viewer_is_timed() || self.refuse_protected_copy(chat_id, cx) {
+        if self.viewer_is_timed()
+            || !self.selection_forwardable(chat_id)
+            || self.refuse_protected_copy(chat_id, cx)
+        {
             return;
         }
         // Close the overlay first so the forward picker is visible.

@@ -310,6 +310,45 @@ impl Session {
         });
     }
 
+    /// [`Self::set_own_reaction`] for the request `extra`, undone if TDLib
+    /// refuses it: no answer but `updateMessageInteractionInfo` would ever
+    /// take the reaction off the bubble again.
+    pub(crate) fn set_own_reaction_for(
+        &mut self,
+        extra: RequestId,
+        chat_id: ChatId,
+        message_id: MessageId,
+        reaction: &ReactionType,
+        add: bool,
+    ) {
+        if let Some(message) = self
+            .histories
+            .get(&chat_id.0)
+            .and_then(|history| history.messages.get(&message_id.0))
+        {
+            let before = message.interaction_info.clone();
+            self.messages
+                .reaction_undo
+                .insert(extra, (chat_id, message_id, before));
+        }
+        self.set_own_reaction(chat_id, message_id, reaction, add);
+    }
+
+    /// TDLib answered a reaction request: on a refusal the bubble goes back
+    /// to what it showed.
+    pub(crate) fn settle_own_reaction(&mut self, extra: Option<RequestId>, refused: bool) {
+        let Some((chat_id, message_id, before)) =
+            extra.and_then(|extra| self.messages.reaction_undo.remove(&extra))
+        else {
+            return;
+        };
+        if refused {
+            self.edit_loaded_message(chat_id, message_id, |message| {
+                message.interaction_info = before.clone();
+            });
+        }
+    }
+
     /// The Premium feature to show instead of reacting with `choice`, or
     /// `None` when the reaction may be sent (tdesktop
     /// `Window::ShowReactPremiumError`). A reaction already on the message

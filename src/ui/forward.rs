@@ -6,6 +6,7 @@ use super::*;
 use crate::ui::status_note::StatusNote;
 use gpui_kit::component::button::*;
 use gpui_kit::component::*;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use quill::composer::{ForwardDraft, cancel_forward_draft};
 use quill::diagnostics::{DiagnosticSink, MemorySink};
@@ -122,8 +123,17 @@ impl QuillApp {
         cx.notify();
     }
 
+    /// The selection in `chat_id` may leave it: nothing leaves a secret chat
+    /// (TDLib `can_forward_message`).
+    pub(super) fn selection_forwardable(&self, chat_id: ChatId) -> bool {
+        !self.session().is_some_and(|s| s.is_secret_chat(chat_id))
+    }
+
     pub(super) fn open_forward_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.forward_draft().is_none() {
+        let Some(draft) = self.forward_draft() else {
+            return;
+        };
+        if !self.selection_forwardable(draft.from_chat_id) {
             return;
         }
         self.share.forward_picker_open = true;
@@ -284,13 +294,15 @@ impl QuillApp {
                                 this.confirm_delete_selection(window, cx);
                             })),
                     )
-                    .child(
-                        Button::new("open-forward-picker")
-                            .label(tr(keys::CONTEXT_FORWARD_MSG))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_forward_picker(window, cx);
-                            })),
-                    ),
+                    .when(self.selection_forwardable(draft.from_chat_id), |this| {
+                        this.child(
+                            Button::new("open-forward-picker")
+                                .label(tr(keys::CONTEXT_FORWARD_MSG))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_forward_picker(window, cx);
+                                })),
+                        )
+                    }),
             )
     }
 }

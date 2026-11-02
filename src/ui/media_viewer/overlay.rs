@@ -97,6 +97,12 @@ impl QuillApp {
                 || self.viewer.state.current().zip(self.session()).is_some_and(
                     |(item, session)| session.chat_has_protected_content(item.chat_id),
                 );
+        let can_forward = !protected
+            && self
+                .viewer
+                .state
+                .current()
+                .is_some_and(|item| self.selection_forwardable(item.chat_id));
         let profile_facts = self.profile_photo_facts();
         let can_delete = match &profile_facts {
             Some(facts) => facts.actions.delete.is_some(),
@@ -301,6 +307,7 @@ impl QuillApp {
                 let menu_view = view;
                 let is_photo = item.kind.is_picture();
                 let menu_protected = protected;
+                let menu_can_forward = can_forward;
                 let menu_can_delete = can_delete;
                 let menu_profile = profile_view;
                 let menu_set_main = can_set_main;
@@ -308,8 +315,8 @@ impl QuillApp {
                 let menu_playable = item.kind.is_playable();
                 let menu_chat_source = self.viewer.state.source() == ViewerSource::Chat;
                 let menu_rotate_video = self.viewer_video_rotatable();
-                let menu_share_at: Option<String> = (self.viewer_can_share_at_time() && !protected)
-                    .then(|| {
+                let menu_share_at: Option<String> =
+                    (self.viewer_can_share_at_time() && can_forward).then(|| {
                         tr_with(
                             keys::MEDIAVIEW_SHARE_AT_TIME,
                             &[(
@@ -418,7 +425,7 @@ impl QuillApp {
                                 |this, _, cx| this.report_viewer_profile_photo(cx),
                             ));
                         }
-                        if !menu_protected && !menu_profile {
+                        if menu_can_forward && !menu_profile {
                             menu = menu.item(item(tr(keys::Q_AV_FORWARD), |this, window, cx| {
                                 this.share_viewer_media(window, cx)
                             }));
@@ -503,6 +510,7 @@ impl QuillApp {
                 kind_label,
                 ttl,
                 protected,
+                can_forward,
                 can_delete,
                 can_set_main,
                 can_report,

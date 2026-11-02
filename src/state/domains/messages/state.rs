@@ -11,6 +11,16 @@ pub struct MessagesState {
     /// What the open message context menu may offer (`messageProperties`).
     pub message_menu_actions:
         Option<(ChatId, MessageId, crate::telegram::envelope::MessageActions)>,
+    /// The chips under a message before a reaction request changed them,
+    /// put back if TDLib refuses it.
+    pub reaction_undo: std::collections::HashMap<
+        RequestId,
+        (
+            ChatId,
+            MessageId,
+            Option<crate::telegram::envelope::MessageInteractionInfo>,
+        ),
+    >,
     /// What the open poll-option menu may offer (`pollOptionProperties`).
     pub poll_option_menu: Option<PollOptionMenu>,
     /// The message menu's Report flow (`reportChat` with message ids).
@@ -181,6 +191,7 @@ impl MessagesState {
             mention_search: None,
             rows_on_screen: None,
             message_menu_actions: None,
+            reaction_undo: Default::default(),
             poll_option_menu: None,
             message_report: None,
             message_audience: None,
