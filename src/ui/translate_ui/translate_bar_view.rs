@@ -466,6 +466,7 @@ impl QuillApp {
                 )
                 .child(control)
         };
+        let skip_shown = prefs.show_button || prefs.translate_chats;
         let show = switch_row(
             tr(keys::TRANSLATE_SETTINGS_SHOW),
             tr(keys::TRANSLATE_SETTINGS_ABOUT),
@@ -476,6 +477,16 @@ impl QuillApp {
                     this.set_translate_prefs(cx, |p| p.show_button = on);
                 }))
                 .into_any_element(),
+        );
+        let show = self.setting_spot(
+            &["language.translate_button"],
+            self.setting_stand_in(
+                !skip_shown,
+                &["language.do_not_translate"],
+                show.into_any_element(),
+                cx,
+            ),
+            cx,
         );
         let chats = switch_row(
             tr(keys::TRANSLATE_SETTINGS_CHAT),
@@ -500,6 +511,7 @@ impl QuillApp {
                 }))
                 .into_any_element(),
         );
+        let chats = self.setting_spot(&["language.translate_chats"], chats.into_any_element(), cx);
         let skip_row = div()
             .flex()
             .items_center()
@@ -528,8 +540,12 @@ impl QuillApp {
             )
             .child(show)
             .child(chats)
-            .when(prefs.show_button || prefs.translate_chats, |column| {
-                column.child(skip_row)
+            .when(skip_shown, |column| {
+                column.child(self.setting_spot(
+                    &["language.do_not_translate"],
+                    skip_row.into_any_element(),
+                    cx,
+                ))
             })
             .into_any_element()
     }

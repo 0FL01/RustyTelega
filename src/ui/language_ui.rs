@@ -490,28 +490,33 @@ impl QuillApp {
                     .h(px(40.)),
             )
             .child(
-                div()
-                    .id("language-rows")
-                    .flex()
-                    .flex_col()
-                    .children(recent_rows)
-                    .when(has_recent, |col| {
-                        col.child(div().my_1().h(px(1.)).bg(border))
-                    })
-                    .children(official_rows)
-                    .when(loading, |col| {
-                        col.child(gpui_kit::component::spinner::Spinner::new().small())
-                    })
-                    .when(empty, |col| {
-                        col.child(
-                            div()
-                                .px_3()
-                                .py_2()
-                                .text_sm()
-                                .text_color(muted)
-                                .child(tr(keys::LANGUAGES_NONE)),
-                        )
-                    }),
+                self.setting_spot(
+                    &["language.interface_language"],
+                    div()
+                        .id("language-rows")
+                        .flex()
+                        .flex_col()
+                        .children(recent_rows)
+                        .when(has_recent, |col| {
+                            col.child(div().my_1().h(px(1.)).bg(border))
+                        })
+                        .children(official_rows)
+                        .when(loading, |col| {
+                            col.child(gpui_kit::component::spinner::Spinner::new().small())
+                        })
+                        .when(empty, |col| {
+                            col.child(
+                                div()
+                                    .px_3()
+                                    .py_2()
+                                    .text_sm()
+                                    .text_color(muted)
+                                    .child(tr(keys::LANGUAGES_NONE)),
+                            )
+                        })
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .into_any_element()
     }
