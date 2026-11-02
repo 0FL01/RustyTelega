@@ -548,6 +548,46 @@ fn a_clip_seeked_while_nobody_paints_ends_when_its_time_runs_out() {
 }
 
 #[test]
+fn a_silent_clip_seeked_while_nobody_paints_ends_when_its_time_runs_out() {
+    let mut rig = Rig::open(Shape::clip(2.0, 0.0));
+    let t0 = rig.start();
+    rig.player.seek(1.0);
+    let mut now = t0;
+    let mut play = |rig: &mut Rig, secs: f64| {
+        for _ in 0..(secs / FRAME_SECS).round() as usize {
+            rig.settle_at(now);
+            rig.player.update_ended(now);
+            now += Duration::from_secs_f64(FRAME_SECS);
+        }
+        now
+    };
+    let halfway = play(&mut rig, 0.5);
+    assert!(!rig.player.ended, "still playing at 1.5 s");
+    let position = rig.player.position_at(halfway);
+    assert!((position - 1.5).abs() <= 2.0 * FRAME_SECS, "{position}");
+    play(&mut rig, 0.6);
+    assert!(
+        rig.player.ended,
+        "{} pictures queued at {}",
+        rig.pictures_queued(),
+        rig.player.position_at(now),
+    );
+}
+
+#[test]
+fn a_paused_silent_clip_seeked_while_nobody_paints_stays_where_it_was_put() {
+    let mut rig = Rig::open(Shape::clip(2.0, 0.0));
+    let t0 = rig.start();
+    rig.player.pause();
+    rig.player.seek(1.0);
+    rig.settle_at(t0);
+    let later = t0 + Duration::from_secs(5);
+    rig.player.update_ended(later);
+    assert!(!rig.player.ended);
+    assert_eq!(rig.player.position_at(later), 1.0);
+}
+
+#[test]
 fn a_silent_clip_nobody_paints_keeps_its_picture_current() {
     let mut rig = Rig::open(Shape::clip(10.0, 0.0));
     let t0 = rig.start();
