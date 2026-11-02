@@ -16,6 +16,9 @@ pub struct MediaState {
     /// The search for downloads paused by the disk before this TDLib
     /// instance went out (once per session).
     pub disk_resume_searched: bool,
+    /// The saved pauses that search asks about. One saved after it went out
+    /// is not part of its answer.
+    pub disk_search_keys: std::collections::BTreeSet<(i64, i64)>,
     /// Downloads that search found, waiting for their resume.
     pub disk_resume_due: Vec<i32>,
     /// `settings.data_storage.disk_paused` changed and needs saving.
@@ -71,6 +74,7 @@ impl MediaState {
             disk_room: None,
             disk_paused: HashSet::new(),
             disk_resume_searched: false,
+            disk_search_keys: Default::default(),
             disk_resume_due: Vec::new(),
             disk_paused_saved_changed: false,
             downloads: DownloadIntents::default(),

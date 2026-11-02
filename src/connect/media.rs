@@ -403,7 +403,7 @@ impl<S: JsonSender> ConnectDriver<S> {
             for id in paused {
                 self.forget_disk_pause(id);
                 if self.session.media.downloads.is_paused(id) {
-                    self.resume_download(FileId(id))?;
+                    self.toggle_download_paused(FileId(id), false)?;
                 }
             }
             let searched = self.search_disk_paused_elsewhere();
@@ -432,7 +432,7 @@ impl<S: JsonSender> ConnectDriver<S> {
                 repaused += 1;
             }
             self.save_disk_pause(id);
-            self.pause_download(FileId(id))?;
+            self.toggle_download_paused(FileId(id), true)?;
         }
         self.save_disk_pauses_if_changed();
         Ok(repaused)
@@ -454,8 +454,13 @@ impl<S: JsonSender> ConnectDriver<S> {
     /// Pause a user-initiated (listed) download (`toggleDownloadIsPaused`).
     /// The pause state itself arrives on `updateFileDownload` — this only
     /// sends the request. Returns `Ok(false)` when the file isn't a
-    /// tracked user download.
+    /// tracked user download. A pause the user makes is theirs to undo: the
+    /// disk recovering no longer resumes it. A resume leaves the disk's note
+    /// in place, which says why the download stops again if it does not fit.
     pub fn pause_download(&mut self, file_id: FileId) -> Result<bool, ConnectSendError> {
+        self.session.media.disk_paused.remove(&file_id.0);
+        self.forget_disk_pause(file_id.0);
+        self.save_disk_pauses_if_changed();
         self.toggle_download_paused(file_id, true)
     }
 
@@ -464,7 +469,7 @@ impl<S: JsonSender> ConnectDriver<S> {
         self.toggle_download_paused(file_id, false)
     }
 
-    fn toggle_download_paused(
+    pub(super) fn toggle_download_paused(
         &mut self,
         file_id: FileId,
         is_paused: bool,

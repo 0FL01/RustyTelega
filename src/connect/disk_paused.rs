@@ -40,6 +40,7 @@ impl<S: JsonSender> ConnectDriver<S> {
             return Ok(());
         }
         media.disk_resume_searched = true;
+        media.disk_search_keys = self.session.settings.data_storage.disk_paused.clone();
         let extra = self.session.request(
             RequestPurpose::Media(MediaPurpose::SearchDiskPausedDownloads),
             None,
@@ -60,7 +61,7 @@ impl<S: JsonSender> ConnectDriver<S> {
     pub(crate) fn resume_disk_paused_found(&mut self) -> Result<(), ConnectSendError> {
         let due = std::mem::take(&mut self.session.media.disk_resume_due);
         for id in due {
-            self.resume_download(FileId(id))?;
+            self.toggle_download_paused(FileId(id), false)?;
         }
         self.save_disk_pauses_if_changed();
         Ok(())

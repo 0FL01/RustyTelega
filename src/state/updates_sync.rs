@@ -302,21 +302,35 @@ impl Session {
     /// The answer to the search for downloads a low or full disk paused
     /// before this TDLib instance: the ones still paused whose message was
     /// saved come back as tracked downloads, due for a resume
-    /// (`ConnectDriver::resume_disk_paused_found`). Saved messages the list
-    /// no longer has are dropped.
+    /// (`ConnectDriver::resume_disk_paused_found`), or held for the next
+    /// healthy reading if the disk went low again meanwhile. Saved messages
+    /// the list no longer has are dropped; a pause saved or undone since the
+    /// search went out is left as it stands.
     pub(crate) fn apply_disk_paused_found(&mut self, found: Vec<ParsedFileDownload>) {
-        let saved = std::mem::take(&mut self.settings.data_storage.disk_paused);
+        let asked = std::mem::take(&mut self.media.disk_search_keys);
+        let low = self.media.disk_room.is_some();
+        let mut held = std::collections::BTreeSet::new();
         for download in found {
-            let key = download.chat_id.zip(download.message_id);
-            let due = download.is_paused
-                && download.complete_date == 0
-                && key.is_some_and(|(chat, message)| saved.contains(&(chat.0, message)));
-            if due {
+            let key = download
+                .chat_id
+                .zip(download.message_id)
+                .map(|(chat, message)| (chat.0, message));
+            let saved = &self.settings.data_storage.disk_paused;
+            let wanted = key.filter(|key| asked.contains(key) && saved.contains(key));
+            if let Some(key) = wanted.filter(|_| download.is_paused && download.complete_date == 0)
+            {
                 let id = download.file_id;
                 self.apply_download_added(download);
-                self.media.disk_resume_due.push(id);
+                if low {
+                    held.insert(key);
+                    self.media.disk_paused.insert(id);
+                } else {
+                    self.media.disk_resume_due.push(id);
+                }
             }
         }
+        let saved = &mut self.settings.data_storage.disk_paused;
+        saved.retain(|key| !asked.contains(key) || held.contains(key));
         self.media.disk_paused_saved_changed = true;
     }
 

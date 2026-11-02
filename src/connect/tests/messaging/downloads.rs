@@ -827,3 +827,89 @@ fn downloads_a_low_disk_paused_resume_in_the_next_tdlib_instance() {
     assert_eq!(recorder.snapshot().len(), base + 2, "searched once");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_download_the_user_paused_stays_paused_when_the_disk_recovers() {
+    const MIB: u64 = 1 << 20;
+    let store = MemorySecretStore::new();
+    let (dir, prepared) = prepared_tmp(&store);
+    let sink: Arc<dyn DiagnosticSink> = Arc::new(MemorySink::new());
+    let recorder = Arc::new(RecordingSender::new());
+    let session = Session::new(AccountKey::primary(), sink.clone());
+    let mut driver = ConnectDriver::new(session, recorder.clone(), test_credentials(), prepared);
+    let seq = AtomicU64::new(0);
+    let ingest = |driver: &mut ConnectDriver<Arc<RecordingSender>>, json: &str| {
+        driver
+            .ingest(copy_and_parse(json, &seq, &sink).unwrap())
+            .unwrap();
+    };
+    ingest(
+        &mut driver,
+        r#"{"@type":"updateAuthorizationState","authorization_state":{"@type":"authorizationStateReady"}}"#,
+    );
+    driver
+        .download_user_file(FileId(51), Some((ChatId(7), 99)))
+        .unwrap();
+    ingest(&mut driver, &file_update(51, 900 * MIB as i64, 0));
+    driver
+        .note_disk(DiskState::Low, Some(FLOORS.close + 500 * MIB), &FLOORS)
+        .unwrap();
+    ingest(&mut driver, &paused_update(51, true));
+    driver.resume_download(FileId(51)).unwrap();
+    ingest(&mut driver, &paused_update(51, false));
+    driver.pause_download(FileId(51)).unwrap();
+    ingest(&mut driver, &paused_update(51, true));
+    let base = recorder.snapshot().len();
+    driver
+        .note_disk(DiskState::Healthy, Some(FLOORS.warn_clear), &FLOORS)
+        .unwrap();
+    let sent = recorder.snapshot();
+    let resumed = sent[base..].iter().any(|json| {
+        let v: Value = serde_json::from_str(json).unwrap();
+        v["@type"] == "toggleDownloadIsPaused" && v["file_id"] == 51 && v["is_paused"] == false
+    });
+    assert!(!resumed, "the user's pause was overridden: {sent:?}");
+    assert!(driver.session.settings.data_storage.disk_paused.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn paused_found(file_id: i32, message: i64) -> crate::telegram::envelope::ParsedFileDownload {
+    crate::telegram::envelope::ParsedFileDownload {
+        file_id,
+        add_date: 0,
+        complete_date: 0,
+        is_paused: true,
+        name: None,
+        files: Vec::new(),
+        chat_id: Some(ChatId(7)),
+        message_id: Some(message),
+    }
+}
+
+#[test]
+fn a_pause_saved_while_the_saved_pause_search_runs_is_kept() {
+    let sink: Arc<dyn DiagnosticSink> = Arc::new(MemorySink::new());
+    let mut session = Session::new(AccountKey::primary(), sink.clone());
+    session.settings.data_storage.disk_paused.insert((7, 99));
+    session.settings.data_storage.disk_paused.insert((7, 100));
+    session.media.disk_search_keys.insert((7, 99));
+    session.media.disk_search_keys.insert((7, 100));
+    session.settings.data_storage.disk_paused.insert((7, 101));
+    session.apply_disk_paused_found(vec![paused_found(77, 99), paused_found(79, 101)]);
+    assert_eq!(session.media.disk_resume_due, [77]);
+    let saved = &session.settings.data_storage.disk_paused;
+    assert_eq!(saved.iter().copied().collect::<Vec<_>>(), [(7, 101)]);
+}
+
+#[test]
+fn a_saved_pause_found_on_a_low_disk_waits_for_a_healthy_one() {
+    let sink: Arc<dyn DiagnosticSink> = Arc::new(MemorySink::new());
+    let mut session = Session::new(AccountKey::primary(), sink);
+    session.media.disk_room = Some(1);
+    session.settings.data_storage.disk_paused.insert((7, 99));
+    session.media.disk_search_keys.insert((7, 99));
+    session.apply_disk_paused_found(vec![paused_found(77, 99)]);
+    assert!(session.media.disk_resume_due.is_empty());
+    assert!(session.media.disk_paused.contains(&77));
+    assert!(session.settings.data_storage.disk_paused.contains(&(7, 99)));
+}
