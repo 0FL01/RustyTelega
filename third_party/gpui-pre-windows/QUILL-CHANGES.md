@@ -526,5 +526,6 @@ The Quill project added two Windows runner tests in 2026 that need no GPU:
 `timer_thread::tests` checks that twenty 1 ms waits on the timer thread's
 waitable timer end well inside twenty 15.6 ms system ticks, and
 `file_picker_tests` checks that a shell item for a file with a non-ASCII name
-gives back its exact path. CI runs them with `cargo test -p gpui-pre-windows
---lib --locked -- timer_thread::tests file_picker_tests`.
+gives back its exact path. CI runs them with `cargo test -p gpui-pre-windows -p quill
+--lib --features quill/demo-capture --locked -- timer_thread::tests
+file_picker_tests`.

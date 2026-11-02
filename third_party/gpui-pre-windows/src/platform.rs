@@ -2362,7 +2362,10 @@ mod tests {
 
 #[cfg(test)]
 mod file_picker_tests {
-    use super::*;
+    use super::file_system_path;
+    use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
+    use windows::Win32::UI::Shell::{IShellItem, SHCreateItemFromParsingName};
+    use windows::core::HSTRING;
 
     /// What a picked item hands back is the file's exact path, with names
     /// outside ASCII and outside the BMP intact.

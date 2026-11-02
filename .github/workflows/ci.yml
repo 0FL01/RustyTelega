@@ -291,7 +291,9 @@ jobs:
           cargo test --no-default-features --locked --lib --
           export::copy::tests::windows_ settings::tests::windows_ platform::tests::windows_
       - name: tests (vendored GPUI timer and file picker)
-        run: cargo test -p gpui-pre-windows --lib --locked -- timer_thread::tests file_picker_tests
+        run: >-
+          cargo test -p gpui-pre-windows -p quill --lib --features quill/demo-capture --locked --
+          timer_thread::tests file_picker_tests
 
   # Launch smoke on Windows (docs/decisions/ci-launch-smoke.md): the real window
   # on a hosted runner without a GPU (WARP). Pushes only, not a required check.
