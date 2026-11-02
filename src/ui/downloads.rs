@@ -11,6 +11,7 @@ use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use quill::ids::{ChatId, FileId};
 use quill::lang::{keys, tr, tr_with};
+use quill::platform::OsOpen;
 use std::path::PathBuf;
 
 impl QuillApp {
@@ -96,13 +97,11 @@ impl QuillApp {
             .and_then(|s| s.media.files.get(&file_id.0))
             .and_then(|f| f.usable_path())
             .map(PathBuf::from);
-        self.connection.set_note(match path {
-            Some(path) if quill::platform::reveal_in_file_manager(&path) => {
-                StatusNote::silent(tr(keys::Q_OPS_REVEALED_IN_FILE_MANAGER))
-            }
-            _ => StatusNote::error(tr(keys::Q_OPS_COULD_NOT_REVEAL_THE_FILE)),
-        });
-        cx.notify();
+        let failure = tr(keys::Q_OPS_COULD_NOT_REVEAL_THE_FILE);
+        match path {
+            Some(path) => self.reveal_in_folder_or(&path, failure, cx),
+            None => self.report_failed_open(OsOpen::Answered(false), failure, cx),
+        }
     }
 
     /// Cancel an in-flight download: listed (user-initiated) downloads go
@@ -149,7 +148,12 @@ impl QuillApp {
 
     /// Slice media-downloads-pause: resume a paused user-initiated download.
     pub(super) fn resume_media_download(&mut self, file_id: FileId, cx: &mut Context<Self>) {
-        if let Some(live) = self.live.as_mut() {
+        if let Some(live) = self.live.as_mut()
+            && !live.driver.download_fits_disk(file_id)
+        {
+            self.connection
+                .set_note(StatusNote::silent(tr(keys::Q_DISK_DOWNLOAD_NO_ROOM)));
+        } else if let Some(live) = self.live.as_mut() {
             self.connection
                 .set_note(match live.driver.resume_download(file_id) {
                     Ok(true) => StatusNote::silent(tr(keys::Q_OPS_DOWNLOAD_RESUMED)),

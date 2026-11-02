@@ -16,6 +16,8 @@ const CONNECT_LIMIT: Duration = Duration::from_secs(30);
 const PARTIAL_PREFIX: &str = ".quill-partial-";
 
 const FAILED: &str = "Download failed. Check your connection and retry.";
+/// The UI held the download ([`DownloadProgress::hold`]); never shown.
+pub(super) const HELD: &str = "The update download waits for disk space.";
 const INTERRUPTED: &str = "Download interrupted or disk full. Retry the update.";
 const NOT_SAVED: &str = "Could not save the update. Check disk space and retry.";
 const NO_FILE: &str =
@@ -108,6 +110,9 @@ pub(super) fn fetch(
     size: u64,
     progress: &DownloadProgress,
 ) -> Result<(), &'static str> {
+    if progress.is_held() {
+        return Err(HELD);
+    }
     let mut have = kept_bytes(partial, size);
     progress.set(have);
     if have == size {
@@ -148,6 +153,9 @@ pub(super) fn fetch(
     };
     let copied = io::copy(&mut reader, &mut file);
     let saved = file.sync_all();
+    if progress.is_held() {
+        return Err(HELD);
+    }
     let copied = copied.map_err(|_| INTERRUPTED)?;
     saved.map_err(|_| NOT_SAVED)?;
     match (have + copied).cmp(&size) {
@@ -167,6 +175,9 @@ struct Counted<'a, R> {
 
 impl<R: Read> Read for Counted<'_, R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.progress.is_held() {
+            return Err(io::Error::other(HELD));
+        }
         let read = self.inner.read(buf)?;
         self.progress.add(read as u64);
         Ok(read)

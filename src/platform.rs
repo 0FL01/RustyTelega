@@ -480,15 +480,26 @@ pub mod keychain {
     }
 }
 
-/// The OS's answer to an open: true when the helper started (`open`,
-/// `xdg-open`) or the shell took the target (Windows).
+/// The OS's answer to an open: true when the helper (`open`, `xdg-open`)
+/// exited with success, or the shell took the target (Windows).
 #[must_use]
 pub enum OsOpen {
     Answered(bool),
-    /// Windows calls the shell on a thread of its own, since a cold browser
-    /// or a network path can take seconds. A thread that ended without
-    /// answering cancels the channel: nothing opened.
+    /// The answer comes from another thread: Windows calls the shell there,
+    /// since a cold browser or a network path can take seconds, and on macOS
+    /// and Linux a thread waits for the helper's exit status. A thread that
+    /// ended without answering cancels the channel: nothing opened.
     Pending(futures_channel::oneshot::Receiver<bool>),
+}
+
+impl OsOpen {
+    /// Whether it opened, once the OS has said.
+    pub async fn opened(self) -> bool {
+        match self {
+            Self::Answered(opened) => opened,
+            Self::Pending(answer) => answer.await.unwrap_or(false),
+        }
+    }
 }
 
 /// Open an `http`/`https` URL with the OS (`xdg-open` / `open`). No WebView.
@@ -521,11 +532,40 @@ pub fn mailto_url(address: &str) -> Option<String> {
 }
 
 /// Open the mail client on a new message to `address`.
+#[allow(clippy::disallowed_methods, reason = "the definition of the door")]
 pub fn open_mailto(address: &str) -> OsOpen {
     match mailto_url(address) {
-        Some(url) => os_open(std::ffi::OsStr::new(&url), "open the mail client"),
+        Some(url) => open_mailto_url(&url),
         None => OsOpen::Answered(false),
     }
+}
+
+/// Open the mail client on a `mailto:` URL Quill built (address, subject
+/// and body already percent-encoded). Anything else is refused, like
+/// [`open_external_url`] refuses what is not a web link.
+pub fn open_mailto_url(url: &str) -> OsOpen {
+    let plain = url
+        .chars()
+        .all(|ch| !ch.is_whitespace() && !ch.is_control());
+    if !url.starts_with("mailto:") || !plain {
+        return OsOpen::Answered(false);
+    }
+    os_open(std::ffi::OsStr::new(url), "open the mail client")
+}
+
+/// Open a pane of the system settings: a `x-apple.systempreferences:` URL
+/// on macOS or an `ms-settings:` one on Windows. Anything else is refused.
+pub fn open_system_settings(target: &str) -> OsOpen {
+    let settings = ["x-apple.systempreferences:", "ms-settings:"]
+        .iter()
+        .any(|scheme| target.starts_with(scheme));
+    let plain = target
+        .chars()
+        .all(|ch| !ch.is_whitespace() && !ch.is_control());
+    if !settings || !plain {
+        return OsOpen::Answered(false);
+    }
+    os_open(std::ffi::OsStr::new(target), "open System Settings")
 }
 
 /// Hand a URL or path to the OS default handler: the one door every helper
@@ -534,14 +574,25 @@ pub fn open_mailto(address: &str) -> OsOpen {
 /// for the OS stays with the user, whichever link, button or file the
 /// agent reached. `what` is the verb phrase the refusal names.
 fn os_open(target: &std::ffi::OsStr, what: &str) -> OsOpen {
+    if let Some(answer) = os_gate(what) {
+        return answer;
+    }
+    #[cfg(any(test, feature = "test-support"))]
+    test_launches::note_target(target);
+    os_open_now(target)
+}
+
+/// The answer for a hand-off to the OS that must not go ahead: refused
+/// while the agent injects input, or scripted by a test.
+fn os_gate(what: &str) -> Option<OsOpen> {
     if crate::agent::ui_driver::guard::refuse_outside_if_injecting(what) {
-        return OsOpen::Answered(false);
+        return Some(OsOpen::Answered(false));
     }
     #[cfg(any(test, feature = "test-support"))]
     if let Some(answer) = test_launches::scripted_answer() {
-        return answer;
+        return Some(answer);
     }
-    os_open_now(target)
+    None
 }
 
 /// macOS `open`, Linux `xdg-open` (argv, no shell).
@@ -554,7 +605,7 @@ fn os_open_now(target: &std::ffi::OsStr) -> OsOpen {
     };
     let mut command = std::process::Command::new(program);
     command.arg(target);
-    OsOpen::Answered(os_spawn(command))
+    os_spawn(command)
 }
 
 /// Windows calls `ShellExecuteW` directly: `cmd /C start` would re-parse
@@ -565,7 +616,7 @@ fn os_open_now(target: &std::ffi::OsStr) -> OsOpen {
     open_off_thread(target, shell_execute)
 }
 
-#[cfg(all(windows, not(any(test, feature = "test-support"))))]
+#[cfg(all(windows, any(test, not(feature = "test-support"))))]
 fn shell_execute(target: &std::ffi::OsStr) -> bool {
     use std::os::windows::ffi::OsStrExt;
     use windows::Win32::System::Com::{
@@ -623,24 +674,52 @@ fn os_open_now(_target: &std::ffi::OsStr) -> OsOpen {
     OsOpen::Answered(true)
 }
 
-/// Start a helper program (`open`, `xdg-open`, `explorer`) without a shell.
-#[cfg(not(any(test, feature = "test-support")))]
-fn os_spawn(mut command: std::process::Command) -> bool {
+/// Start a helper program (`open`, `xdg-open`) without a shell. Its exit
+/// status is the answer: xdg-open exits 3 or 4 with no handler, and
+/// `open -R` exits 1 for a file that moved.
+#[cfg(all(unix, not(any(test, feature = "test-support"))))]
+fn os_spawn(mut command: std::process::Command) -> OsOpen {
+    match command.spawn() {
+        Ok(child) => answer_on_exit(child),
+        Err(_) => OsOpen::Answered(false),
+    }
+}
+
+/// `explorer /select,` exits 1 whether it showed the file or not, so on
+/// Windows a helper that started is the answer.
+#[cfg(all(windows, not(any(test, feature = "test-support"))))]
+fn os_spawn(mut command: std::process::Command) -> OsOpen {
     match command.spawn() {
         Ok(child) => {
             crate::child_reap::wait_in_background(child);
-            true
+            OsOpen::Answered(true)
         }
-        Err(_) => false,
+        Err(_) => OsOpen::Answered(false),
+    }
+}
+
+/// Answers once `child` exits, with whether it exited with success. When no
+/// thread can wait for it, the helper did start, so that is the answer.
+#[cfg(unix)]
+#[cfg_attr(all(feature = "test-support", not(test)), allow(dead_code))]
+fn answer_on_exit(mut child: std::process::Child) -> OsOpen {
+    let (answer, answered) = futures_channel::oneshot::channel();
+    let waiter = crate::thread_guard::spawn_guarded("quill-os-open-wait", move || {
+        let success = child.wait().is_ok_and(|status| status.success());
+        let _ = answer.send(success);
+    });
+    match waiter {
+        Ok(_) => OsOpen::Pending(answered),
+        Err(_) => OsOpen::Answered(true),
     }
 }
 
 /// Test builds launch nothing: they count the attempt instead, so a test
 /// can prove that nothing reached the OS ([`os_launch_attempts`]).
 #[cfg(any(test, feature = "test-support"))]
-fn os_spawn(_command: std::process::Command) -> bool {
+fn os_spawn(_command: std::process::Command) -> OsOpen {
     test_launches::note();
-    true
+    OsOpen::Answered(true)
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -651,6 +730,16 @@ mod test_launches {
     thread_local! {
         static LAUNCHES: Cell<usize> = const { Cell::new(0) };
         static NEXT_ANSWER: Cell<Option<OsOpen>> = const { Cell::new(None) };
+        static LAST_TARGET: std::cell::RefCell<Option<String>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn note_target(target: &std::ffi::OsStr) {
+        LAST_TARGET.with(|last| *last.borrow_mut() = Some(target.to_string_lossy().into_owned()));
+    }
+
+    pub(super) fn last_target() -> Option<String> {
+        LAST_TARGET.with(|last| last.borrow().clone())
     }
 
     pub(super) fn script_answer(answer: OsOpen) {
@@ -678,6 +767,12 @@ pub fn os_launch_attempts() -> usize {
     test_launches::count()
 }
 
+/// Test builds only: the last link or file this thread handed to the OS.
+#[cfg(any(test, feature = "test-support"))]
+pub fn os_opened_last() -> Option<String> {
+    test_launches::last_target()
+}
+
 /// The next open on this thread gets `answer`.
 #[cfg(any(test, feature = "test-support"))]
 pub fn script_next_os_open(answer: OsOpen) {
@@ -694,11 +789,20 @@ pub fn open_local_file(path: &std::path::Path) -> OsOpen {
 /// MED3: reveal a file in the file manager — macOS `open -R` (selects the
 /// file in Finder), Windows `explorer /select,`, Linux opens the parent
 /// directory with `xdg-open` (no portable select-file equivalent). Never
-/// while the agent UI driver injects input, like [`os_open`].
-pub fn reveal_in_file_manager(path: &std::path::Path) -> bool {
-    if crate::agent::ui_driver::guard::refuse_outside_if_injecting("reveal a file in its folder") {
-        return false;
+/// while the agent UI driver injects input, like [`os_open`]. A path that
+/// is gone is a failure before any helper runs: explorer exits 1 either
+/// way, and xdg-open on a missing folder only says so in its status.
+pub fn reveal_in_file_manager(path: &std::path::Path) -> OsOpen {
+    if let Some(answer) = os_gate("reveal a file in its folder") {
+        return answer;
     }
+    if !path.exists() {
+        return OsOpen::Answered(false);
+    }
+    reveal_now(path)
+}
+
+fn reveal_now(path: &std::path::Path) -> OsOpen {
     if cfg!(target_os = "macos") {
         let mut command = std::process::Command::new("open");
         command.args(["-R"]).arg(path);
@@ -729,6 +833,7 @@ pub fn reveal_in_file_manager(path: &std::path::Path) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods, reason = "tests of the doors themselves")]
 mod tests {
     use super::*;
     use futures_lite::future::block_on;
@@ -738,6 +843,33 @@ mod tests {
             OsOpen::Pending(answer) => answer,
             OsOpen::Answered(opened) => panic!("answered {opened} on the calling thread"),
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_helper_that_exits_with_an_error_did_not_open() {
+        let run = |code: &str| {
+            let child = std::process::Command::new("sh")
+                .args(["-c", &format!("exit {code}")])
+                .spawn()
+                .unwrap();
+            block_on(answer_on_exit(child).opened())
+        };
+        assert!(!run("3"), "xdg-open: no handler");
+        assert!(!run("1"), "open -R: the file moved");
+        assert!(run("0"));
+    }
+
+    #[test]
+    fn revealing_a_path_that_is_gone_fails_before_any_helper() {
+        let gone = std::env::temp_dir().join("quill-no-such-folder/at/all.txt");
+        let launches = os_launch_attempts();
+        assert!(!block_on(reveal_in_file_manager(&gone).opened()));
+        assert_eq!(os_launch_attempts(), launches, "nothing ran");
+        assert!(block_on(
+            reveal_in_file_manager(&std::env::temp_dir()).opened()
+        ));
+        assert_eq!(os_launch_attempts(), launches + 1);
     }
 
     #[test]
@@ -780,6 +912,18 @@ mod tests {
         assert!(block_on(answer).is_err());
     }
 
+    /// The real `ShellExecuteW` on a file that is not there: it answers
+    /// "not opened" on the opener thread instead of claiming success.
+    #[cfg(windows)]
+    #[test]
+    fn windows_a_failing_shell_execute_answers_not_opened() {
+        let gone = crate::scratch::unique_dir("quill-shell-execute").join("missing-file.pdf");
+        assert!(!gone.exists());
+        assert!(!shell_execute(gone.as_os_str()));
+        let answer = pending(open_off_thread(gone.as_os_str(), shell_execute));
+        assert_eq!(block_on(answer), Ok(false));
+    }
+
     #[test]
     fn mailto_accepts_plain_addresses_only() {
         assert_eq!(
@@ -802,6 +946,27 @@ mod tests {
         ] {
             assert_eq!(mailto_url(bad), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn a_mail_link_reaches_the_os_only_when_it_is_one() {
+        for bad in [
+            "https://example.com",
+            "mailto:ann@example.com\nbcc:x@y.z",
+            "mailto:ann@example.com?subject=two words",
+            "file:///etc/passwd",
+        ] {
+            let before = os_launch_attempts();
+            assert!(
+                matches!(open_mailto_url(bad), OsOpen::Answered(false)),
+                "{bad}"
+            );
+            assert_eq!(os_launch_attempts(), before, "{bad}");
+        }
+        let before = os_launch_attempts();
+        let url = crate::signin::banned_help_mailto("+1 555", "1.0", "linux");
+        assert!(matches!(open_mailto_url(&url), OsOpen::Answered(true)));
+        assert_eq!(os_launch_attempts(), before + 1);
     }
 
     #[test]

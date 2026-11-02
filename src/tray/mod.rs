@@ -27,7 +27,8 @@
 #![deny(clippy::indexing_slicing)]
 
 use crate::settings::BadgePrefs;
-use crate::state::Session;
+use crate::state::{ChatSummary, Session};
+use crate::telegram::envelope::ChannelMemberStatus;
 
 pub mod badge_cache;
 pub mod monochrome;
@@ -132,7 +133,7 @@ fn forum_topics_extra(session: &Session, prefs: &BadgePrefs, archive: bool) -> u
         .forum_topics
         .keys()
         .filter_map(|chat_id| session.chats.get(chat_id))
-        .filter(|chat| chat.in_archive == archive)
+        .filter(|chat| in_list(chat, archive))
         .filter(|chat| prefs.include_muted || !session.effective_muted(chat))
         .map(|chat| {
             let topics = session.forum_topics_unread(chat.id);
@@ -146,6 +147,16 @@ fn forum_topics_extra(session: &Session, prefs: &BadgePrefs, archive: bool) -> u
             }
         })
         .fold(0u32, u32::saturating_add)
+}
+
+/// Whether `chat` counts toward the main list's (or the archive's) badge.
+/// A chat the user left drops out of both lists but keeps its loaded
+/// topics: it counts in neither.
+fn in_list(chat: &ChatSummary, archive: bool) -> bool {
+    let left = chat.my_member_status == Some(ChannelMemberStatus::Left)
+        && !chat.in_main_list
+        && !chat.in_archive;
+    chat.in_archive == archive && !left
 }
 
 fn list_badge(session: &Session, prefs: &BadgePrefs, archive: bool) -> u32 {
@@ -173,7 +184,7 @@ fn list_badge(session: &Session, prefs: &BadgePrefs, archive: bool) -> u32 {
     session
         .chats
         .values()
-        .filter(|chat| chat.in_archive == archive)
+        .filter(|chat| in_list(chat, archive))
         .filter(|chat| prefs.include_muted || !session.effective_muted(chat))
         .map(|chat| {
             if prefs.count_messages {
@@ -408,6 +419,17 @@ pub fn close_outcome(
         (true, true) => CloseOutcome::Hide,
         (true, false) => CloseOutcome::Minimize,
     }
+}
+
+/// Only the main window goes, as a close does (tdesktop
+/// `MainWindow::hideNoQuit`), so a call, Picture-in-Picture and chat windows
+/// stay on screen.
+pub fn minimize_hides_main_window(
+    run_in_background: bool,
+    tray_available: bool,
+    macos: bool,
+) -> bool {
+    run_in_background && tray_available && macos
 }
 
 /// The "Show tray icon" preference, mirrored here so the 1s tray timer needs

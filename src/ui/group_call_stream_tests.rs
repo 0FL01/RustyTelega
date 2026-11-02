@@ -764,3 +764,23 @@ fn nobody_broadcasting_shows_the_no_stream_text(cx: &mut TestAppContext) {
     assert!(find(call, "group-call-stream-label").is_some(), "the label");
     assert!(find(call, "live-spinner").is_none(), "no spinner");
 }
+
+#[gpui_kit::test]
+fn a_low_disk_shows_its_bar_in_the_voice_chat_window(cx: &mut TestAppContext) {
+    let (app, mut main, mut call) = open_stream(cx, StreamState::NoStream);
+    let bar = |call: &mut VisualTestContext| {
+        call.update(|window, cx| {
+            window.render_frame(cx);
+            window.try_find("disk-low-storage").is_some()
+        })
+    };
+    assert!(!bar(&mut call));
+    app.update(&mut main, |app, cx| {
+        app.apply_disk_reading(Some(quill::disk_guard::FLOORS.warn - 1), cx);
+    });
+    frames(&mut call);
+    assert!(
+        bar(&mut call),
+        "the warning is in the voice chat window too"
+    );
+}

@@ -173,3 +173,31 @@ fn a_new_release_drops_the_old_partial_and_keeps_its_own() {
     assert!(keep.exists());
     assert!(!old.exists());
 }
+
+#[test]
+fn a_held_download_stops_at_its_next_read_and_keeps_what_it_has() {
+    let progress = DownloadProgress::default();
+    let body = package();
+    let mut reader = super::Counted {
+        inner: &body[..],
+        progress: &progress,
+    };
+    let mut buf = [0u8; 100];
+    assert_eq!(std::io::Read::read(&mut reader, &mut buf).unwrap(), 100);
+    progress.hold();
+    assert!(std::io::Read::read(&mut reader, &mut buf).is_err());
+    assert_eq!(progress.bytes(), 100);
+
+    let partial = folder().join("package");
+    assert_eq!(
+        fetch(
+            &agent(false, 0),
+            "http://127.0.0.1:9/",
+            &partial,
+            SIZE,
+            &progress
+        ),
+        Err(super::HELD),
+        "a held download asks for nothing"
+    );
+}

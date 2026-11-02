@@ -1225,6 +1225,16 @@ impl Frame {
             .into_inner()
     }
 
+    fn hitbox_bounds<'a>(
+        &'a self,
+        hit_test: &'a HitTest,
+    ) -> impl Iterator<Item = Bounds<Pixels>> + 'a {
+        self.hitboxes
+            .iter()
+            .filter(|hitbox| hit_test.ids.contains(&hitbox.id))
+            .map(|hitbox| hitbox.bounds)
+    }
+
     pub(crate) fn hit_test(&self, position: Point<Pixels>) -> HitTest {
         let mut set_hover_hitbox_count = false;
         let mut hit_test = HitTest::default();
@@ -1275,11 +1285,41 @@ enum InputModality {
     Touch,
 }
 
+/// Quill: what a closed window marked with [`Window::keep_when_closed`]
+/// leaves behind, for the window that replaces it ([`Window::take_over`]).
+/// Everything else in a window belongs to the platform surface or one frame.
+pub struct KeptWindow {
+    id: WindowId,
+    root: Option<AnyView>,
+    focus: Option<FocusId>,
+    element_states: FxHashMap<(GlobalElementId, TypeId), ElementStateBox>,
+    next_frame_callbacks: Vec<FrameCallback>,
+    display_observers: SubscriberSet<(), AnyObserver>,
+    focus_listeners: SubscriberSet<(), AnyWindowFocusListener>,
+    focus_lost_listeners: SubscriberSet<(), AnyObserver>,
+    bounds_observers: SubscriberSet<(), AnyObserver>,
+    appearance_observers: SubscriberSet<(), AnyObserver>,
+    button_layout_observers: SubscriberSet<(), AnyObserver>,
+    visibility_observers:
+        SubscriberSet<(), Box<dyn FnMut(WindowVisibility, &mut Window, &mut App) -> bool>>,
+    activation_observers: SubscriberSet<(), AnyObserver>,
+    pending_input_observers: SubscriberSet<(), AnyObserver>,
+}
+
+impl KeptWindow {
+    /// The closed window's root view.
+    pub fn root(&self) -> Option<&AnyView> {
+        self.root.as_ref()
+    }
+}
+
 /// Holds the state for a specific window.
 pub struct Window {
     pub(crate) handle: AnyWindowHandle,
     pub(crate) invalidator: WindowInvalidator,
     pub(crate) removed: bool,
+    /// Quill: see [`Window::keep_when_closed`].
+    pub(crate) keep_when_closed: bool,
     pub(crate) platform_window: Box<dyn PlatformWindow>,
     pub(crate) display_id: Option<DisplayId>,
     pub(crate) display_observers: SubscriberSet<(), AnyObserver>,
@@ -1330,6 +1370,10 @@ pub struct Window {
     mouse_hit_test: HitTest,
     /// Quill: the mouse position the drag ghost was last painted for.
     drag_painted_at: Option<Point<Pixels>>,
+    /// QUILL: the boxes of the hitboxes under the pointer in the last frame
+    /// drawn during a drag.
+    drag_hovered: Option<SmallVec<[Bounds<Pixels>; 8]>>,
+    drag_target_moved: bool,
     /// The [`InteractiveElement::a11y_tag`]s of the elements being painted,
     /// outermost first (pushed and popped around each tagged element's
     /// paint), so the focused element can record the tags above it.
@@ -2165,6 +2209,7 @@ impl Window {
             handle,
             invalidator,
             removed: false,
+            keep_when_closed: false,
             platform_window,
             display_id,
             display_observers: SubscriberSet::new(),
@@ -2203,6 +2248,8 @@ impl Window {
             mouse_position,
             mouse_hit_test: HitTest::default(),
             drag_painted_at: None,
+            drag_hovered: None,
+            drag_target_moved: false,
             a11y_tag_stack: Vec::new(),
             tooltip_tags: Vec::new(),
             paint_filter: None,
@@ -2467,6 +2514,88 @@ impl Window {
     /// Close this window.
     pub fn remove_window(&mut self) {
         self.removed = true;
+    }
+
+    /// Quill: when this window closes, keep its root view and everything
+    /// registered on the window, for [`App::take_kept_window`].
+    pub fn keep_when_closed(&mut self) {
+        self.keep_when_closed = true;
+    }
+
+    /// Quill: what is left of this window, once it is closing.
+    pub(crate) fn into_kept(mut self: Box<Self>) -> KeptWindow {
+        KeptWindow {
+            id: self.handle.id,
+            root: self.root.take(),
+            focus: self.focus,
+            element_states: mem::take(&mut self.rendered_frame.element_states),
+            next_frame_callbacks: self.next_frame_callbacks.take(),
+            display_observers: mem::replace(&mut self.display_observers, SubscriberSet::new()),
+            focus_listeners: mem::replace(&mut self.focus_listeners, SubscriberSet::new()),
+            focus_lost_listeners: mem::replace(
+                &mut self.focus_lost_listeners,
+                SubscriberSet::new(),
+            ),
+            bounds_observers: mem::replace(&mut self.bounds_observers, SubscriberSet::new()),
+            appearance_observers: mem::replace(
+                &mut self.appearance_observers,
+                SubscriberSet::new(),
+            ),
+            button_layout_observers: mem::replace(
+                &mut self.button_layout_observers,
+                SubscriberSet::new(),
+            ),
+            visibility_observers: mem::replace(
+                &mut self.visibility_observers,
+                SubscriberSet::new(),
+            ),
+            activation_observers: mem::replace(
+                &mut self.activation_observers,
+                SubscriberSet::new(),
+            ),
+            pending_input_observers: mem::replace(
+                &mut self.pending_input_observers,
+                SubscriberSet::new(),
+            ),
+        }
+    }
+
+    /// Quill: become the window `kept` came from. Its subscriptions fire here
+    /// and its handles reach this window, so no entity needs to know it moved.
+    /// Call this first, from the build closure of the window that replaces it;
+    /// the closure then returns the kept root view.
+    pub fn take_over(&mut self, kept: KeptWindow, cx: &mut App) {
+        let KeptWindow {
+            id,
+            root: _,
+            focus,
+            element_states,
+            next_frame_callbacks,
+            display_observers,
+            focus_listeners,
+            focus_lost_listeners,
+            bounds_observers,
+            appearance_observers,
+            button_layout_observers,
+            visibility_observers,
+            activation_observers,
+            pending_input_observers,
+        } = kept;
+        self.focus = focus;
+        self.rendered_frame.element_states = element_states;
+        self.next_frame_callbacks
+            .borrow_mut()
+            .extend(next_frame_callbacks);
+        self.display_observers = display_observers;
+        self.focus_listeners = focus_listeners;
+        self.focus_lost_listeners = focus_lost_listeners;
+        self.bounds_observers = bounds_observers;
+        self.appearance_observers = appearance_observers;
+        self.button_layout_observers = button_layout_observers;
+        self.visibility_observers = visibility_observers;
+        self.activation_observers = activation_observers;
+        self.pending_input_observers = pending_input_observers;
+        cx.note_window_replaced(id, self.handle.id);
     }
 
     /// Obtain the currently focused [`FocusHandle`]. If no elements are focused, returns `None`.
@@ -3132,6 +3261,12 @@ impl Window {
         self.a11y.set_window_title(title.to_string());
     }
 
+    /// Quill: the reason Windows shows while this window holds back the end
+    /// of the session, or `None` to stop showing it.
+    pub fn set_shutdown_block_reason(&self, reason: Option<&str>) {
+        self.platform_window.set_shutdown_block_reason(reason);
+    }
+
     /// Sets the position of the macOS traffic light buttons.
     #[cfg(target_os = "macos")]
     pub fn set_traffic_light_position(&self, position: Point<Pixels>) {
@@ -3665,7 +3800,7 @@ impl Window {
         // panel). `Window::focus` suppresses `refresh` while a draw is in progress, so
         // schedule another frame here to render the new focus state and dispatch the
         // resulting focus events.
-        if self.focus != focus_before_listeners {
+        if self.focus != focus_before_listeners || mem::take(&mut self.drag_target_moved) {
             self.refresh();
         }
         self.needs_present.set(true);
@@ -3855,6 +3990,7 @@ impl Window {
         }
 
         self.mouse_hit_test = self.next_frame.hit_test(self.mouse_position);
+        self.note_drag_hover(cx);
 
         // Now actually paint the elements.
         #[cfg(feature = "profiler")]
@@ -4108,7 +4244,9 @@ impl Window {
                     })
                 })
             } else {
-                self.reuse_paint(deferred_draw.paint_range.clone());
+                let replayed = deferred_draw.paint_range.clone();
+                self.reuse_paint(replayed.clone());
+                self.replay_live_views(&deferred_draw.element_id_stack, &replayed, &paint_start);
             }
             let paint_end = self.paint_index();
             deferred_draw.paint_range = paint_start..paint_end;
@@ -5406,6 +5544,16 @@ impl Window {
         self.sprite_atlas.remove_emoji_glyphs_unused_since(mark)
     }
 
+    /// QUILL: how many text glyphs this window's sprite atlas holds.
+    pub fn text_glyph_count(&self) -> usize {
+        self.sprite_atlas.text_glyph_count()
+    }
+
+    /// QUILL: [`Window::sweep_emoji_glyphs`] for text glyphs.
+    pub fn sweep_text_glyphs(&mut self, mark: u64) -> usize {
+        self.sprite_atlas.remove_text_glyphs_unused_since(mark)
+    }
+
     /// QUILL: this window's atlas, for tests that seed it.
     #[cfg(any(test, feature = "test-support"))]
     pub fn sprite_atlas(&self) -> &Arc<dyn PlatformAtlas> {
@@ -6350,6 +6498,20 @@ impl Window {
                 window.schedule_touch_momentum_tick();
             }
         });
+    }
+
+    /// QUILL: a cached view replays `drag_over` styles for the hitboxes it was
+    /// painted under, so when content moves under a still pointer the next
+    /// frame renders every view. Hitbox ids change with each render, so this
+    /// compares their boxes. A frame that refreshed needs no second one.
+    fn note_drag_hover(&mut self, cx: &App) {
+        let hovered = cx.active_drag.is_some().then(|| {
+            self.next_frame
+                .hitbox_bounds(&self.mouse_hit_test)
+                .collect::<SmallVec<_>>()
+        });
+        let previous = mem::replace(&mut self.drag_hovered, hovered);
+        self.drag_target_moved = !self.refreshing && previous.is_some() && previous != self.drag_hovered;
     }
 
     fn dispatch_mouse_event(&mut self, event: &dyn Any, cx: &mut App) {

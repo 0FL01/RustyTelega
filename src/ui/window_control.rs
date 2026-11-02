@@ -559,6 +559,24 @@ pub(crate) fn pin_on_top_button<V: 'static>(
         )
 }
 
+/// Run `gone` once `window` is closed, however that came about: a platform
+/// that destroys a window never asks it to close. It runs after the update
+/// that closed the window, which may hold the app.
+pub(super) fn when_window_goes(window: &Window, cx: &App, gone: impl FnOnce(&mut App) + 'static) {
+    let id = window.window_handle().window_id();
+    let watch = std::rc::Rc::new(std::cell::Cell::new(None::<Subscription>));
+    let ends = watch.clone();
+    let mut gone = Some(gone);
+    watch.set(Some(cx.on_window_closed(move |cx, closed| {
+        if closed == id {
+            ends.take();
+            if let Some(gone) = gone.take() {
+                cx.defer(gone);
+            }
+        }
+    })));
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Backend, backend_hides, net_wm_state_data, net_wm_state_property};

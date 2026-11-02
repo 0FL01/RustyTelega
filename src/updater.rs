@@ -105,29 +105,44 @@ pub(crate) fn download_source(asset_url: &str) -> DownloadSource {
 }
 
 /// Bytes of the update package downloaded so far: the download thread adds
-/// to it and the UI reads it on render.
+/// to it and the UI reads it on render. The UI can also hold the download
+/// (a low or full disk), which stops it at the next read.
 #[derive(Debug, Clone, Default)]
-pub struct DownloadProgress(std::sync::Arc<std::sync::atomic::AtomicU64>);
+pub struct DownloadProgress {
+    bytes: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    held: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
 
 impl DownloadProgress {
     pub fn add(&self, bytes: u64) {
-        self.0
+        self.bytes
             .fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn set(&self, bytes: u64) {
-        self.0.store(bytes, std::sync::atomic::Ordering::Relaxed);
+        self.bytes
+            .store(bytes, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn bytes(&self) -> u64 {
-        self.0.load(std::sync::atomic::Ordering::Relaxed)
+        self.bytes.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Stop the download: it ends with an error, keeping
+    /// what it has for the next attempt to go on from.
+    pub fn hold(&self) {
+        self.held.store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    pub fn is_held(&self) -> bool {
+        self.held.load(std::sync::atomic::Ordering::Acquire)
     }
 }
 
 /// One download is equal only to itself.
 impl PartialEq for DownloadProgress {
     fn eq(&self, other: &Self) -> bool {
-        std::sync::Arc::ptr_eq(&self.0, &other.0)
+        std::sync::Arc::ptr_eq(&self.bytes, &other.bytes)
     }
 }
 

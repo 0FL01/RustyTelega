@@ -82,12 +82,13 @@ impl VolumePill {
 /// at a time, as in the stream window. Intercepted, because Up and Down
 /// are already bound (message selection) and bindings match before
 /// `on_key_down`. Only the window that holds the story viewer.
-pub(crate) fn intercept_live_story_volume_keys(window: &Window, cx: &mut Context<QuillApp>) {
-    let main = window.window_handle();
+pub(crate) fn intercept_live_story_volume_keys(cx: &mut Context<QuillApp>) {
     let app = cx.weak_entity();
     cx.intercept_keystrokes(move |event, window, cx| {
         let keystroke = &event.keystroke;
-        if window.window_handle() != main || keystroke.modifiers.modified() {
+        // Read at each key: a reset gives the main window a new id.
+        let main = crate::ui::link_inbox::main_window_id(cx);
+        if main != Some(window.window_handle().window_id()) || keystroke.modifiers.modified() {
             return;
         }
         let step = match keystroke.key.as_str() {

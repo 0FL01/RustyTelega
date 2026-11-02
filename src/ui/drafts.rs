@@ -84,7 +84,13 @@ impl QuillApp {
         let reply = self.draft_reply(self.composer_ui.reply(), chat_id);
         let markup = self.composer_markup(cx);
         let content = if self.composer_ui.rich_editor_open {
-            RichDraft::from_markup(&markup).map_or(DraftContent::Text(markup), DraftContent::Rich)
+            let blocks = self
+                .composer_ui
+                .rich_draft
+                .parsed
+                .borrow_mut()
+                .parse(&markup);
+            RichDraft::from_parsed(blocks).map_or(DraftContent::Text(markup), DraftContent::Rich)
         } else if let Some(rich) = self.stored_rich_draft() {
             DraftContent::Rich(rich.clone())
         } else {
@@ -379,7 +385,7 @@ impl QuillApp {
         }
         self.set_composer_markup(&text, window, cx);
         // `set_value` emits no Change: re-check the restored draft.
-        let text = self.composer.read(cx).value().to_string();
+        let text = self.composer.read(cx).value();
         self.composer_ui.prev_text = text.clone();
         self.sync_spellcheck(&text, cx);
         self.sync_suggest_menu(false, cx);

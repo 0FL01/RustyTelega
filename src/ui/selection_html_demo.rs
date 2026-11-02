@@ -27,7 +27,8 @@ fn plain(text: &str) -> Value {
     json!({"@type": "richTextPlain", "text": text})
 }
 
-/// The rich message: a heading, styled text, a checklist and a table.
+/// The rich message: a heading, styled text, a checklist, spoilers in two
+/// items, a quote, details and a table.
 pub(super) fn rich_blocks() -> Value {
     json!([
         {"@type": "pageBlockSectionHeading", "size": 1, "text": plain("Weekend trip")},
@@ -47,8 +48,38 @@ pub(super) fn rich_blocks() -> Value {
                 "blocks": [{"@type": "pageBlockParagraph", "text": plain("Book the cabin")}]},
             {"@type": "pageBlockListItem", "label": "•", "has_checkbox": true, "is_checked": false,
                 "value": 0, "type": "",
-                "blocks": [{"@type": "pageBlockParagraph", "text": plain("Pack the tent")}]},
+                "blocks": [{"@type": "pageBlockParagraph", "text": {"@type": "richTexts", "texts": [
+                    plain("Pack the "),
+                    {"@type": "richTextBold", "text": plain("tent")},
+                ]}}]},
         ]},
+        {"@type": "pageBlockList", "items": [
+            {"@type": "pageBlockListItem", "label": "•", "has_checkbox": false, "is_checked": false,
+                "value": 0, "type": "",
+                "blocks": [{"@type": "pageBlockParagraph", "text": {"@type": "richTextSpoiler",
+                    "text": plain("Secret stop")}}]},
+            {"@type": "pageBlockListItem", "label": "•", "has_checkbox": false, "is_checked": false,
+                "value": 0, "type": "",
+                "blocks": [{"@type": "pageBlockParagraph", "text": {"@type": "richTextSpoiler",
+                    "text": plain("Second secret")}}]},
+        ]},
+        {"@type": "pageBlockBlockQuote", "credit": plain(""), "blocks": [
+            {"@type": "pageBlockParagraph", "text": {"@type": "richTexts", "texts": [
+                plain("Bring a "),
+                {"@type": "richTextItalic", "text": plain("warm")},
+                plain(" jacket"),
+            ]}},
+        ]},
+        {"@type": "pageBlockDetails", "is_open": true,
+            "header": {"@type": "richTexts", "texts": [
+                plain("Packing "),
+                {"@type": "richTextBold", "text": plain("list")},
+            ]},
+            "blocks": [{"@type": "pageBlockParagraph", "text": {"@type": "richTexts", "texts": [
+                plain("Boots, "),
+                {"@type": "richTextBold", "text": plain("rope")},
+                plain(" and a map"),
+            ]}}]},
         {"@type": "pageBlockTable", "caption": plain(""), "is_bordered": true,
             "is_striped": false, "is_compact": false, "cells": [
             [{"@type": "pageBlockTableCell", "text": plain("Day"), "is_header": true,

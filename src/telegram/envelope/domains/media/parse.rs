@@ -19,6 +19,9 @@ pub(crate) fn parse_media_payload(
                 EnvelopePayload::Media(MediaPayload::UpdateFileAddedToDownloads(Box::new(download)))
             })
             .ok_or(ParseError::MissingField),
+        "foundFileDownloads" => Ok(EnvelopePayload::Media(MediaPayload::FoundFileDownloads(
+            crate::telegram::envelope::updates_sync::parse_found_file_downloads(value),
+        ))),
         "updateFileRemovedFromDownloads" => Ok(EnvelopePayload::Media(
             MediaPayload::UpdateFileRemovedFromDownloads {
                 file_id: json_i32(value.get("file_id"), 0),

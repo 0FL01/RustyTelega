@@ -99,6 +99,7 @@ impl QuillApp {
             (None, Some(handle)) => {
                 self.group_call.window = None;
                 let _ = handle.update(cx, |_, window, _| window.remove_window());
+                self.sync_group_call_large_tile();
             }
             // Sized for the other layout: reopen.
             (Some((_, stream)), Some(handle))
@@ -106,6 +107,7 @@ impl QuillApp {
             {
                 self.group_call.window = None;
                 let _ = handle.update(cx, |_, window, _| window.remove_window());
+                self.sync_group_call_large_tile();
                 self.open_group_call_window(stream, cx);
             }
             _ => {}
@@ -152,6 +154,7 @@ impl QuillApp {
                 },
                 move |window, cx| {
                     window.activate_window();
+                    let gone = weak.clone();
                     window.on_window_should_close(cx, move |_, cx| {
                         let _ = weak.update(cx, |app, cx| {
                             app.group_call.window = None;
@@ -161,12 +164,24 @@ impl QuillApp {
                                 .map(|c| c.id);
                             app.group_call.stream.pending_join = None;
                             app.group_call.stream.overlay = None;
+                            app.sync_group_call_large_tile();
                             cx.notify();
                         });
                         true
                     });
+                    let from = window.window_handle();
+                    super::window_control::when_window_goes(window, cx, move |cx| {
+                        let _ = gone.update(cx, |app, cx| {
+                            if app.group_call.window == Some(from) {
+                                app.group_call.window = None;
+                                app.sync_group_call_large_tile();
+                                cx.notify();
+                            }
+                        });
+                    });
                     let view = cx.new(|cx| {
                         let activation_owner = render_owner.downgrade();
+                        let visibility_owner = render_owner.downgrade();
                         GroupCallPanel {
                             owner: render_owner.downgrade(),
                             _observe: follow_app(&render_owner, cx),
@@ -181,6 +196,20 @@ impl QuillApp {
                                             app.group_call_ptt_release_all(cx)
                                         });
                                     }
+                                },
+                            ),
+                            _visibility: cx.observe_window_visibility(
+                                window,
+                                move |_, visibility, window, cx| {
+                                    let from = window.window_handle();
+                                    let _ = visibility_owner.update(cx, |app, _| {
+                                        // A replaced window still reports while it goes.
+                                        if app.group_call.window != Some(from) {
+                                            return;
+                                        }
+                                        app.group_call.window_visible = visibility.is_visible();
+                                        app.sync_group_call_large_tile();
+                                    });
                                 },
                             ),
                             pinned_on_top: false,
@@ -203,7 +232,9 @@ impl QuillApp {
                 match result {
                     Ok(handle) => {
                         app.group_call.window = Some(handle.into());
+                        app.group_call.window_visible = true;
                         app.group_call.stream.window_is_stream = stream;
+                        app.sync_group_call_large_tile();
                     }
                     Err(_) => app.connection.set_note(StatusNote::error(tr(
                         keys::Q_AV_COULDNT_OPEN_THE_VIDEO_CHAT,
@@ -212,6 +243,18 @@ impl QuillApp {
                 cx.notify();
             });
         });
+    }
+
+    pub(super) fn group_call_large_tile(&self) -> Option<quill::calls::tile_pin::TileKey> {
+        let seen = self.group_call.window.is_some() && self.group_call.window_visible;
+        self.group_call.pin.pinned().filter(|_| seen)
+    }
+
+    pub(super) fn sync_group_call_large_tile(&mut self) {
+        let tile = self.group_call_large_tile();
+        if let Some(live) = self.live.as_mut() {
+            live.driver.set_group_call_large_tile(tile);
+        }
     }
 
     /// Bring the group call window back (the call bar).
@@ -291,6 +334,7 @@ pub(super) struct GroupCallPanel {
     /// Takes keyboard focus so push-to-talk key events reach the window.
     focus: FocusHandle,
     _activation: Subscription,
+    _visibility: Subscription,
     /// The window stays above the others (tdesktop "pin on top").
     pinned_on_top: bool,
     /// The title the window was given (a stream's follows its chat).
@@ -347,6 +391,9 @@ impl Render for GroupCallPanel {
         let stream_full = stream_full(window, owner.read(cx));
         let panel = cx.entity_id();
         let members = self.members.clone();
+        let disk_bar = owner.update(cx, |app, cx| {
+            app.disk_low_overlay(px(super::calls::call_video::WINDOW_CONTROLS), cx)
+        });
         let (body, animating, stream_title) = owner.update(cx, |app, cx| {
             app.frame.tick_view.set(Some(panel));
             let body =
@@ -413,6 +460,7 @@ impl Render for GroupCallPanel {
                 }
             }))
             .child(body)
+            .when_some(disk_bar, |this, bar| this.relative().child(bar))
             // tdesktop's pin-on-top control; full screen there is no
             // window chrome to pin.
             .when(!full, |this| {

@@ -82,7 +82,7 @@ pub(crate) struct ComposerUi {
     pub(super) preview_token: u64,
     /// The composer text before the last keystroke, for "Replace emoji
     /// automatically" (it only reacts to one typed character).
-    pub(super) prev_text: String,
+    pub(super) prev_text: gpui_kit::SharedString,
     /// A typed markdown replacement Backspace can still take back.
     pub(super) markdown_revert: Option<super::composer_field::MarkdownRevert>,
     /// "Silent send" shortcut: the next send alone goes without sound.
@@ -212,7 +212,7 @@ impl ComposerUi {
             inline_return: None,
             edit_replace_as_file: false,
             preview_token: 0,
-            prev_text: String::new(),
+            prev_text: gpui_kit::SharedString::default(),
             markdown_revert: None,
             send_silent_once: false,
             send_effect_once: 0,

@@ -5,6 +5,11 @@
 //! lazily as their sections scroll into view; cells show static images and
 //! only the hovered sticker animates.
 #![deny(clippy::indexing_slicing)]
+#[cfg(test)]
+#[cfg(feature = "demo-capture")]
+#[path = "list_wheel_tests.rs"]
+mod list_wheel_tests;
+
 use super::app::QuillApp;
 use gpui_kit::component::button::*;
 use gpui_kit::component::input::Textarea;

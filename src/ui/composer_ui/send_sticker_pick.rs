@@ -238,7 +238,10 @@ impl QuillApp {
     /// The link the preview is generated from: the one picked in the
     /// options menu, else the first (clamped to the links present).
     pub(in crate::ui) fn chosen_preview_url(&self, text: &str) -> Option<String> {
-        let urls = find_urls(text);
+        self.chosen_of(&find_urls(text))
+    }
+
+    fn chosen_of(&self, urls: &[String]) -> Option<String> {
         let index = self.preview_choice().link_index;
         urls.get(index).or_else(|| urls.last()).cloned()
     }
@@ -373,9 +376,9 @@ impl QuillApp {
         {
             return None;
         }
-        let text = self.composer.read(cx).value().to_string();
+        let text = self.composer.read(cx).value();
         let urls = find_urls(&text);
-        let first = self.chosen_preview_url(&text)?;
+        let first = self.chosen_of(&urls)?;
         let choice = self.preview_choice();
         let chosen = urls.iter().position(|u| *u == first).unwrap_or(0);
         // Live prefetch state; the screenshot demo injects its own into

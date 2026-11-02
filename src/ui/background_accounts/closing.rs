@@ -12,7 +12,7 @@
 use super::*;
 use crate::ui::chat_window::ScopedApp;
 use gpui_kit::AsyncApp;
-use quill::connect::{QUIT_CLOSE_DEADLINE, deadline_after};
+use quill::connect::{EXPORT_STOP_HOLD, QUIT_CLOSE_DEADLINE, deadline_after};
 
 /// How often a waiter checks the closing set again.
 const CLOSE_POLL: Duration = Duration::from_millis(16);
@@ -95,8 +95,8 @@ impl QuillApp {
         }
     }
 
-    pub(in crate::ui) fn close_every_client_later(&mut self, cx: &mut Context<Self>) {
-        self.close_screen_client(cx);
+    /// Close every background client, keeping each one's restart.
+    pub(in crate::ui) fn close_background_clients_later(&mut self, cx: &mut Context<Self>) {
         self.stop_background_clients(cx);
         self.background.closing.restart_all();
     }
@@ -160,6 +160,7 @@ impl QuillApp {
     /// background one, together, at most until `deadline`. Folders waiting
     /// for a close stay recorded and are deleted on the next start.
     pub(in crate::ui) fn close_all_for_quit(&mut self, deadline: Instant) {
+        self.stop_exports_and_wait(deadline_after(EXPORT_STOP_HOLD).min(deadline));
         if let Some(live) = self.live.take() {
             let key = live.driver.session.account.clone();
             self.background.push_closing(key, live, false);

@@ -284,8 +284,12 @@ impl Session {
         if let Some(name) = download.name {
             self.sync.download_names.insert(id, name);
         }
-        if let Some(chat_id) = download.chat_id {
-            self.media.downloads.note_chat(id, chat_id);
+        match (download.chat_id, download.message_id) {
+            (Some(chat_id), Some(message_id)) => {
+                self.media.downloads.note_origin(id, chat_id, message_id);
+            }
+            (Some(chat_id), None) => self.media.downloads.note_chat(id, chat_id),
+            _ => {}
         }
         if download.complete_date != 0 {
             self.media.downloads.record_finished(id);
@@ -293,6 +297,41 @@ impl Session {
         } else {
             self.media.downloads.adopt(id, download.is_paused);
         }
+    }
+
+    /// The answer to the search for downloads a low or full disk paused
+    /// before this TDLib instance: the ones still paused whose message was
+    /// saved come back as tracked downloads, due for a resume
+    /// (`ConnectDriver::resume_disk_paused_found`), or held for the next
+    /// healthy reading if the disk went low again meanwhile. Saved messages
+    /// the list no longer has are dropped; a pause saved or undone since the
+    /// search went out is left as it stands.
+    pub(crate) fn apply_disk_paused_found(&mut self, found: Vec<ParsedFileDownload>) {
+        let asked = std::mem::take(&mut self.media.disk_search_keys);
+        let low = self.media.disk_room.is_some();
+        let mut held = std::collections::BTreeSet::new();
+        for download in found {
+            let key = download
+                .chat_id
+                .zip(download.message_id)
+                .map(|(chat, message)| (chat.0, message));
+            let saved = &self.settings.data_storage.disk_paused;
+            let wanted = key.filter(|key| asked.contains(key) && saved.contains(key));
+            if let Some(key) = wanted.filter(|_| download.is_paused && download.complete_date == 0)
+            {
+                let id = download.file_id;
+                self.apply_download_added(download);
+                if low {
+                    held.insert(key);
+                    self.media.disk_paused.insert(id);
+                } else {
+                    self.media.disk_resume_due.push(id);
+                }
+            }
+        }
+        let saved = &mut self.settings.data_storage.disk_paused;
+        saved.retain(|key| !asked.contains(key) || held.contains(key));
+        self.media.disk_paused_saved_changed = true;
     }
 
     /// The download left the list (removed here or on another device).

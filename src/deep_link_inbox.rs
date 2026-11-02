@@ -137,6 +137,11 @@ pub fn take_activation() -> bool {
     std::mem::take(&mut inbox().activate)
 }
 
+/// Puts back an activation no window could take.
+pub fn keep_activation() {
+    inbox().activate = true;
+}
+
 /// Consumes the pending "quit" request of a later `--quit` launch.
 pub fn take_quit_request() -> bool {
     std::mem::take(&mut inbox().quit)

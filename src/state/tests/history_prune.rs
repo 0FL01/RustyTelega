@@ -540,6 +540,24 @@ fn a_late_page_for_a_closed_topic_stays_inside_the_topic_bound() {
 }
 
 #[test]
+fn an_older_page_for_an_evicted_topic_does_not_start_it_again() {
+    let (mut session, _sink) = session();
+    session.topic_history_entry(ChatId(7), 1).loaded_complete = true;
+    let extra = session.request_for_topic(RequestPurpose::GetTopicHistory, Some(ChatId(7)), 1);
+    let pending = session.requests.get(extra).cloned().expect("in flight");
+    for topic in 2..=(CLOSED_TOPICS_MAX as i32 + 6) {
+        session.topic_history_entry(ChatId(7), topic);
+    }
+    assert!(!session.threads.topic_histories.contains_key(&(7, 1)));
+    session.apply_topic_page(vec![live(7, 5)], 1, MessageId(0), &pending);
+    assert!(
+        !session.threads.topic_histories.contains_key(&(7, 1)),
+        "an older page is not the topic's newest content"
+    );
+    assert!(session.history_pruning.gone_topic_pages.is_empty());
+}
+
+#[test]
 fn a_session_without_a_server_keeps_every_history() {
     // The screenshot demos: nothing could load trimmed rows back.
     let (mut session, _sink) = session();

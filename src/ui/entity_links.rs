@@ -112,7 +112,7 @@ impl QuillApp {
             LinkTarget::Url { .. } => match open_decision(&link) {
                 OpenDecision::Open => {
                     if let LinkTarget::Url { url, .. } = &link {
-                        self.open_message_url(url, cx);
+                        self.open_link(url, cx);
                     }
                 }
                 OpenDecision::Confirm {
@@ -152,15 +152,7 @@ impl QuillApp {
                 self.send_bot_command(chat_id, message_id, &command, cx);
             }
             LinkTarget::Email(address) => {
-                let open = quill::platform::open_mailto(&address);
-                self.when_os_answers(open, cx, |this, opened, cx| {
-                    this.connection.set_note(if opened {
-                        StatusNote::silent(tr(keys::Q_OPS_OPENED_MAIL))
-                    } else {
-                        StatusNote::error(tr(keys::Q_OPS_COULD_NOT_OPEN_THE_MAIL))
-                    });
-                    cx.notify();
-                });
+                self.open_mail_to(&address, cx);
             }
             LinkTarget::Phone(_) | LinkTarget::BankCard(_) | LinkTarget::DateTime { .. } => {
                 if let LinkTarget::BankCard(number) = &link {
@@ -374,7 +366,7 @@ impl QuillApp {
                 self.viewer.pending_seek = Some((target_id, clamp_seek(seconds, video.duration)));
                 self.open_media_viewer(chat_id, target_id, cx);
             }
-            (_, SeekTarget::Web(url)) => self.open_message_url(&url, cx),
+            (_, SeekTarget::Web(url)) => self.open_link(&url, cx),
             _ => {}
         }
     }
@@ -619,7 +611,7 @@ impl QuillApp {
                                             .child(label)
                                             .on_click(cx.listener(move |this, _, _, cx| {
                                                 this.message_ui.link_popup = None;
-                                                this.open_message_url(&url, cx);
+                                                this.open_link(&url, cx);
                                             }))
                                     },
                                 )),
@@ -732,7 +724,7 @@ impl QuillApp {
                         .primary()
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.message_ui.open_link_confirm = None;
-                            this.open_message_url(&url, cx);
+                            this.open_link(&url, cx);
                             this.close_kit_dialog_if_done(DialogKind::OpenLink, window, cx);
                         })),
                 );

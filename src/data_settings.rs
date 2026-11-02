@@ -232,6 +232,16 @@ pub struct DataStoragePrefs {
     /// loaded from disk); the screen shows "Loading…" until then.
     #[serde(default)]
     pub seeded: bool,
+    /// True once the cache limits got their first value on this account
+    /// (`ConnectDriver::maybe_seed_storage_limits`). Never reset, so a
+    /// later "No limit" sticks.
+    #[serde(default)]
+    pub storage_limits_seeded: bool,
+    /// The listed downloads a low or full disk paused, as (chat id,
+    /// message id): TDLib keeps them paused across restarts, and its file
+    /// ids differ in the next instance, so the message finds them again.
+    #[serde(default)]
+    pub disk_paused: std::collections::BTreeSet<(i64, i64)>,
     pub mobile: AutoDownloadNetSettings,
     pub roaming: AutoDownloadNetSettings,
     pub wifi: AutoDownloadNetSettings,
@@ -242,6 +252,8 @@ impl Default for DataStoragePrefs {
         Self {
             version: DATA_STORAGE_PREFS_VERSION,
             seeded: false,
+            storage_limits_seeded: false,
+            disk_paused: std::collections::BTreeSet::new(),
             mobile: AutoDownloadNetSettings::default(),
             roaming: AutoDownloadNetSettings::default(),
             wifi: AutoDownloadNetSettings::default(),

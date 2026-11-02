@@ -28,8 +28,8 @@ fn block_caption(value: &Value) -> String {
 #[derive(Default)]
 struct RichWalk {
     text: String,
-    /// (utf16_start, utf16_end, kind) over the final text.
-    entities: Vec<(i32, i32, TextEntityKind)>,
+    /// (start, end, kind) in bytes of the final text.
+    entities: Vec<(usize, usize, TextEntityKind)>,
     buttons: Vec<InlineKeyboardButton>,
 }
 
@@ -38,15 +38,11 @@ impl RichWalk {
         self.text.push_str(s);
     }
 
-    fn utf16_len(&self) -> i32 {
-        self.text.encode_utf16().count() as i32
-    }
-
     /// Walk `inner`, then wrap the appended range in `kind`.
     fn styled(&mut self, value: &Value, field: &str, kind: TextEntityKind) {
-        let start = self.utf16_len();
+        let start = self.text.len();
         walk_rich_text(value.get(field).unwrap_or(&Value::Null), self);
-        let end = self.utf16_len();
+        let end = self.text.len();
         if end > start {
             self.entities.push((start, end, kind));
         }
@@ -76,21 +72,16 @@ fn walk_rich_text(value: &Value, w: &mut RichWalk) {
         }
         "richTextUrl" => {
             let url = field_str(value, "url");
-            let start_text = w.text.clone();
+            let start = w.text.len();
             walk_rich_text(value.get("text").unwrap_or(&Value::Null), w);
-            let label: String = w
-                .text
-                .get(start_text.len()..)
-                .unwrap_or_default()
-                .to_string();
+            let label = w.text.get(start..).unwrap_or_default();
             let kind = if url == label {
                 TextEntityKind::Url
             } else {
                 TextEntityKind::TextUrl { url }
             };
-            let start = start_text.encode_utf16().count() as i32;
-            let end = w.utf16_len();
-            if end > start && !label.is_empty() {
+            let end = w.text.len();
+            if end > start {
                 w.entities.push((start, end, kind));
             }
         }
@@ -135,22 +126,17 @@ fn walk_rich_text(value: &Value, w: &mut RichWalk) {
 }
 
 /// Flatten a `RichText` tree to (plain text, entities, inline buttons).
-/// Entity offsets are converted from UTF-16 to UTF-8; unconvertible
-/// entities are dropped, never fatal.
+/// Entity offsets are bytes of the plain text.
 pub fn rich_text_to_parts(value: &Value) -> (String, Vec<TextEntity>, Vec<InlineKeyboardButton>) {
     let mut w = RichWalk::default();
     walk_rich_text(value, &mut w);
     let entities = w
         .entities
         .into_iter()
-        .filter_map(|(start16, end16, kind)| {
-            let start = utf16_to_utf8_offset(&w.text, start16).ok()?;
-            let end = utf16_to_utf8_offset(&w.text, end16).ok()?;
-            (end > start).then_some(TextEntity {
-                utf8_start: start,
-                utf8_end: end,
-                kind,
-            })
+        .map(|(utf8_start, utf8_end, kind)| TextEntity {
+            utf8_start,
+            utf8_end,
+            kind,
         })
         .collect();
     (w.text, entities, w.buttons)
@@ -187,30 +173,131 @@ fn heading(level: u8, value: &Value, field: &str) -> RichBlock {
     }
 }
 
-fn join_blocks_text(blocks: &Value) -> String {
-    blocks
-        .as_array()
-        .map(|items| {
-            items
-                .iter()
-                .map(parse_page_block)
-                .filter_map(|block| match block {
-                    RichBlock::Paragraph { text, .. }
-                    | RichBlock::Heading { text, .. }
-                    | RichBlock::Collapsible { header: text, .. } => Some(text),
-                    RichBlock::List { items, .. } => Some(
-                        items
-                            .iter()
-                            .map(|item| item.text.clone())
-                            .collect::<Vec<_>>()
-                            .join("\n"),
-                    ),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
+/// Text joined by lines, with entity offsets moved to where each part lands.
+#[derive(Default)]
+struct JoinedLines {
+    text: String,
+    entities: Vec<TextEntity>,
+    started: bool,
+}
+
+impl JoinedLines {
+    fn push(&mut self, text: &str, entities: Vec<TextEntity>) {
+        if self.started {
+            self.text.push('\n');
+        }
+        self.started = true;
+        let shift = self.text.len();
+        self.text.push_str(text);
+        self.entities
+            .extend(entities.into_iter().map(|entity| TextEntity {
+                utf8_start: entity.utf8_start + shift,
+                utf8_end: entity.utf8_end + shift,
+                ..entity
+            }));
+    }
+
+    fn push_block(&mut self, block: RichBlock) {
+        match block {
+            RichBlock::Paragraph { text, entities, .. }
+            | RichBlock::Heading { text, entities, .. } => self.push(&text, entities),
+            RichBlock::Collapsible {
+                header,
+                header_entities,
+                ..
+            } => self.push(&header, header_entities),
+            RichBlock::List { items, .. } => {
+                let mut lines = JoinedLines::default();
+                for item in items {
+                    lines.push(&item.text, item.entities);
+                }
+                self.push(&lines.text, lines.entities);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn join_blocks(blocks: &Value) -> JoinedLines {
+    let mut lines = JoinedLines::default();
+    for block in blocks.as_array().into_iter().flatten() {
+        lines.push_block(parse_page_block(block));
+    }
+    lines
+}
+
+/// The part of `entities` inside `range`, relative to its start.
+fn entities_within(entities: &[TextEntity], range: std::ops::Range<usize>) -> Vec<TextEntity> {
+    entities
+        .iter()
+        .filter_map(|entity| {
+            let start = entity.utf8_start.max(range.start);
+            let end = entity.utf8_end.min(range.end);
+            (start < end).then(|| TextEntity {
+                utf8_start: start - range.start,
+                utf8_end: end - range.start,
+                kind: entity.kind.clone(),
+            })
         })
-        .unwrap_or_default()
+        .collect()
+}
+
+/// Every line of `lines` behind the quote mark, its entities moved along.
+fn quoted(lines: JoinedLines) -> RichBlock {
+    const MARK: &str = "❝ ";
+    let mut out = JoinedLines::default();
+    let mut start = 0;
+    for line in lines.text.split('\n') {
+        let end = start + line.len();
+        let mut entities = entities_within(&lines.entities, start..end);
+        for entity in &mut entities {
+            entity.utf8_start += MARK.len();
+            entity.utf8_end += MARK.len();
+        }
+        out.push(&format!("{MARK}{line}"), entities);
+        start = end + 1;
+    }
+    RichBlock::Paragraph {
+        text: out.text,
+        entities: out.entities,
+        buttons: Vec::new(),
+    }
+}
+
+/// An expandable quote: its first line is the header, the rest the body.
+fn expandable_quote(value: &Value) -> RichBlock {
+    let (text, entities, _) = rich_text_to_parts(value.get("text").unwrap_or(&Value::Null));
+    let (header, body, body_at) = match text.split_once('\n') {
+        Some((header, body)) => (header, body, header.len() + 1),
+        None => (text.as_str(), "", text.len()),
+    };
+    let header_entities = entities_within(&entities, 0..header.len());
+    let body_entities = entities_within(&entities, body_at..text.len());
+    RichBlock::Collapsible {
+        header: if header.is_empty() { "Quote" } else { header }.to_string(),
+        header_entities,
+        body: body.to_string(),
+        body_entities,
+        open: false,
+    }
+}
+
+fn list_item(item: &Value) -> RichListItem {
+    let lines = join_blocks(item.get("blocks").unwrap_or(&Value::Null));
+    RichListItem {
+        label: field_str(item, "label"),
+        text: lines.text,
+        entities: lines.entities,
+        checked: item
+            .get("has_checkbox")
+            .and_then(Value::as_bool)
+            .filter(|has| *has)
+            .map(|_| {
+                item.get("is_checked")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            }),
+    }
 }
 
 /// Parse one incoming `pageBlock*` object.
@@ -268,72 +355,26 @@ pub fn parse_page_block(value: &Value) -> RichBlock {
         "pageBlockDivider" => RichBlock::Divider,
         "pageBlockAnchor" => RichBlock::Empty,
         "pageBlockList" => {
-            let items = value
-                .get("items")
-                .and_then(Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .map(|item| {
-                            let mut text = field_str(item, "label");
-                            let rest = join_blocks_text(item.get("blocks").unwrap_or(&Value::Null));
-                            if !rest.is_empty() {
-                                if !text.is_empty() {
-                                    text.push('\n');
-                                }
-                                text.push_str(&rest);
-                            }
-                            RichListItem {
-                                text,
-                                checked: item
-                                    .get("has_checkbox")
-                                    .and_then(Value::as_bool)
-                                    .filter(|has| *has)
-                                    .map(|_| {
-                                        item.get("is_checked")
-                                            .and_then(Value::as_bool)
-                                            .unwrap_or(false)
-                                    }),
-                            }
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            // Schema `pageBlockList` carries no ordered flag — render bullets.
+            let items = value.get("items").and_then(Value::as_array);
+            let items = items.map(Vec::as_slice).unwrap_or_default();
             RichBlock::List {
-                ordered: false,
-                items,
+                // Schema `pageBlockListItem`: `type` is empty for unordered lists.
+                ordered: items.iter().any(|item| !field_str(item, "type").is_empty()),
+                items: items.iter().map(list_item).collect(),
             }
         }
-        "pageBlockBlockQuote" => {
-            let text = join_blocks_text(value.get("blocks").unwrap_or(&Value::Null));
-            let quoted = text
-                .lines()
-                .map(|line| format!("❝ {line}"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            RichBlock::Paragraph {
-                text: quoted,
-                entities: Vec::new(),
-                buttons: Vec::new(),
-            }
-        }
-        "pageBlockExpandableBlockQuote" => {
-            let (text, _, _) = rich_text_to_parts(value.get("text").unwrap_or(&Value::Null));
-            let mut lines = text.lines();
-            let header = lines.next().unwrap_or("Quote").to_string();
-            RichBlock::Collapsible {
-                header,
-                body: lines.collect::<Vec<_>>().join("\n"),
-                open: false,
-            }
-        }
+        "pageBlockBlockQuote" => quoted(join_blocks(value.get("blocks").unwrap_or(&Value::Null))),
+        "pageBlockExpandableBlockQuote" => expandable_quote(value),
         "pageBlockPullQuote" => paragraph(value),
         "pageBlockDetails" => {
-            let (header, _, _) = rich_text_to_parts(value.get("header").unwrap_or(&Value::Null));
+            let (header, header_entities, _) =
+                rich_text_to_parts(value.get("header").unwrap_or(&Value::Null));
+            let body = join_blocks(value.get("blocks").unwrap_or(&Value::Null));
             RichBlock::Collapsible {
                 header,
-                body: join_blocks_text(value.get("blocks").unwrap_or(&Value::Null)),
+                header_entities,
+                body: body.text,
+                body_entities: body.entities,
                 open: value
                     .get("is_open")
                     .and_then(Value::as_bool)
@@ -597,7 +638,9 @@ mod tests {
             parse_page_block(&details),
             RichBlock::Collapsible {
                 header: "More".into(),
+                header_entities: Vec::new(),
                 body: "body".into(),
+                body_entities: Vec::new(),
                 open: true,
             }
         );

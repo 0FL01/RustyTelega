@@ -130,3 +130,14 @@ fn the_players_go_with_the_call(cx: &mut TestAppContext) {
         assert!(app.calls.remote_player.is_none());
     });
 }
+
+#[gpui_kit::test]
+fn a_low_disk_shows_its_bar_in_the_call_window(cx: &mut TestAppContext) {
+    let (app, mut main, mut call) = open_call(cx);
+    assert!(call.update(|window, _| window.try_find("disk-low-storage").is_none()));
+    app.update(&mut main, |app, cx| {
+        app.apply_disk_reading(Some(quill::disk_guard::FLOORS.warn - 1), cx);
+    });
+    frames(&mut call);
+    assert!(call.update(|window, _| window.try_find("disk-low-storage").is_some()));
+}

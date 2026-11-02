@@ -22,15 +22,19 @@ pub use appearance::*;
 pub use badge::*;
 pub use chat_prefs::*;
 pub use chat_windows::*;
+pub(crate) use deferred::{close_deferred_writes_under, read_with_pending, write_json_deferred};
 pub use deferred::{flush_deferred_writes, take_deferred_write_failure};
-pub(crate) use deferred::{read_with_pending, write_json_deferred};
 pub use first_run::*;
 pub use media::*;
 pub use settings_search::*;
 pub use video_pip::*;
 pub use window_save::*;
 
+#[cfg(not(debug_assertions))]
 pub const APP_DIR_NAME: &str = "Quill";
+/// A stray debug run gets a folder of its own, so it never opens real accounts.
+#[cfg(debug_assertions)]
+pub const APP_DIR_NAME: &str = "Quill Debug";
 pub const PREFS_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -166,7 +170,7 @@ fn save_json_prefs<T>(paths: &AccountPaths, file_name: &str, prefs: &T)
 where
     T: Serialize,
 {
-    let _ = write_json_deferred(&paths.root.join(file_name), prefs);
+    write_json_deferred(&paths.root.join(file_name), prefs);
 }
 
 /// Write `value` as JSON to `path` atomically: a sibling temp file is
@@ -379,6 +383,70 @@ mod tests {
             serde_json::from_str(r#"{"x":0,"y":0,"width":1000,"height":700}"#).unwrap();
         assert_eq!(legacy.sidebar_width, DEFAULT_SIDEBAR_WIDTH);
         assert!(!legacy.sidebar_hidden);
+    }
+
+    /// Opens `path` the way an editor or a backup tool may: read sharing
+    /// only, so a rename onto it fails until the handle closes.
+    #[cfg(windows)]
+    fn hold(path: &Path) -> fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 0x1;
+        fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(path)
+            .unwrap()
+    }
+
+    /// A settings file someone keeps open: the write fails, the old
+    /// settings stay whole and no temp file is left beside them.
+    #[cfg(windows)]
+    #[test]
+    fn windows_a_settings_write_onto_a_held_file_keeps_the_old_one() {
+        let dir = crate::scratch::unique_dir("quill-settings-held");
+        let path = dir.join("prefs.json");
+        write_json_atomic(&path, &vec![1]).unwrap();
+        let old = fs::read(&path).unwrap();
+        let held = hold(&path);
+
+        let written = write_json_atomic(&path, &vec![2]);
+
+        drop(held);
+        assert!(written.is_err(), "{written:?}");
+        assert_eq!(fs::read(&path).unwrap(), old);
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "no temp file left");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A scanner holds the settings file for a moment: the write waits it
+    /// out and lands.
+    #[cfg(windows)]
+    #[test]
+    fn windows_a_settings_write_lands_once_a_brief_hold_ends() {
+        let dir = crate::scratch::unique_dir("quill-settings-brief");
+        let path = dir.join("prefs.json");
+        write_json_atomic(&path, &vec![1]).unwrap();
+        let held = hold(&path);
+        let watched = dir.clone();
+        // Lets go once the write has its temp file, so the first rename
+        // meets the hold or just misses it; both must land.
+        let releaser = std::thread::spawn(move || {
+            while !fs::read_dir(&watched)
+                .unwrap()
+                .flatten()
+                .any(|item| item.file_name().to_string_lossy().contains(".tmp-"))
+            {
+                std::thread::yield_now();
+            }
+            drop(held);
+        });
+
+        write_json_atomic(&path, &vec![2]).unwrap();
+
+        releaser.join().unwrap();
+        let read: Vec<i32> = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(read, [2]);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -184,3 +184,35 @@ fn the_log_holds_exactly_its_size_in_removals() {
         "the 65th pushes the first out"
     );
 }
+
+/// Which messages a history replies to is collected once per change, so
+/// updates of chats it never replies to walk none of its messages.
+#[test]
+fn replies_follow_inserts_edits_and_removals() {
+    use crate::telegram::envelope::MessageReplyTo;
+    let reply = |chat: i64, id: i64| MessageReplyTo {
+        chat_id: ChatId(chat),
+        message_id: MessageId(id),
+        quote_text: None,
+        quote_entities: Vec::new(),
+        content_preview: None,
+        origin: None,
+        origin_send_date: 0,
+        content: None,
+        story_id: 0,
+    };
+    let mut messages = three();
+    assert!(!messages.replies_to(8, 30));
+    let mut answer = message(4, "re");
+    answer.reply_to = Some(reply(8, 30));
+    messages.insert(4, answer);
+    assert!(messages.replies_to(8, 30));
+    assert!(!messages.replies_to(8, 31));
+    if let Some(answer) = messages.get_mut(&4) {
+        answer.reply_to = Some(reply(8, 31));
+    }
+    assert!(messages.replies_to(8, 31));
+    assert!(!messages.replies_to(8, 30));
+    messages.remove(&4);
+    assert!(!messages.replies_to(8, 31));
+}

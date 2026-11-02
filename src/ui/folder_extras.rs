@@ -111,12 +111,7 @@ impl QuillApp {
                 )));
             }
         } else if let Some(session) = self.demo_session.as_mut() {
-            for chat in session.chats.values_mut() {
-                if chat.folder_positions.contains_key(&folder_id) {
-                    chat.unread_count = 0;
-                    chat.is_marked_as_unread = false;
-                }
-            }
+            session.mark_chats_read_locally(|chat| chat.folder_positions.contains_key(&folder_id));
         }
         cx.notify();
     }
@@ -894,3 +889,8 @@ crate::ui::shell::register_dialogs! {
         QuillApp::build_folder_new_chats_dialog,
     ),
 }
+
+#[cfg(test)]
+#[cfg(feature = "demo-capture")]
+#[path = "folder_extras_tests.rs"]
+mod tests;

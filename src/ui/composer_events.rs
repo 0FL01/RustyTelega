@@ -66,14 +66,14 @@ impl QuillApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let mut text = state.read(cx).value().to_string();
+        let mut text = state.read(cx).value();
         if matches!(event, InputEvent::Change) {
             let prev = self.composer_ui.prev_text.clone();
             if self
                 .composer_ui
                 .markdown_revert
                 .as_ref()
-                .is_some_and(|revert| revert.text != text)
+                .is_some_and(|revert| revert.text != text.as_ref())
             {
                 self.composer_ui.markdown_revert = None;
             }
@@ -81,7 +81,7 @@ impl QuillApp {
                 text = replaced;
             } else if self.apply_markdown_replacement(&prev, window, cx) {
                 // `**bold**` typed: the markers became formatting.
-                text = state.read(cx).value().to_string();
+                text = state.read(cx).value();
                 self.composer_ui.prev_text = text.clone();
             } else {
                 // A macOS text replacement shortcut ended by this keystroke.

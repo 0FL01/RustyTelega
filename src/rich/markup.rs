@@ -1,9 +1,43 @@
 //! Rich text: plain-text markup to and from `RichBlock`s, and the live preview.
 use super::*;
 
+const FENCE: &str = "```";
+/// Marks a further line of the list item above it.
+const ITEM_LINE_INDENT: &str = "  ";
+
+/// The line numbers each code block covers, fence to fence, as the inline
+/// parser reads them: a line with a fence opens a block that the next line
+/// with one closes. A block with nothing in it is not one.
+pub(super) fn code_fences<'a>(
+    lines: impl Iterator<Item = &'a str>,
+) -> Vec<std::ops::RangeInclusive<usize>> {
+    let mut fences = Vec::new();
+    let mut open = None;
+    let mut empty = true;
+    for (index, line) in lines.enumerate() {
+        match open {
+            None if line.contains(FENCE) => {
+                open = Some(index);
+                empty = true;
+            }
+            Some(start) if line.contains(FENCE) => {
+                if !empty {
+                    fences.push(start..=index);
+                }
+                open = None;
+            }
+            Some(_) => empty &= line.trim().is_empty(),
+            None => {}
+        }
+    }
+    fences
+}
+
 /// Convert composer text into editor blocks. Line markers (same spirit as
 /// the M1 markup): `#`/`##`/`###` headings, `-`/`*` unordered lists,
-/// `1.` ordered lists, `>>` collapsible blocks, `---` dividers.
+/// `1.` ordered lists, `>>` collapsible blocks, `---` dividers. A code fence
+/// is one unit of its paragraph, whatever its lines look like. An indented
+/// line goes on the list item above it.
 pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
     let mut blocks: Vec<RichBlock> = Vec::new();
     let mut paragraph: Vec<String> = Vec::new();
@@ -31,10 +65,18 @@ pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
             }
         };
 
-    let mut lines = text.lines().peekable();
-    while let Some(line) = lines.next() {
+    let fences = code_fences(text.lines());
+    let mut fence = fences.iter().peekable();
+    let mut lines = text.lines().enumerate().peekable();
+    while let Some((index, line)) = lines.next() {
         let trimmed = line.trim();
-        if let Some(heading) = parse_heading_marker(trimmed) {
+        if let Some(code) = fence.next_if(|code| *code.start() == index) {
+            flush_list(&mut list_items, list_ordered, &mut blocks);
+            paragraph.push(line.to_string());
+            while let Some((_, line)) = lines.next_if(|(at, _)| code.contains(at)) {
+                paragraph.push(line.to_string());
+            }
+        } else if let Some(heading) = parse_heading_marker(trimmed) {
             flush_paragraph(&mut paragraph, &mut blocks);
             flush_list(&mut list_items, list_ordered, &mut blocks);
             blocks.push(heading);
@@ -52,7 +94,13 @@ pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
             flush_paragraph(&mut paragraph, &mut blocks);
             flush_list(&mut list_items, list_ordered, &mut blocks);
             let mut body: Vec<String> = Vec::new();
-            while let Some(next) = lines.peek() {
+            while let Some(&(at, next)) = lines.peek() {
+                if let Some(code) = fence.next_if(|code| *code.start() == at) {
+                    while let Some((_, line)) = lines.next_if(|(at, _)| code.contains(at)) {
+                        body.push(line.to_string());
+                    }
+                    continue;
+                }
                 let next_trimmed = next.trim();
                 if next_trimmed.is_empty()
                     || parse_heading_marker(next_trimmed).is_some()
@@ -62,17 +110,27 @@ pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
                 {
                     break;
                 }
-                body.push(lines.next().unwrap_or("").to_string());
+                body.push(next.to_string());
+                lines.next();
             }
             blocks.push(RichBlock::Collapsible {
                 header: header.trim().to_string(),
+                header_entities: Vec::new(),
                 body: body.join("\n").trim().to_string(),
+                body_entities: Vec::new(),
                 open: false,
             });
         } else if trimmed.is_empty() {
             flush_paragraph(&mut paragraph, &mut blocks);
             flush_list(&mut list_items, list_ordered, &mut blocks);
+        } else if let Some(item) = list_items
+            .last_mut()
+            .filter(|_| line.starts_with(ITEM_LINE_INDENT))
+        {
+            item.text.push('\n');
+            item.text.push_str(trimmed);
         } else {
+            flush_list(&mut list_items, list_ordered, &mut blocks);
             paragraph.push(line.to_string());
         }
     }
@@ -85,16 +143,16 @@ pub fn markup_to_blocks(text: &str) -> Vec<RichBlock> {
 ///
 /// Inverse of the editor's block markers (`#` / `##` / `###`, `-` and
 /// `1.` lists, `[ ]` / `[x]` checkboxes, `>>` collapsible blocks, `---`).
-/// Rich AI answers are written back through this so the rich send path
-/// rebuilds the same structure. Clipboard
+/// The rich send path rebuilds the same structure from it. Clipboard
 /// [`crate::telegram::envelope::RichMessageContent::copy_text`] drops those
 /// markers, and the send path then sees flat paragraph(s).
 ///
-/// Inline `TextEntity` spans stay plain text: the editor stores styling as
-/// markup characters inside the block text, and incoming entity spans have
-/// no marker here. Tables, captions, and document names have no block
-/// marker either — their text is kept as paragraphs so the words are not
-/// dropped. Button rows, anchors, and unsupported blocks contribute nothing.
+/// These are editor blocks: styling is markup characters inside the block
+/// text. Parsed blocks go through [`RichDraft::from_message`] first, which
+/// writes their entities as markup. Tables, captions, and document names
+/// have no block marker, so their text is kept as paragraphs and the words
+/// are not dropped. Button rows, anchors, and unsupported blocks contribute
+/// nothing.
 pub fn blocks_to_markup(blocks: &[RichBlock]) -> String {
     let mut parts: Vec<String> = Vec::new();
     for block in blocks {
@@ -113,6 +171,15 @@ fn one_line(text: &str) -> String {
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// A list item's text, its later lines indented to stay in the item.
+fn item_lines(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(&format!("\n{ITEM_LINE_INDENT}"))
 }
 
 fn block_to_markup(block: &RichBlock) -> Option<String> {
@@ -147,16 +214,21 @@ fn block_to_markup(block: &RichBlock) -> Option<String> {
                         Some(false) => "[ ] ",
                         None => "",
                     };
-                    format!("{marker}{check}{}", one_line(&item.text))
+                    format!("{marker}{check}{}", item_lines(&item.text))
                 })
                 .collect();
             Some(lines.join("\n"))
         }
         RichBlock::Collapsible { header, body, .. } => {
             let mut lines = vec![format!(">> {}", one_line(header))];
+            let fences = code_fences(body.lines());
             let body = body
                 .lines()
-                .filter(|line| !line.trim().is_empty())
+                .enumerate()
+                .filter(|(index, line)| {
+                    !line.trim().is_empty() || fences.iter().any(|code| code.contains(index))
+                })
+                .map(|(_, line)| line)
                 .collect::<Vec<_>>()
                 .join("\n");
             if !body.is_empty() {
@@ -209,18 +281,14 @@ fn nonempty_lines(parts: &[&str]) -> Option<String> {
 }
 
 /// M2: resolve editor markup to clean text + render entities for the live
-/// block preview. `parse_format_markup` yields UTF-16 offsets;
-/// `TextEntity` needs UTF-8 byte offsets (converted with
-/// `utf16_to_utf8_offset`, as in `rich_text_to_parts`). Block quotes are
-/// block-level — inside a paragraph the text survives and the marker is
-/// dropped, mirroring `formatted_to_rich_text`.
+/// block preview. Block quotes are block-level: inside a paragraph the text
+/// survives and the marker is dropped, mirroring `formatted_to_rich_text`.
 fn markup_preview_text(text: &str) -> (String, Vec<TextEntity>) {
     let (clean, composer_entities) = crate::composer::parse_format_markup(text);
     let entities = composer_entities
         .into_iter()
         .filter_map(|entity| {
-            let start = utf16_to_utf8_offset(&clean, entity.offset).ok()?;
-            let end = utf16_to_utf8_offset(&clean, entity.offset + entity.length).ok()?;
+            let std::ops::Range { start, end } = entity.bytes;
             if end <= start {
                 return None;
             }
@@ -267,12 +335,10 @@ fn markup_preview_text(text: &str) -> (String, Vec<TextEntity>) {
 }
 
 /// M2: editor preview — `markup_to_blocks` with inline markup resolved to
-/// clean text + `TextEntity` spans. Paragraphs and headings keep their
-/// styling (the history renderer paints entities there); list items and
-/// collapsible header/body render plain throughout Quill (same as incoming
-/// `pageBlock*`, whose list labels are plain strings), so their markers
-/// are stripped without entities. The send path is untouched — it
-/// re-parses markup itself via `block_rich_text`.
+/// clean text + `TextEntity` spans. Paragraphs, headings and list items keep
+/// their styling; collapsible header/body render plain throughout Quill, so
+/// their markers are stripped without entities. The send path is untouched:
+/// it re-parses markup itself via `block_rich_text`.
 pub fn preview_blocks(text: &str) -> Vec<RichBlock> {
     markup_to_blocks(text)
         .into_iter()
@@ -312,17 +378,29 @@ pub fn preview_block(block: RichBlock) -> RichBlock {
             ordered,
             items: items
                 .into_iter()
-                .map(|item| RichListItem {
-                    text: markup_preview_text(&item.text).0,
-                    ..item
+                .map(|item| {
+                    let (text, entities) = markup_preview_text(&item.text);
+                    RichListItem {
+                        text,
+                        entities,
+                        ..item
+                    }
                 })
                 .collect(),
         },
-        RichBlock::Collapsible { header, body, open } => RichBlock::Collapsible {
-            header: markup_preview_text(&header).0,
-            body: markup_preview_text(&body).0,
-            open,
-        },
+        RichBlock::Collapsible {
+            header, body, open, ..
+        } => {
+            let (header, header_entities) = markup_preview_text(&header);
+            let (body, body_entities) = markup_preview_text(&body);
+            RichBlock::Collapsible {
+                header,
+                header_entities,
+                body,
+                body_entities,
+                open,
+            }
+        }
         other => other,
     }
 }
@@ -346,7 +424,9 @@ fn parse_list_marker(trimmed: &str) -> Option<(RichListItem, bool)> {
             let (checked, text) = parse_checkbox(rest.trim());
             return Some((
                 RichListItem {
+                    label: String::new(),
                     text: text.to_string(),
+                    entities: Vec::new(),
                     checked,
                 },
                 false,
@@ -367,7 +447,9 @@ fn parse_list_marker(trimmed: &str) -> Option<(RichListItem, bool)> {
         let (checked, text) = parse_checkbox(rest);
         return Some((
             RichListItem {
+                label: String::new(),
                 text: text.to_string(),
+                entities: Vec::new(),
                 checked,
             },
             true,
@@ -463,9 +545,7 @@ mod tests {
     #[test]
     fn preview_blocks_resolves_markup_to_entities() {
         // M2: the editor preview shows clean text + entity spans for
-        // paragraphs/headings (no raw `**` markers); list items and
-        // collapsible text is marker-stripped, matching how Quill renders
-        // those blocks everywhere.
+        // every text block (no raw `**` markers).
         let blocks = preview_blocks(
             "# **Club** night\n\nPick **one**:\n\n- **a**\n\n>> **More**\n**body**\n",
         );
@@ -484,11 +564,22 @@ mod tests {
             panic!("expected list, got {:?}", blocks[2]);
         };
         assert_eq!(items[0].text, "a");
-        let RichBlock::Collapsible { header, body, .. } = &blocks[3] else {
+        assert_eq!(items[0].entities.len(), 1);
+        assert!(matches!(items[0].entities[0].kind, TextEntityKind::Bold));
+        let RichBlock::Collapsible {
+            header,
+            header_entities,
+            body,
+            body_entities,
+            ..
+        } = &blocks[3]
+        else {
             panic!("expected collapsible, got {:?}", blocks[3]);
         };
         assert_eq!(header, "More");
         assert_eq!(body, "body");
+        assert!(matches!(header_entities[0].kind, TextEntityKind::Bold));
+        assert!(matches!(body_entities[0].kind, TextEntityKind::Bold));
     }
 
     #[test]

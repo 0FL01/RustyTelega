@@ -455,6 +455,8 @@ pub struct InputBaseState<M: InputModeKind> {
     pub(super) replaying_history: bool,
     pub(super) validated_token_edit: bool,
     pub(super) document_revision: u64,
+    /// `text` as a string, until the next edit takes it (Quill patch).
+    value_memo: std::cell::Cell<Option<SharedString>>,
     pub(super) token_presentation: super::InlineTokenPresentation,
     pub(super) token_layout_cache: Option<Box<super::token_presentation::TokenLayoutCache>>,
     /// Real per-frame bounds of the placed token elements, keyed by token
@@ -1055,6 +1057,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             completion_inserting: false,
             overlay_action_handler: None,
             silent_replace_text: false,
+            value_memo: Default::default(),
             emit_events: true,
             _subscriptions,
             _pending_update: false,
@@ -1648,10 +1651,17 @@ impl<M: InputModeKind> InputBaseState<M> {
 
     /// Return the value of the input field as an owned string.
     ///
-    /// The string is materialized on each call. See [`Self::text`] for the
-    /// [`Rope`] the state owns, which is borrowed and costs nothing to read.
+    /// The string is materialized once per edit (Quill patch). See
+    /// [`Self::text`] for the [`Rope`] the state owns, which is borrowed and
+    /// costs nothing to read.
     pub fn value(&self) -> SharedString {
-        SharedString::new(self.text.to_string())
+        let value = self
+            .value_memo
+            .take()
+            .unwrap_or_else(|| SharedString::new(self.text.to_string()));
+        debug_assert!(self.text == value.as_ref(), "a text edit kept the old value");
+        self.value_memo.set(Some(value.clone()));
+        value
     }
 
     /// Return the portion of the value within the input field that
@@ -3736,6 +3746,7 @@ impl<M: InputModeKind> InputBaseState<M> {
             }
 
             // Check if mouse is in this line's bounds
+            let pos = line_layout.nearest_laid_out(pos, line_height);
             if let Some((local_index, line_end_affinity)) =
                 line_layout.closest_index_for_position(pos, last_layout)
             {
@@ -4445,7 +4456,9 @@ impl<M: InputModeKind> InputBaseState<M> {
         for (range, new_text) in &sorted {
             let old_text = self.text.clone();
             self.mode.adjust_auto_closed_pair(range, new_text.len());
-            self.text.replace(range.clone(), new_text);
+            self.value_memo.take();
+            self.value_memo.take();
+        self.text.replace(range.clone(), new_text);
 
             M::adjust_annotations(self, range, new_text.len());
             recorded |= self.push_history(
@@ -4791,6 +4804,7 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
         // Single-line path
         let old_text = self.text.clone();
         self.mode.adjust_auto_closed_pair(&range, new_text.len());
+        self.value_memo.take();
         self.text.replace(range.clone(), new_text);
 
         let mut new_offset = (range.start + new_text.len()).min(self.text.len());
@@ -4811,6 +4825,7 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
                 && !self.is_valid_input(&pending_text, cx)
                 && self.is_valid_input(&old_text.to_string(), cx)
             {
+                self.value_memo.take();
                 self.text = old_text;
                 return;
             }
@@ -4818,6 +4833,7 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
             if !self.replaying_history && !self.mask_pattern.is_none() {
                 let mask_text = self.mask_pattern.mask(&pending_text);
                 mask_changed = mask_text.as_str() != pending_text;
+                self.value_memo.take();
                 self.text = Rope::from(mask_text.as_str());
                 let new_text_len =
                     (new_text.len() + mask_text.len()).saturating_sub(pending_text.len());
@@ -4956,6 +4972,7 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
         let auto_closed_pairs_before = self.mode.auto_closed_pairs().clone();
         let old_text = self.text.clone();
         self.mode.adjust_auto_closed_pair(&range, new_text.len());
+        self.value_memo.take();
         self.text.replace(range.clone(), new_text);
 
         if self.is_single_line() {
@@ -4966,6 +4983,7 @@ impl<M: InputModeKind> EntityInputHandler for InputBaseState<M> {
                 && !self.is_valid_input(&pending_text, cx)
                 && self.is_valid_input(&old_text.to_string(), cx)
             {
+                self.value_memo.take();
                 self.text = old_text;
                 if starts_composition {
                     self.undo_manager.commit_transaction();

@@ -95,8 +95,9 @@ pub trait ScreenBackend: Send + Sync {
     /// Checked before the chooser opens (tdesktop
     /// `desktopCaptureAllowed`).
     fn access(&self) -> ScreenAccess;
-    /// Ask the OS for access and open its privacy settings.
-    fn open_privacy_settings(&self);
+    /// Ask the OS for access. Returns the system settings pane where the
+    /// user grants it, for the UI to open (`QuillApp::open_system_settings`).
+    fn ask_access(&self) -> Option<&'static str>;
     /// Screens first, then windows, in the OS order.
     fn sources(&self) -> Result<Vec<ScreenSource>, CaptureError>;
     /// One picture of `source`, fitted into `max` pixels.
@@ -303,9 +304,14 @@ impl PreviewSlot {
         inner.published_at = Some(frame.captured_at);
     }
 
-    /// The newest preview and its sequence number.
-    pub fn latest(&self) -> Option<(u64, Thumbnail)> {
-        self.inner.lock_or_recover().latest.clone()
+    /// The newest preview and its sequence number, unless it is `seen`.
+    pub fn latest_after(&self, seen: u64) -> Option<(u64, Thumbnail)> {
+        let inner = self.inner.lock_or_recover();
+        inner
+            .latest
+            .as_ref()
+            .filter(|(seq, _)| *seq != seen)
+            .cloned()
     }
 }
 

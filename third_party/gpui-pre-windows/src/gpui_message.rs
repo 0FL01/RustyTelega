@@ -26,6 +26,9 @@ gpui_message_ids! {
     /// Quill: tells the platform window that the GPU device is gone for good (see
     /// `WindowsPlatformInner::handle_device_gone`).
     WM_GPUI_GPU_DEVICE_GONE = WM_USER + 12;
+    /// Quill: ask the app about a quit the OS started now that the app is
+    /// not borrowed (see `WindowsPlatformInner::handle_query_end_session`).
+    WM_GPUI_QUIT_REQUEST_LATER = WM_USER + 13;
 }
 
 impl GpuiMessageId {
@@ -100,7 +103,7 @@ mod tests {
 
     #[test]
     fn ids_gpui_does_not_use_are_not_gpui_messages() {
-        for raw in [WM_USER, WM_USER + 8, WM_USER + 9, WM_USER + 13] {
+        for raw in [WM_USER, WM_USER + 8, WM_USER + 9, WM_USER + 14] {
             assert_eq!(GpuiMessageId::from_raw(raw), None);
         }
     }

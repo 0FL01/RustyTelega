@@ -79,7 +79,9 @@ impl ScreenBackend for DemoScreens {
         self.access
     }
 
-    fn open_privacy_settings(&self) {}
+    fn ask_access(&self) -> Option<&'static str> {
+        Some("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+    }
 
     fn sources(&self) -> Result<Vec<ScreenSource>, CaptureError> {
         Ok(Self::list())
@@ -226,7 +228,7 @@ impl QuillApp {
             is_joined: true,
             screen_sharing: true,
             screen_share_paused: true,
-            participants: std::sync::Arc::new(participants),
+            participants: participants.into(),
             ..ActiveGroupCall::fresh(7)
         });
         if crowd > 0 {

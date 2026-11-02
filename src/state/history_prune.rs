@@ -71,6 +71,8 @@ pub struct HistoryPruning {
     /// waiting for the UI's claims before they are trimmed.
     release_chats: VecDeque<i64>,
     release_topics: VecDeque<(i64, i32)>,
+    /// Topic pages still in flight when their entry was dropped.
+    pub(super) gone_topic_pages: BTreeSet<u64>,
     dropped: BTreeMap<i64, DroppedHistory>,
     dropped_order: VecDeque<i64>,
     /// The histories are the only copy of the rows ([`Session::keep_all_histories`]).
@@ -199,8 +201,15 @@ impl HistoryState {
 
 impl TopicHistory {
     /// [`HistoryState::trim_to_tail`] for a topic: the paging cursor moves
-    /// to the oldest kept message so older pages continue from there.
+    /// to the oldest kept message so older pages continue from there. A
+    /// window short of the latest has no tail worth keeping: it goes, and
+    /// the topic opens at its latest page again.
     pub(crate) fn trim_to_tail(&mut self, keep: usize) -> usize {
+        if self.has_newer {
+            let before = self.messages.len();
+            self.reset_window();
+            return before - self.messages.len();
+        }
         let doomed = tail_excess(&self.messages, keep);
         for id in &doomed {
             self.messages.remove(id);
@@ -388,8 +397,13 @@ impl Session {
             return;
         }
         if let Some(history) = self.threads.topic_histories.get_mut(&(chat_id.0, topic)) {
-            history.trim_to_tail(CLOSED_TAIL_KEEP);
+            let moved = history.has_newer | (history.trim_to_tail(CLOSED_TAIL_KEEP) > 0);
             self.history_pruning.touch_topic((chat_id.0, topic));
+            // Pages asked for from the window that went would land across
+            // a gap.
+            if moved {
+                self.drop_topic_pages_past(chat_id, topic, &[WindowEnd::Oldest, WindowEnd::Newest]);
+            }
         }
         self.enforce_closed_bounds(None);
     }
@@ -524,9 +538,14 @@ impl Session {
         {
             self.drop_history_entry(chat_id.0);
         }
-        self.threads
-            .topic_histories
-            .retain(|(chat, _), _| *chat != chat_id.0);
+        let topics: Vec<(i64, i32)> = (self.threads.topic_histories.keys())
+            .filter(|(chat, _)| *chat == chat_id.0)
+            .copied()
+            .collect();
+        for key in topics {
+            self.drop_topic_pages_in_flight(key);
+            self.threads.topic_histories.remove(&key);
+        }
         self.history_pruning
             .closed_topics
             .retain(|(chat, _)| *chat != chat_id.0);
@@ -575,6 +594,7 @@ impl Session {
             else {
                 break;
             };
+            self.drop_topic_pages_in_flight(key);
             self.threads.topic_histories.remove(&key);
             self.forget_side_tables_once_unloaded(ChatId(key.0));
         }

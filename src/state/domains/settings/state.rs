@@ -95,6 +95,9 @@ pub struct SettingsState {
     pub storage_clearing: bool,
     /// Batch 6: the local storage limits TDLib reports (`updateOption`).
     pub storage_limits: crate::storage_limits::StorageLimits,
+    /// This session sent the first cache limits; the account counts as
+    /// seeded once TDLib echoes them (`storage_limits.chosen()`).
+    pub storage_limits_seed_sent: bool,
     /// B13: new-chat privacy, inactive-session TTL, 18+ option, network
     /// usage and the remember-password check.
     pub privacy_data: PrivacyData,
@@ -216,6 +219,8 @@ pub struct SettingsState {
     /// (`parity:menu-save-selection-html`); the driver removes each one
     /// when the UI takes its outcome.
     pub rich_html_exports: Vec<crate::rich_html::RichHtmlExport>,
+    /// Cache copies the exports downloaded for themselves.
+    pub export_files: ExportFiles,
     /// The `setlanguage` link whose box is open.
     pub language_link: Option<LanguageLinkLookup>,
     /// Settings → Language: packs, the switch in flight, strings to install.
@@ -229,6 +234,13 @@ pub struct SettingsState {
 }
 
 impl SettingsState {
+    pub fn export_links(&self) -> impl Iterator<Item = &crate::export::handle::WorkerLink> {
+        let chat = self.chat_export.iter().map(|export| &export.link);
+        let account = self.account_export.iter().map(|export| &export.link);
+        chat.chain(account)
+            .chain(self.rich_html_exports.iter().map(|export| &export.link))
+    }
+
     pub(crate) fn new() -> Self {
         Self {
             quick_replies: QuickRepliesState::default(),
@@ -264,6 +276,7 @@ impl SettingsState {
             storage_freed: None,
             storage_clearing: false,
             storage_limits: Default::default(),
+            storage_limits_seed_sent: false,
             privacy_data: Default::default(),
             notices: AccountNotices::default(),
             sessions: None,
@@ -302,6 +315,7 @@ impl SettingsState {
             account_export: None,
             chat_export: None,
             rich_html_exports: Vec::new(),
+            export_files: ExportFiles::default(),
             language_link: None,
             language: LanguageState::default(),
         }

@@ -342,7 +342,10 @@ impl<S: JsonSender> ConnectDriver<S> {
         let extra = self.session.request_download(file_id);
         let request = if let Some((chat_id, message_id)) = origin {
             self.session.begin_user_download(file_id);
-            self.session.media.downloads.note_chat(file_id.0, chat_id);
+            self.session
+                .media
+                .downloads
+                .note_origin(file_id.0, chat_id, message_id);
             add_file_to_downloads_request(
                 extra,
                 file_id,
@@ -372,19 +375,47 @@ impl<S: JsonSender> ConnectDriver<S> {
         }
     }
 
+    /// Applies one disk reading. A low disk holds automatic downloads and
+    /// pauses the listed downloads that would not fit above close; a full
+    /// one (a call holds the client open) has no room, so it pauses them
+    /// all; a healthy one resumes those. Returns how many of the paused ones had
+    /// been resumed since the disk paused them, so the caller can say why
+    /// they stopped again.
     pub fn note_disk(
         &mut self,
         state: DiskState,
         free: Option<u64>,
         floors: &DiskFloors,
-    ) -> Result<(), ConnectSendError> {
-        self.session.media.disk_holds_auto_downloads = state != DiskState::Healthy;
-        let (DiskState::Low, Some(free), true) = (state, free, self.chats_path_active()) else {
-            return Ok(());
+    ) -> Result<usize, ConnectSendError> {
+        let room = match state {
+            DiskState::Healthy => None,
+            DiskState::Low => free.map(|free| free.saturating_sub(floors.close)),
+            DiskState::Full => Some(0),
         };
-        let room = free.saturating_sub(floors.close);
+        let media = &mut self.session.media;
+        media.disk_holds_auto_downloads = state != DiskState::Healthy;
+        media.disk_room = room;
+        if !self.chats_path_active() {
+            return Ok(0);
+        }
+        if state == DiskState::Healthy {
+            let paused: Vec<i32> = self.session.media.disk_paused.drain().collect();
+            for id in paused {
+                self.forget_disk_pause(id);
+                if self.session.media.downloads.is_paused(id) {
+                    self.toggle_download_paused(FileId(id), false)?;
+                }
+            }
+            let searched = self.search_disk_paused_elsewhere();
+            self.save_disk_pauses_if_changed();
+            searched?;
+            return Ok(0);
+        }
+        let Some(room) = room else {
+            return Ok(0);
+        };
         let media = &self.session.media;
-        let over: Vec<FileId> = media
+        let over: Vec<i32> = media
             .downloads
             .user_ids()
             .filter(|id| !media.downloads.is_paused(*id))
@@ -394,19 +425,42 @@ impl<S: JsonSender> ConnectDriver<S> {
                     .get(id)
                     .is_some_and(|file| file.download_left() > room)
             })
-            .map(FileId)
             .collect();
-        for file_id in over {
-            self.pause_download(file_id)?;
+        let mut repaused = 0;
+        for id in over {
+            if !self.session.media.disk_paused.insert(id) {
+                repaused += 1;
+            }
+            self.save_disk_pause(id);
+            self.toggle_download_paused(FileId(id), true)?;
         }
-        Ok(())
+        self.save_disk_pauses_if_changed();
+        Ok(repaused)
+    }
+
+    /// Whether `file_id` has room to finish above the close floor while the
+    /// disk is low. Always true otherwise.
+    pub fn download_fits_disk(&self, file_id: FileId) -> bool {
+        let media = &self.session.media;
+        let Some(room) = media.disk_room else {
+            return true;
+        };
+        media
+            .files
+            .get(&file_id.0)
+            .is_none_or(|file| file.download_left() <= room)
     }
 
     /// Pause a user-initiated (listed) download (`toggleDownloadIsPaused`).
     /// The pause state itself arrives on `updateFileDownload` — this only
     /// sends the request. Returns `Ok(false)` when the file isn't a
-    /// tracked user download.
+    /// tracked user download. A pause the user makes is theirs to undo: the
+    /// disk recovering no longer resumes it. A resume leaves the disk's note
+    /// in place, which says why the download stops again if it does not fit.
     pub fn pause_download(&mut self, file_id: FileId) -> Result<bool, ConnectSendError> {
+        self.session.media.disk_paused.remove(&file_id.0);
+        self.forget_disk_pause(file_id.0);
+        self.save_disk_pauses_if_changed();
         self.toggle_download_paused(file_id, true)
     }
 
@@ -415,7 +469,7 @@ impl<S: JsonSender> ConnectDriver<S> {
         self.toggle_download_paused(file_id, false)
     }
 
-    fn toggle_download_paused(
+    pub(super) fn toggle_download_paused(
         &mut self,
         file_id: FileId,
         is_paused: bool,

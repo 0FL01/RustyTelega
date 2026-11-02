@@ -308,6 +308,7 @@ impl QuillApp {
     /// Pin or unpin a video tile (local only, like tdesktop).
     pub(super) fn toggle_group_call_tile_pin(&mut self, key: TileKey, cx: &mut Context<Self>) {
         self.group_call.pin.toggle(key);
+        self.sync_group_call_large_tile();
         cx.notify();
     }
 
@@ -451,8 +452,13 @@ impl QuillApp {
                             Button::new("call-pref-ptt-open-settings")
                                 .label(tr(keys::GROUP_CALL_MAC_SETTINGS))
                                 .small()
-                                .on_click(cx.listener(|_, _, _, _| {
-                                    quill::calls::ptt_global::open_permission_settings();
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if let Some(pane) =
+                                        quill::calls::ptt_global::permission_settings_pane()
+                                    {
+                                        let failure = tr(keys::Q_AV_COULDNT_OPEN_SYSTEM_SETTINGS);
+                                        this.open_system_settings(pane, failure, cx);
+                                    }
                                 })),
                         )
                         .child(

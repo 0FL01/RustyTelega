@@ -226,6 +226,7 @@ impl QuillApp {
             .wheel(phase, delta_down, at_bottom, active, now);
         self.pull_step(step, target, cx);
         if step.redraw || self.history.pull.machine.animating(now) {
+            self.notify_conversation(cx);
             cx.notify();
         }
         step.consumed
@@ -404,27 +405,18 @@ impl QuillApp {
         (shift, indicator, listener)
     }
 
-    /// The capture-phase wheel listener over the history's bounds.
     fn pull_listener(&self, cx: &mut Context<Self>) -> AnyElement {
         let app = cx.weak_entity();
         canvas(
-            |_, _, _| {},
-            move |bounds, _, window, _| {
+            |bounds, window, _| window.insert_hitbox(bounds, HitboxBehavior::Normal),
+            move |_, hitbox, window, _| {
                 let app = app.clone();
                 window.on_mouse_event(move |event: &ScrollEvent, phase, window, cx| {
-                    if phase != DispatchPhase::Capture || !bounds.contains(&event.position) {
+                    if phase != DispatchPhase::Capture || !hitbox.should_handle_scroll(window) {
                         return;
                     }
                     let consumed = app
-                        .update(cx, |this, cx| {
-                            // GPUI clears a visible tooltip on a wheel event with
-                            // `window.refresh()`, which replays a cached view's last
-                            // frame — tooltip included. Dirtying the conversation
-                            // slice makes the next frame drop it (the "React" hint
-                            // otherwise stays put after the message scrolls away).
-                            this.notify_conversation(cx);
-                            this.pull_wheel(event, window, cx)
-                        })
+                        .update(cx, |this, cx| this.pull_wheel(event, window, cx))
                         .unwrap_or(false);
                     if consumed {
                         cx.stop_propagation();

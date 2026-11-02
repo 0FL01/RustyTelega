@@ -24,7 +24,10 @@ impl QuillApp {
         demo: Option<ScreenshotDemo>,
     ) -> Self {
         #[cfg(test)]
-        quill::wake::isolate_current_thread();
+        {
+            quill::wake::isolate_current_thread();
+            quill::power_saving::isolate_for_tests();
+        }
         super::tooltip_timing::install(cx);
         super::image_budget::start_sweeper(cx);
         quill::media_tools::warm_up();
@@ -527,7 +530,7 @@ impl QuillApp {
             }
         })
         .detach();
-        super::calls::stream_volume::intercept_live_story_volume_keys(window, cx);
+        super::calls::stream_volume::intercept_live_story_volume_keys(cx);
         // Fast buttons mode: keys 1 to 9 in an empty composer press the
         // last message's inline buttons (tdesktop `setupFastButtonMode`).
         let fast_app = cx.weak_entity();

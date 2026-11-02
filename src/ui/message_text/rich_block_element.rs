@@ -31,17 +31,12 @@ pub(in crate::ui) fn rich_block_element(
                 .flex_col()
                 .gap_1();
             if !text.is_empty() {
-                col = col.child(rich_text_line(
-                    text,
-                    entities,
-                    msg_key,
-                    false,
-                    revealed,
-                    font,
-                    // Instant View richText* has no custom emoji entities
-                    // (richTextCustomEmoji degrades to alternative_text).
-                    &HashMap::new(),
-                    cx,
+                let part = RichPart {
+                    block: index,
+                    part: 0,
+                };
+                col = col.child(rich_part_line(
+                    part, text, entities, msg_key, revealed, font, cx,
                 ));
             }
             for (button_index, button) in buttons.iter().enumerate() {
@@ -80,15 +75,16 @@ pub(in crate::ui) fn rich_block_element(
             };
             Some(
                 heading
-                    .child(rich_text_line(
+                    .child(rich_part_line(
+                        RichPart {
+                            block: index,
+                            part: 0,
+                        },
                         text,
                         entities,
                         msg_key,
-                        false,
                         revealed,
                         font,
-                        // Instant View richText* has no custom emoji entities.
-                        &HashMap::new(),
                         cx,
                     ))
                     .into_any_element(),
@@ -104,6 +100,7 @@ pub(in crate::ui) fn rich_block_element(
                 let marker = match item.checked {
                     Some(true) => "☑",
                     Some(false) => "☐",
+                    None if !item.label.is_empty() => &item.label,
                     None if *ordered => &format!("{}.", item_index + 1),
                     None => "•",
                 };
@@ -112,28 +109,65 @@ pub(in crate::ui) fn rich_block_element(
                         .id(format!("rich-list-item-{row_id}-{index}-{item_index}"))
                         .flex()
                         .gap_2()
-                        .child(div().text_sm().child(marker.to_string()))
-                        .child(div().text_sm().child(item.text.clone())),
+                        .child(div().text_size(font).child(marker.to_string()))
+                        .child(div().flex_1().min_w_0().child(rich_part_line(
+                            RichPart {
+                                block: index,
+                                part: item_index,
+                            },
+                            &item.text,
+                            &item.entities,
+                            msg_key,
+                            revealed,
+                            font,
+                            cx,
+                        ))),
                 );
             }
             Some(col.into_any_element())
         }
-        RichBlock::Collapsible { header, body, .. } => Some(
-            div()
-                .id(format!("rich-details-{row_id}-{index}"))
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(div().text_sm().font_semibold().child(format!("▾ {header}")))
-                .child(
-                    div()
-                        .ml_4()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(body.clone()),
-                )
-                .into_any_element(),
-        ),
+        RichBlock::Collapsible {
+            header,
+            header_entities,
+            body,
+            body_entities,
+            ..
+        } => {
+            let part = |part| RichPart { block: index, part };
+            let header_line = rich_part_line(
+                part(0),
+                header,
+                header_entities,
+                msg_key,
+                revealed,
+                font,
+                cx,
+            );
+            let body_line =
+                rich_part_line(part(1), body, body_entities, msg_key, revealed, font, cx);
+            Some(
+                div()
+                    .id(format!("rich-details-{row_id}-{index}"))
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .flex()
+                            .gap_1()
+                            .font_semibold()
+                            .child(div().text_size(font).child("▾"))
+                            .child(div().flex_1().min_w_0().child(header_line)),
+                    )
+                    .child(
+                        div()
+                            .ml_4()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(body_line),
+                    )
+                    .into_any_element(),
+            )
+        }
         RichBlock::Document {
             file_name, caption, ..
         } => {
@@ -381,4 +415,78 @@ pub(in crate::ui) fn reply_quote_strip(
             )),
         ))
         .into_any_element()
+}
+
+#[cfg(test)]
+mod reveal_tests {
+    use super::super::{InlineAction, RichPart, paragraph_text};
+    use quill::text::{TextEntity, TextEntityKind, TextRun, styled_runs};
+    use std::collections::{HashMap, HashSet};
+
+    fn spoiler() -> Vec<TextRun> {
+        styled_runs(
+            "x",
+            &[TextEntity {
+                utf8_start: 0,
+                utf8_end: 1,
+                kind: TextEntityKind::Spoiler,
+            }],
+        )
+    }
+
+    fn reveal_key(part: RichPart) -> Option<(i64, u64, u64, bool)> {
+        let revealed = HashSet::new();
+        let empty = HashMap::new();
+        let layered = HashMap::new();
+        let text = paragraph_text(
+            &spoiler(),
+            part.first_run(),
+            (1, 2),
+            false,
+            &revealed,
+            &empty,
+            &layered,
+        );
+        text.actions.iter().find_map(|action| match action {
+            InlineAction::RevealSpoiler(key) => Some(*key),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn a_spoiler_at_the_same_run_of_another_text_keeps_its_own_key() {
+        let item = |block, part| reveal_key(RichPart { block, part });
+        assert!(item(0, 0).is_some());
+        assert_ne!(item(0, 0), item(1, 0), "two blocks");
+        assert_ne!(item(0, 0), item(0, 1), "two list items");
+        assert_ne!(item(1, 0), item(0, 1), "across blocks and items");
+    }
+
+    #[test]
+    fn revealing_one_text_leaves_the_other_hidden() {
+        let (first, second) = (
+            RichPart { block: 0, part: 0 },
+            RichPart { block: 1, part: 0 },
+        );
+        let Some(key) = reveal_key(first) else {
+            panic!("the run is a spoiler");
+        };
+        let revealed = HashSet::from([key]);
+        let (empty, layered) = (HashMap::new(), HashMap::new());
+        let hidden = |part: RichPart| {
+            !paragraph_text(
+                &spoiler(),
+                part.first_run(),
+                (1, 2),
+                false,
+                &revealed,
+                &empty,
+                &layered,
+            )
+            .actions
+            .is_empty()
+        };
+        assert!(!hidden(first));
+        assert!(hidden(second));
+    }
 }

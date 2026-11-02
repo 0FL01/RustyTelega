@@ -32,14 +32,17 @@ struct Harness {
 }
 
 fn new_app(cx: &mut TestAppContext) -> Harness {
+    new_demo_app(cx, "ready-chats")
+}
+
+fn new_demo_app(cx: &mut TestAppContext, demo: &'static str) -> Harness {
     cx.update(gpui_kit::init);
     cx.update(bind_keys);
     let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
     let slot_in = slot.clone();
     let handle = cx.open_window(size(px(1100.), px(700.)), move |window, cx| {
-        let view = cx.new(|cx| {
-            QuillApp::new_with_demo(window, cx, None, Some(ScreenshotDemo::named("ready-chats")))
-        });
+        let view = cx
+            .new(|cx| QuillApp::new_with_demo(window, cx, None, Some(ScreenshotDemo::named(demo))));
         let focus = view.focus_handle(cx);
         window.focus(&focus, cx);
         let shell = cx.new(|_| QuillShell::new(view.clone()));
@@ -201,16 +204,13 @@ fn a_reply_started_in_a_chat_window_stays_in_that_window(cx: &mut TestAppContext
     let h = new_app(cx);
     let chat_window = h.open_in_new_window(OTHER, cx);
     // Right-click the window's one message (its bubble sits at the left
-    // of the row, level with the row's reaction button): the menu belongs
-    // to the window.
+    // of the row): the menu belongs to the window.
     let point = cx
         .update_window(chat_window, |_, window, cx| {
             window.render_frame(cx);
-            let react = window
-                .within(("row", OTHER_LAST.0 as u64))
-                .find(format!("message-react-{}", OTHER_LAST.0))
-                .bounds();
-            gpui_kit::point(px(70.), react.center().y)
+            let row = h.app.read(cx).windows.slot_for(OTHER).expect("slot");
+            let row = row.borrow().history.painted_row_center(OTHER_LAST);
+            gpui_kit::point(px(70.), row.y)
         })
         .unwrap();
     let mut vcx = VisualTestContext::from_window(chat_window, cx);
@@ -1006,8 +1006,8 @@ fn a_chat_windows_pictures_go_through_a_cache_of_its_own(cx: &mut TestAppContext
     );
     let images = h
         .app
-        .read_with(cx, |app, cx| {
-            app.windows.image_cache_for(chat_window.window_id(), cx)
+        .read_with(cx, |app, _| {
+            app.windows.image_cache_for(chat_window.window_id())
         })
         .expect("the window's cache");
     let loaded = images.read_with(cx, |images, _| images.loaded_images());
@@ -1126,4 +1126,230 @@ fn a_message_photo_edit_whose_chat_window_closed_leaves_no_png(cx: &mut TestAppC
         })
         .unwrap_or_default();
     assert_eq!(left, 0, "the dropped edit's PNG was deleted");
+}
+
+/// A Send held on a photo's render and a tap on that card, in a chat
+/// window that closes before the render lands: the main window says the
+/// photo did not go, no editor opens anywhere, and the edited photo waits
+/// in the chat's tray.
+#[gpui_kit::test]
+fn a_held_send_whose_chat_window_closed_says_it_did_not_go(cx: &mut TestAppContext) {
+    use crate::ui::photo_editor::{EditorPurpose, PhotoEditor};
+    use quill::composer::{AttachmentExtras, AttachmentKind, ComposerAttachment};
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    let dir = quill::scratch::process_dir("quill-chat-window-edit");
+    std::fs::create_dir_all(&dir).unwrap();
+    let original = dir.join("held-closing.png");
+    image::RgbaImage::from_pixel(61, 17, image::Rgba([7, 8, 9, 255]))
+        .save(&original)
+        .unwrap();
+    let app = h.app.clone();
+    let path = original.clone();
+    cx.update_window(chat_window, |_, window, cx| {
+        app.update(cx, |app, cx| {
+            app.in_window_of(window, cx, |app, window, cx| {
+                app.update_pending_attachments(|tray| {
+                    tray.push(ComposerAttachment {
+                        file_name: "held-closing.png".into(),
+                        path: path.clone(),
+                        kind: AttachmentKind::Photo,
+                        spoiler: false,
+                        extras: AttachmentExtras::default(),
+                    })
+                })
+                .unwrap();
+                let item = app.tray_item(0).unwrap();
+                let pixels = image::open(&path).unwrap().to_rgba8();
+                app.viewer.photo_editor =
+                    Some(PhotoEditor::new(EditorPurpose::Attachment(item), pixels));
+                app.photo_editor_mut(PhotoEditor::rotate, cx);
+                app.save_photo_editor(window, cx);
+                app.submit_composer(String::new(), window, cx);
+                app.open_photo_editor(0, cx);
+            });
+        });
+        window.dispatch_action(Box::new(CloseWindow), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(h.other_windows(cx).is_empty());
+    h.settle(cx);
+    h.app.read_with(cx, |app, _| {
+        assert_eq!(
+            app.connection.note().text(),
+            quill::lang::tr(quill::lang::keys::Q_MISC_NOT_SENT_THE_CHAT_CLOSED_BEFORE_THE_PHOTO)
+        );
+        assert!(app.viewer.photo_editor.is_none(), "no editor opened");
+        assert!(app.viewer.photo_editor_after.is_none(), "the tap is gone");
+        assert!(!app.composer_sends.holds(&original), "the edit landed");
+    });
+    let edits = quill::scratch::temp_work_dir("quill-edits");
+    let rendered: Vec<_> = std::fs::read_dir(edits)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter_map(|entry| std::fs::canonicalize(entry.path()).ok())
+                .filter(|path| image::image_dimensions(path).ok() == Some((17, 61)))
+                .collect()
+        })
+        .unwrap_or_default();
+    assert_eq!(rendered.len(), 1);
+    h.app.read_with(cx, |app, _| {
+        assert!(
+            app.composer_sends.holds(&rendered[0]),
+            "it waits in the tray"
+        );
+    });
+    let _ = std::fs::remove_file(&rendered[0]);
+}
+
+/// Whether `window` drew the status toast.
+fn status_toast_drawn(window: AnyWindowHandle, cx: &mut TestAppContext) -> bool {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        window.try_find("status-toast").is_some()
+    })
+    .unwrap()
+}
+
+#[gpui_kit::test]
+fn a_note_from_a_chat_window_toasts_in_that_window(cx: &mut TestAppContext) {
+    crate::ui::app_render::pin_toasts_for_tests();
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    h.app.update(cx, |app, cx| {
+        app.note_window_input(Some(OTHER));
+        app.connection
+            .set_note(crate::ui::status_note::StatusNote::error(
+                "Couldn't open the link",
+            ));
+        app.set_window_scope(None);
+        cx.notify();
+    });
+    assert!(status_toast_drawn(chat_window, cx), "the window shows it");
+    assert!(!status_toast_drawn(h.main, cx), "the main window does not");
+
+    // The pointer moving over the main window leaves the toast where it
+    // was asked for.
+    h.app.update(cx, |app, cx| {
+        app.note_window_input(None);
+        cx.notify();
+    });
+    assert!(status_toast_drawn(chat_window, cx));
+    assert!(!status_toast_drawn(h.main, cx));
+}
+
+#[gpui_kit::test]
+fn a_late_open_failure_toasts_in_the_window_that_asked(cx: &mut TestAppContext) {
+    crate::ui::app_render::pin_toasts_for_tests();
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    let (answer, answered) = futures_channel::oneshot::channel();
+    quill::platform::script_next_os_open(quill::platform::OsOpen::Pending(answered));
+    h.app.update(cx, |app, cx| {
+        app.note_window_input(Some(OTHER));
+        app.open_link("https://example.com/a", cx);
+        // The pointer moves over the main window before the OS answers.
+        app.note_window_input(None);
+    });
+    answer.send(false).unwrap();
+    cx.run_until_parked();
+    assert!(status_toast_drawn(chat_window, cx), "the window that asked");
+    assert!(!status_toast_drawn(h.main, cx));
+}
+
+#[gpui_kit::test]
+fn closing_a_chat_window_moves_its_toast_to_the_main_window(cx: &mut TestAppContext) {
+    crate::ui::app_render::pin_toasts_for_tests();
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    h.app.update(cx, |app, cx| {
+        app.note_window_input(Some(OTHER));
+        app.connection
+            .set_note(crate::ui::status_note::StatusNote::error(
+                "Couldn't open the link",
+            ));
+        cx.notify();
+    });
+    assert!(status_toast_drawn(chat_window, cx));
+    cx.update_window(chat_window, |_, window, cx| {
+        window.dispatch_action(Box::new(CloseWindow), cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert!(status_toast_drawn(h.main, cx), "the toast is not lost");
+}
+
+#[gpui_kit::test]
+fn a_narrow_forum_window_showing_its_topics_draws_the_toast(cx: &mut TestAppContext) {
+    crate::ui::app_render::pin_toasts_for_tests();
+    let h = new_demo_app(cx, "ready-composer-bars");
+    let forum = crate::ui::demos::composer::FORUM_CHAT;
+    let chat_window = h.open_in_new_window(forum, cx);
+    cx.simulate_window_resize(chat_window, size(px(700.), px(700.)));
+    cx.run_until_parked();
+    let topics_only = cx
+        .update_window(chat_window, |_, window, cx| {
+            window.render_frame(cx);
+            window.try_find("chat-window-history").is_none()
+        })
+        .unwrap();
+    assert!(topics_only, "the window shows only the topic list");
+    h.app.update(cx, |app, cx| {
+        app.note_window_input(Some(forum));
+        app.connection
+            .set_note(crate::ui::status_note::StatusNote::error(
+                "Couldn't open the link",
+            ));
+        cx.notify();
+    });
+    assert!(status_toast_drawn(chat_window, cx));
+}
+
+#[gpui_kit::test]
+fn a_low_disk_shows_its_bar_in_a_chat_window_until_space_returns(cx: &mut TestAppContext) {
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    let bar = |cx: &mut TestAppContext| {
+        cx.update_window(chat_window, |_, window, cx| {
+            window.render_frame(cx);
+            window.try_find("disk-low-storage").is_some()
+        })
+        .unwrap()
+    };
+    assert!(!bar(cx));
+    h.app.update(cx, |app, cx| {
+        app.apply_disk_reading(Some(quill::disk_guard::FLOORS.warn - 1), cx);
+    });
+    cx.run_until_parked();
+    assert!(bar(cx), "the warning is in the chat window too");
+    h.app.update(cx, |app, cx| {
+        app.apply_disk_reading(Some(quill::disk_guard::FLOORS.warn_clear), cx);
+    });
+    cx.run_until_parked();
+    assert!(!bar(cx), "and goes once space returns");
+}
+
+#[gpui_kit::test]
+fn a_chat_window_the_platform_destroys_frees_its_chat(cx: &mut TestAppContext) {
+    let h = new_app(cx);
+    let chat_window = h.open_in_new_window(OTHER, cx);
+    // A lost renderer: the platform destroys the window without asking it to close.
+    cx.update_window(chat_window, |_, window, _| window.remove_window())
+        .unwrap();
+    cx.run_until_parked();
+    assert!(h.other_windows(cx).is_empty());
+    assert!(
+        h.app.read_with(cx, |app, _| !app.windows.has(OTHER)),
+        "stale chat window entry"
+    );
+    assert!(h.window_chats(cx).is_empty());
+    cx.update_window(h.main, |_, window, cx| {
+        h.app
+            .update(cx, |app, cx| app.open_chat_in_new_window(OTHER, window, cx));
+    })
+    .unwrap();
+    cx.run_until_parked();
+    assert_eq!(h.other_windows(cx).len(), 1, "asking again opens a window");
 }

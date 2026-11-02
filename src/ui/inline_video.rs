@@ -173,10 +173,11 @@ impl InlineTile {
     }
 
     /// Bytes of BGRA a player decoding at `edge` holds at most: `queued`
-    /// pictures ahead plus the one shown.
+    /// pictures ahead, the one shown and any idle buffers its pool keeps.
     pub(super) fn decode_bytes(self, edge: u32, queued: usize) -> usize {
         let (w, h) = self.decoded_size(edge);
-        w as usize * h as usize * 4 * (queued + 1)
+        let idle = super::video_player::surface::idle_bgra_buffers();
+        w as usize * h as usize * 4 * (queued + 1 + idle)
     }
 
     /// Whether the clip is small enough to play inline in software
@@ -510,7 +511,6 @@ impl QuillApp {
 /// a quarter of the tile), rendered at twice the size for Retina edges, so
 /// one small image serves every tile with that radius: a mask of the whole
 /// tile cost MBs for each tile size and window width.
-#[cfg(any(target_os = "macos", target_os = "windows", test))]
 pub(super) fn corner_mask(
     corner: usize,
     radius: u32,
@@ -574,7 +574,6 @@ pub(super) fn corner_mask(
 
 /// The device-pixel size of a [`corner_mask`]: its radius square at twice
 /// the size, no more than half the tile.
-#[cfg(any(target_os = "macos", target_os = "windows", test))]
 pub(super) fn corner_mask_size(radius: u32, tile: (u32, u32)) -> (u32, u32) {
     (
         radius.saturating_mul(2).min(tile.0),
@@ -650,7 +649,10 @@ mod tests {
     fn small_clips_are_never_upscaled() {
         let tiny = InlineTile::media(crate::ui::message_media::MediaFrameKind::Video, 100, 80, 0);
         assert_eq!(tiny.decoded_size(tiny.decode_edge(2.)), (100, 80));
-        assert_eq!(tiny.decode_bytes(720, 3), 100 * 80 * 4 * 4);
+        assert_eq!(
+            tiny.decode_bytes(720, 3),
+            100 * 80 * 4 * (3 + 1 + crate::ui::video_player::surface::idle_bgra_buffers())
+        );
         assert_eq!(
             InlineTile::media(crate::ui::message_media::MediaFrameKind::Video, 0, 0, 0)
                 .decoded_size(300),

@@ -20,6 +20,12 @@ struct MockInner {
     fail_mute: bool,
     /// Test-only failure injection for `set_group_muted`.
     fail_group_mute: bool,
+    /// Join payloads made and not yet taken.
+    made_offers: Vec<GroupOffer>,
+    /// Test-only: payloads stay in `made_offers`, as while tgcalls works.
+    hold_group_offers: bool,
+    /// Test-only failure injection for the next join payload.
+    fail_group_offer: bool,
     /// Test-only failure injection for the next `connect`.
     fail_connect: bool,
     devices: Vec<MediaDevice>,
@@ -39,6 +45,7 @@ struct MockInner {
     device_selections: Vec<(i32, Option<String>, Option<String>)>,
     /// Phase C2g: group transport recording for driver tests.
     group_offers: Vec<(i32, i64)>,
+    group_rekeys: Vec<(i32, i64)>,
     group_roles: Vec<(i32, GroupCallRole)>,
     group_connects: Vec<(i32, String, Option<String>)>,
     group_video_syncs: Vec<(i32, Vec<GroupVideoSource>)>,
@@ -57,6 +64,10 @@ struct MockInner {
     connected_chats: Vec<i64>,
     /// Test-only: the next `connect_group_call` fails with this code.
     fail_group_connect: Option<i32>,
+    fail_group_video_sync: bool,
+    device_lists: usize,
+    /// Device lists not answered yet, while they are held.
+    held_lists: Option<Vec<std::sync::mpsc::Sender<Vec<MediaDevice>>>>,
     engine_event_hook: Option<EngineEventCallback>,
     live_frame_hook: Option<LiveFrameCallback>,
     stream_qualities: Vec<(i64, StreamQuality)>,
@@ -155,8 +166,26 @@ impl MockEngine {
     }
 
     /// Phase C2g: recorded group transport calls for driver tests.
+    /// Test-only: join payloads wait until `release_group_offers`.
+    pub fn hold_group_offers(&self) {
+        self.inner.lock_or_recover().hold_group_offers = true;
+    }
+
+    pub fn release_group_offers(&self) {
+        self.inner.lock_or_recover().hold_group_offers = false;
+    }
+
+    /// Test-only: the next join payload never comes.
+    pub fn fail_group_offer(&self) {
+        self.inner.lock_or_recover().fail_group_offer = true;
+    }
+
     pub fn group_offers(&self) -> Vec<(i32, i64)> {
         self.inner.lock_or_recover().group_offers.clone()
+    }
+
+    pub fn group_rekeys(&self) -> Vec<(i32, i64)> {
+        self.inner.lock_or_recover().group_rekeys.clone()
     }
 
     pub fn group_roles(&self) -> Vec<(i32, GroupCallRole)> {
@@ -227,6 +256,27 @@ impl MockEngine {
     /// Test-only: the next `connect_group_call` fails with `code`.
     pub fn fail_next_group_connect(&self, code: i32) {
         self.inner.lock_or_recover().fail_group_connect = Some(code);
+    }
+
+    /// Device lists wait for [`Self::release_device_lists`] from now on.
+    pub fn hold_device_lists(&self) {
+        self.inner.lock_or_recover().held_lists = Some(Vec::new());
+    }
+
+    pub fn release_device_lists(&self) {
+        let mut inner = self.inner.lock_or_recover();
+        let held = inner.held_lists.take().unwrap_or_default();
+        for answer in held {
+            let _ = answer.send(inner.devices.clone());
+        }
+    }
+
+    pub fn device_lists(&self) -> usize {
+        self.inner.lock_or_recover().device_lists
+    }
+
+    pub fn fail_next_group_video_sync(&self) {
+        self.inner.lock_or_recover().fail_group_video_sync = true;
     }
 
     pub fn group_playbacks(&self) -> Vec<(i32, Option<String>, bool)> {
@@ -345,6 +395,21 @@ impl MockEngine {
                 "13.0.0".into(),
             ],
         }
+    }
+}
+
+impl MockInner {
+    fn make_offer(&mut self, key: GroupOfferKey, payload: String) {
+        self.made_offers.retain(|offer| offer.key != key);
+        let payload = if std::mem::take(&mut self.fail_group_offer) {
+            Err(EngineError::Engine {
+                op: "qc_group_create",
+                code: -1,
+            })
+        } else {
+            Ok(payload)
+        };
+        self.made_offers.push(GroupOffer { key, payload });
     }
 }
 
@@ -518,21 +583,33 @@ impl CallEngine for MockEngine {
         group_call_id: i32,
         chat_id: i64,
         role: GroupCallRole,
-    ) -> Result<String, EngineError> {
+    ) -> Result<(), EngineError> {
         let mut inner = self.inner.lock_or_recover();
         if !inner.available {
             return Err(EngineError::Unavailable);
         }
         inner.group_offers.push((group_call_id, chat_id));
         inner.group_roles.push((group_call_id, role));
-        Ok(format!("mock-group-offer-{group_call_id}"))
+        inner.make_offer(
+            GroupOfferKey::Call(group_call_id),
+            format!("mock-group-offer-{group_call_id}"),
+        );
+        Ok(())
+    }
+
+    fn take_group_offers(&mut self) -> Vec<GroupOffer> {
+        let mut inner = self.inner.lock_or_recover();
+        if inner.hold_group_offers {
+            return Vec::new();
+        }
+        std::mem::take(&mut inner.made_offers)
     }
 
     fn create_conference_call(
         &mut self,
         key: i32,
         crypto: Arc<dyn FrameCrypto>,
-    ) -> Result<String, EngineError> {
+    ) -> Result<(), EngineError> {
         let mut inner = self.inner.lock_or_recover();
         if !inner.available {
             return Err(EngineError::Unavailable);
@@ -541,7 +618,11 @@ impl CallEngine for MockEngine {
         inner.group_roles.push((key, GroupCallRole::Member));
         inner.conferences.retain(|(old, _)| *old != key);
         inner.conferences.push((key, crypto));
-        Ok(format!("mock-conference-offer-{key}"))
+        inner.make_offer(
+            GroupOfferKey::Call(key),
+            format!("mock-conference-offer-{key}"),
+        );
+        Ok(())
     }
 
     fn rekey_group_call(&mut self, from: i32, to: i32) -> Result<(), EngineError> {
@@ -629,6 +710,12 @@ impl CallEngine for MockEngine {
             .push((chat_id, quality));
     }
 
+    fn move_group_call_to_chat(&mut self, group_call_id: i32, chat_id: i64) -> bool {
+        let mut inner = self.inner.lock_or_recover();
+        inner.group_rekeys.push((group_call_id, chat_id));
+        true
+    }
+
     fn stream_quality(&self, chat_id: i64) -> Option<StreamQuality> {
         self.inner
             .lock_or_recover()
@@ -673,6 +760,12 @@ impl CallEngine for MockEngine {
         if !inner.available {
             return Err(EngineError::Unavailable);
         }
+        if std::mem::take(&mut inner.fail_group_video_sync) {
+            return Err(EngineError::Engine {
+                op: "sync_group_video",
+                code: -1,
+            });
+        }
         inner
             .group_video_syncs
             .push((group_call_id, sources.to_vec()));
@@ -694,7 +787,7 @@ impl CallEngine for MockEngine {
         Ok(())
     }
 
-    fn start_screen_share(&mut self, group_call_id: i32) -> Result<String, EngineError> {
+    fn start_screen_share(&mut self, group_call_id: i32) -> Result<(), EngineError> {
         let mut inner = self.inner.lock_or_recover();
         if !inner.available {
             return Err(EngineError::Unavailable);
@@ -703,7 +796,11 @@ impl CallEngine for MockEngine {
         if !inner.presentations.contains(&group_call_id) {
             inner.presentations.push(group_call_id);
         }
-        Ok(format!("mock-presentation-offer-{group_call_id}"))
+        inner.make_offer(
+            GroupOfferKey::Screen(group_call_id),
+            format!("mock-presentation-offer-{group_call_id}"),
+        );
+        Ok(())
     }
 
     fn connect_screen_share(
@@ -728,6 +825,9 @@ impl CallEngine for MockEngine {
         }
         inner.screen_share_stops.push(group_call_id);
         inner.presentations.retain(|id| *id != group_call_id);
+        inner
+            .made_offers
+            .retain(|offer| offer.key != GroupOfferKey::Screen(group_call_id));
         Ok(())
     }
 
@@ -817,6 +917,9 @@ impl CallEngine for MockEngine {
             return Err(EngineError::Unavailable);
         }
         inner.group_leaves.push(group_call_id);
+        inner
+            .made_offers
+            .retain(|offer| offer.key.id() != group_call_id);
         inner.conferences.retain(|(key, _)| *key != group_call_id);
         let chat_id = inner
             .group_offers
@@ -847,6 +950,19 @@ impl CallEngine for MockEngine {
             return Err(EngineError::Unavailable);
         }
         Ok(inner.devices.clone())
+    }
+
+    fn list_media_devices(&self, answer: std::sync::mpsc::Sender<Vec<MediaDevice>>) {
+        let mut inner = self.inner.lock_or_recover();
+        inner.device_lists += 1;
+        if let Some(held) = inner.held_lists.as_mut() {
+            held.push(answer);
+            return;
+        }
+        drop(inner);
+        if let Ok(devices) = self.media_devices() {
+            let _ = answer.send(devices);
+        }
     }
 
     fn protocol(&self) -> EngineProtocol {

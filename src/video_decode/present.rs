@@ -6,7 +6,7 @@
 //! "starved" (buffering) state live here too.
 #![deny(clippy::indexing_slicing)]
 
-use super::{DUE_SLACK, Player, VideoFrame, lock, synced_position, take_due};
+use super::{DUE_SLACK, Pixels, Player, VideoFrame, lock, synced_position, take_due};
 use std::time::{Duration, Instant};
 
 /// The longest the UI is told to sleep before the next picture, so a wrong
@@ -29,11 +29,12 @@ impl Player {
     pub(super) fn take_frame_for(&mut self, present: Instant, now: Instant) -> Option<VideoFrame> {
         // With sound, pull the wall clock back to it when they drifted
         // apart (the sound is the master; the wall clock only smooths it).
-        if !self.clock.held && self.clock.is_playing() {
-            let wall = self.clock.position(now);
+        let clock = self.clock();
+        if !clock.held && clock.is_playing() {
+            let wall = clock.position(now);
             let synced = synced_position(wall, self.heard());
             if synced != wall {
-                self.clock.follow(synced, now);
+                self.with_clock(|clock| clock.follow(synced, now));
             }
         }
         let position = self.position_at(present.max(now));
@@ -42,28 +43,36 @@ impl Player {
             take_due(&mut state.video, position, self.first)
         };
         if let Some(frame) = &picked {
+            self.note_handed_out(frame);
             self.shared.wake.notify_all();
             if self.first {
                 self.first = false;
-                self.clock.release(now);
+                self.with_clock(|clock| clock.release(now));
             }
             self.last_pts = Some(frame.pts);
         }
         picked
     }
 
+    fn note_handed_out(&self, frame: &VideoFrame) {
+        if matches!(frame.pixels, Pixels::Nv12 { .. }) {
+            self.bgra.release();
+        }
+    }
+
     /// When the front queued picture becomes due on the wall clock, while
     /// the clock runs. `None` when paused, held for a first picture, ended,
     /// or nothing is queued yet (the caller then asks every frame).
     pub fn next_due(&self, now: Instant) -> Option<Instant> {
-        if self.clock.held || !self.clock.is_playing() || self.ended {
+        let clock = self.clock();
+        if clock.held || !clock.is_playing() || self.ended {
             return None;
         }
         let front = lock(&self.shared.state)
             .video
             .front()
             .map(|frame| frame.pts)?;
-        let ahead = (front - DUE_SLACK - self.position_at(now)) / self.clock.rate.max(0.01);
+        let ahead = (front - DUE_SLACK - self.position_at(now)) / clock.rate.max(0.01);
         if !ahead.is_finite() || ahead <= 0.0 {
             return Some(now);
         }
@@ -76,7 +85,8 @@ impl Player {
     /// Playing, but the decoder has no picture ready and is not at the end
     /// of the file: the picture is stalled (shown as buffering).
     pub fn starved(&self) -> bool {
-        if self.clock.held || !self.clock.is_playing() || self.ended {
+        let clock = self.clock();
+        if clock.held || !clock.is_playing() || self.ended {
             return false;
         }
         let state = lock(&self.shared.state);
@@ -86,14 +96,17 @@ impl Player {
 
     /// Paused: show the next queued picture and move the clock to it.
     pub fn step_forward(&mut self) -> Option<VideoFrame> {
-        if self.clock.is_playing() {
+        if self.clock().is_playing() {
             return None;
         }
         let frame = lock(&self.shared.state).video.pop_front()?;
+        self.note_handed_out(&frame);
         self.shared.wake.notify_all();
         let now = Instant::now();
-        self.clock.follow(frame.pts, now);
-        self.clock.pause(now);
+        self.with_clock(|clock| {
+            clock.follow(frame.pts, now);
+            clock.pause(now);
+        });
         self.first = false;
         self.ended = false;
         self.last_pts = Some(frame.pts);
@@ -103,7 +116,7 @@ impl Player {
     /// Paused: go back one picture. Seeks to just before the one shown, so
     /// the next [`Player::take_frame_at`] returns the picture before it.
     pub fn step_back(&mut self) {
-        if self.clock.is_playing() {
+        if self.clock().is_playing() {
             return;
         }
         let fps = self

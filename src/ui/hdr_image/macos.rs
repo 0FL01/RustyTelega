@@ -42,6 +42,8 @@ const HDR_PEAK_MIN: f32 = 1.01;
 /// A decoded HDR still's GPU buffer.
 pub(crate) struct Frame {
     buffer: CFRetained<CVPixelBuffer>,
+    #[cfg(test)]
+    headroom_bits: std::sync::atomic::AtomicU32,
 }
 
 // SAFETY: a CVPixelBuffer is a CoreFoundation object with atomic retain
@@ -54,7 +56,19 @@ impl Frame {
         self.buffer.clone()
     }
 
+    /// Tests: the headroom last set on this frame.
+    #[cfg(test)]
+    pub(crate) fn headroom(&self) -> f32 {
+        f32::from_bits(
+            self.headroom_bits
+                .load(std::sync::atomic::Ordering::Relaxed),
+        )
+    }
+
     pub(crate) fn set_headroom(&self, headroom: f32) {
+        #[cfg(test)]
+        self.headroom_bits
+            .store(headroom.to_bits(), std::sync::atomic::Ordering::Relaxed);
         let key = CFString::from_static_str(HEADROOM_KEY);
         let value = CFNumber::new_f32(headroom);
         // SAFETY: the attachment is a CFNumber, which is what the renderer
@@ -218,7 +232,11 @@ fn draw_half_float(image: &CFRetained<CGImage>) -> Result<Option<HdrPixels>, Dec
         return Ok(None);
     }
     Ok(Some(HdrPixels {
-        frame: Frame { buffer },
+        frame: Frame {
+            buffer,
+            #[cfg(test)]
+            headroom_bits: std::sync::atomic::AtomicU32::new(0),
+        },
         size: (w32, h32),
         peak,
     }))
@@ -373,6 +391,22 @@ pub(crate) fn set_window_edr(window: &gpui_kit::Window, on: bool) {
         }
         Some(())
     });
+}
+
+/// Whether the window's layer is in extended-range mode now. The renderer
+/// turns it off on its own when it can't draw in it.
+pub(crate) fn window_edr(window: &gpui_kit::Window) -> Option<bool> {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyObject, Bool};
+    with_view(window, |view| {
+        // SAFETY: as in `set_window_edr`.
+        let layer: *mut AnyObject = unsafe { msg_send![view, layer] };
+        // SAFETY: as above; a null layer is skipped.
+        let layer = unsafe { layer.as_ref() }?;
+        // SAFETY: CAMetalLayer's wantsExtendedDynamicRangeContent getter.
+        let on: Bool = unsafe { msg_send![layer, wantsExtendedDynamicRangeContent] };
+        Some(on.as_bool())
+    })
 }
 
 fn with_view<T>(

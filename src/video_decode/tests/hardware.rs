@@ -107,6 +107,27 @@ fn a_failing_hardware_decoder_hands_over_to_software_without_losing_a_picture() 
     assert!(drift <= 2048, "sound kept: {drift} samples apart");
 }
 
+/// A seek arms the shim to show the last picture it skipped if the file
+/// ends first. A hardware failure at the end, long after that seek, used
+/// to replay a picture already shown.
+#[test]
+fn a_hardware_failure_at_the_end_after_a_seek_repeats_no_picture() {
+    if !decoder() {
+        return;
+    }
+    let clip = fixture("clip-h264-aac.mp4");
+    let software = decode(
+        FfiDemuxer::open(&clip, &options(false)).expect("open"),
+        PixelOutput::Bgra,
+    );
+    let mut demuxer =
+        FfiDemuxer::open_stand_in(&clip, &options(true), StandIn::DrainFails).expect("open");
+    demuxer.seek(0.0).expect("seek");
+    let failing = decode(demuxer, PixelOutput::Bgra);
+    assert!(!failing.finished.hardware, "software after the failure");
+    assert_eq!(failing.pts, software.pts, "no picture lost or repeated");
+}
+
 #[test]
 fn a_hardware_decoder_that_software_cannot_replace_stays_in_charge() {
     if !decoder() {
@@ -139,4 +160,23 @@ fn a_hardware_decoder_that_software_cannot_replace_stays_in_charge() {
     let again = decode(demuxer, PixelOutput::Bgra);
     assert_eq!(again.pts, software.pts, "a seek plays the whole clip on it");
     assert!(again.finished.hardware);
+}
+
+#[test]
+fn a_seek_past_the_end_still_shows_the_last_picture_when_hardware_fails_on_the_way() {
+    if !decoder() {
+        return;
+    }
+    let clip = fixture("clip-h264-aac.mp4");
+    let mut demuxer =
+        FfiDemuxer::open_stand_in(&clip, &options(true), StandIn::FailThirdPicture).expect("open");
+    let total = demuxer.info().duration.expect("a duration");
+    demuxer.seek(total).expect("seek to the end");
+    let after = decode(demuxer, PixelOutput::Bgra);
+    let shown: Vec<f64> = after.pts.iter().map(|pts| (pts * 10.0).round()).collect();
+    assert_eq!(shown, vec![9.0], "the last picture, once");
+    assert!(
+        !after.finished.hardware,
+        "software took over during the seek"
+    );
 }

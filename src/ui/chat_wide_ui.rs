@@ -73,10 +73,12 @@ impl QuillApp {
         let layout = self.history.chat_layout.clone();
         let history_width = self.history.width.clone();
         let probed = self.history.width_probed.clone();
+        let pane_width = self.history.pane_width.clone();
         let app = cx.weak_entity();
         canvas(
             |_, _, _| {},
             move |bounds, _, window, cx| {
+                pane_width.set(bounds.size.width);
                 let width = f32::from(bounds.size.width);
                 let now = ChatLayout::for_width(width);
                 let layout_changed = layout.replace(now) != now;

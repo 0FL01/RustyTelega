@@ -431,7 +431,7 @@ impl<S: JsonSender> ConnectDriver<S> {
             }
             DeepLinkAction::OpenChannelPost { channel_id, .. } => {
                 // TDLib channel dialog encoding: -(10^12) - channel_id.
-                get_chat(extra, ChatId(-1_000_000_000_000 - channel_id))
+                get_chat(extra, ChatId::from_supergroup(*channel_id))
             }
         };
         self.session.chats_state.deep_link =

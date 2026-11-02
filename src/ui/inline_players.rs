@@ -329,6 +329,8 @@ struct State {
     /// Each window's pass counts, of its history and of each panel
     /// (`None`: the main window's).
     passes: HashMap<(Option<ChatId>, List), u64>,
+    /// Each window's history width, and its pass number when that changed.
+    history_widths: HashMap<Option<ChatId>, (Pixels, u64)>,
     /// The view each window's history renders in (`begin_render`): redrawn
     /// once a sleeping slot it shows gets a new player, so its tile picks
     /// it up.
@@ -391,15 +393,18 @@ impl InlineVideos {
         self: &Rc<Self>,
         window: Option<ChatId>,
         view: Option<EntityId>,
+        width: Pixels,
         cx: &mut App,
     ) {
         let dropped = self.with(|state| {
+            let number = state.pass(window, List::History).saturating_add(1);
+            let resizing = state.note_history_width(window, width, number);
             state.swept.insert(window);
             match view {
                 Some(view) => state.views.insert(window, view),
                 None => state.views.remove(&window),
             };
-            state.begin_pass(window, List::History)
+            state.begin_pass(window, List::History, resizing)
         });
         let marks: Vec<(Key, VideoPlayer)> = self
             .with(|state| {
@@ -1024,11 +1029,11 @@ mod tests {
         // Players at 1x 720p-GIF size: dozens fit.
         let each = InlineTile::media(Gif, 1280, 720, 0).decode_bytes(360, 3);
         let fit = (1..).take_while(|n| admits(each * n, each)).count();
-        assert!(fit >= 40, "{fit}");
-        // At 2x they cost four times as much, still a dozen.
+        assert!(fit >= 24, "{fit}");
+        // At 2x they cost four times as much, still more than a few.
         let each = InlineTile::media(Gif, 1280, 720, 0).decode_bytes(720, 3);
         let fit = (1..).take_while(|n| admits(each * n, each)).count();
-        assert!((12..40).contains(&fit), "{fit}");
+        assert!((6..24).contains(&fit), "{fit}");
         // AVPlayer players hold nothing of ours.
         assert!(admits(INLINE_DECODE_BUDGET, 0));
         assert!(!admits(INLINE_DECODE_BUDGET, 1));
@@ -1036,10 +1041,15 @@ mod tests {
 
     #[test]
     fn the_budget_counts_the_queue_the_inline_decoder_keeps() {
-        // `OpenOptions::inline` keeps three pictures ahead of the one shown.
+        // `OpenOptions::inline` keeps three pictures ahead of the one shown,
+        // and a BGRA pool three idle buffers, which NV12 surfaces let go.
         let queued = quill::video_decode::OpenOptions::inline(320).video_frames;
         assert_eq!(queued, 3);
         let gif = InlineTile::media(crate::ui::message_media::MediaFrameKind::Gif, 1280, 720, 0);
-        assert_eq!(gif.decode_bytes(320, queued), 320 * 180 * 4 * 4);
+        let idle = if cfg!(target_os = "macos") { 3 } else { 0 };
+        assert_eq!(
+            gif.decode_bytes(320, queued),
+            320 * 180 * 4 * (queued + 1 + idle)
+        );
     }
 }

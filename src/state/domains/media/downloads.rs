@@ -75,10 +75,12 @@ pub struct DownloadIntents {
     failed: HashSet<i32>,
     /// Requested preloads.
     preloads: HashSet<i32>,
-    /// The chat of the message a listed download came from, noted when it
-    /// starts (`note_chat`): the downloads panel tags its row with it.
-    /// Kept while the file has an intent or a place in `finished`.
-    chats: HashMap<i32, ChatId>,
+    /// The chat of the message a listed download came from, and the
+    /// message when known (0 otherwise), noted when it starts
+    /// (`note_chat`, `note_origin`): the downloads panel tags its row with
+    /// the chat. Kept while the file has an intent or a place in
+    /// `finished`.
+    chats: HashMap<i32, (ChatId, i64)>,
 }
 
 impl DownloadIntents {
@@ -278,13 +280,31 @@ impl DownloadIntents {
     /// The download of `file_id` came from a message in `chat_id`.
     pub fn note_chat(&mut self, file_id: i32, chat_id: ChatId) {
         if file_id != 0 && chat_id.0 != 0 {
-            self.chats.insert(file_id, chat_id);
+            let message = self.chats.get(&file_id).map_or(0, |(_, message)| *message);
+            self.chats.insert(file_id, (chat_id, message));
+        }
+    }
+
+    /// The download of `file_id` came from message `message_id` in
+    /// `chat_id`.
+    pub fn note_origin(&mut self, file_id: i32, chat_id: ChatId, message_id: i64) {
+        if file_id != 0 && chat_id.0 != 0 {
+            self.chats.insert(file_id, (chat_id, message_id));
         }
     }
 
     /// The chat a download came from, when it was noted at its start.
     pub fn chat_of(&self, file_id: i32) -> Option<ChatId> {
-        self.chats.get(&file_id).copied()
+        self.chats.get(&file_id).map(|(chat, _)| *chat)
+    }
+
+    /// The message a download came from, when it was noted: the key that
+    /// finds it again in another TDLib instance, whose file ids differ.
+    pub fn origin_of(&self, file_id: i32) -> Option<(ChatId, i64)> {
+        self.chats
+            .get(&file_id)
+            .copied()
+            .filter(|(_, message)| *message > 0)
     }
 
     /// Everything goes (the session closed).

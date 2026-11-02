@@ -70,8 +70,11 @@ fn seed(sink: Arc<MemorySink>, today: &[i64]) -> Session {
     apply(&format!(
         r#"{{"@type":"updateOption","name":"my_id","value":{{"@type":"optionValueInteger","value":"{ME}"}}}}"#
     ));
+    // From local noon, so a day of 23 or 25 hours still lands on the next date.
     let now = now_unix();
-    let date = |offset_days: i64| civil_local(now.saturating_add(offset_days * 86_400));
+    let clock = civil_local(now);
+    let noon = now - i64::from(clock.hour) * 3_600 - i64::from(clock.minute) * 60 + 12 * 3_600;
+    let date = |offset_days: i64| civil_local(noon.saturating_add(offset_days * 86_400));
     let mut birthdays: Vec<(i64, i64)> = today.iter().map(|id| (*id, 0)).collect();
     birthdays.extend([(ALAN, -1), (KATHERINE, 1)]);
     let entries: Vec<String> = birthdays

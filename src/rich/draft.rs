@@ -4,57 +4,66 @@
 //! with a `richMessage` page (`Data::Draft::richMessage`) and shows it in
 //! place of the message field (`HistoryView::Controls::RichDraftPreview`).
 use super::*;
+use std::sync::Arc;
 
-/// A rich draft, held as editor blocks: paragraph, heading, list and
-/// details text is composer markup, the form the rich editor writes and
+/// A rich draft, held as editor blocks: its text is composer markup, the form the rich editor writes and
 /// [`input_page_block_json`] reads. One built from TDLib's blocks has its
 /// inline entities written back as markup, so it edits, sends and saves
 /// like one typed in the editor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RichDraft {
-    blocks: Vec<RichBlock>,
+    blocks: Vec<Arc<RichBlock>>,
 }
 
 impl RichDraft {
     /// The draft of a parsed `richMessage`. `None` when no block shows.
     pub fn from_message(blocks: &[RichBlock]) -> Option<Self> {
-        Self::from_blocks(blocks.iter().map(editor_block).collect())
+        Self::from_blocks(
+            blocks
+                .iter()
+                .map(|block| Arc::new(editor_block(block)))
+                .collect(),
+        )
     }
 
     /// The draft the rich editor's markup saves as. `None` when the markup
     /// is plain paragraphs, which save as a text draft instead (tdesktop
     /// `SerializeAsSimple` in `prepareRichDraftForAutosave`).
     pub fn from_markup(markup: &str) -> Option<Self> {
-        let blocks = markup_to_blocks(markup);
+        Self::from_parsed(markup_to_blocks(markup).into_iter().map(Arc::new).collect())
+    }
+
+    /// [`Self::from_markup`] of a text already parsed ([`MarkupBlocks`]).
+    pub fn from_parsed(blocks: Vec<Arc<RichBlock>>) -> Option<Self> {
         if blocks
             .iter()
-            .all(|block| matches!(block, RichBlock::Paragraph { .. }))
+            .all(|block| matches!(**block, RichBlock::Paragraph { .. }))
         {
             return None;
         }
         Self::from_blocks(blocks)
     }
 
-    fn from_blocks(blocks: Vec<RichBlock>) -> Option<Self> {
+    fn from_blocks(blocks: Vec<Arc<RichBlock>>) -> Option<Self> {
         blocks
             .iter()
-            .any(|block| *block != RichBlock::Empty)
+            .any(|block| **block != RichBlock::Empty)
             .then_some(Self { blocks })
     }
 
     /// The editor blocks, for `inputMessageRichMessage`.
-    pub fn blocks(&self) -> &[RichBlock] {
-        &self.blocks
+    pub fn blocks(&self) -> Vec<RichBlock> {
+        self.blocks.iter().map(|block| (**block).clone()).collect()
     }
 
     /// The markup the rich editor opens the draft with.
     pub fn markup(&self) -> String {
-        blocks_to_markup(&self.blocks)
+        blocks_to_markup(&self.blocks())
     }
 
     /// The blocks as the block renderer paints them.
     pub fn preview_blocks(&self) -> Vec<RichBlock> {
-        self.blocks.iter().cloned().map(preview_block).collect()
+        self.blocks().into_iter().map(preview_block).collect()
     }
 
     /// `inputRichMessage` for `draftMessageContentInputRichMessage`. `None`
@@ -65,18 +74,18 @@ impl RichDraft {
         if self
             .blocks
             .iter()
-            .any(|block| *block != RichBlock::Empty && input_page_block_json(block).is_none())
+            .any(|block| **block != RichBlock::Empty && input_page_block_json(block).is_none())
         {
             return None;
         }
-        input_rich_message(&self.blocks)
+        input_rich_message(&self.blocks())
     }
 
     /// Whether sending needs Premium (tdesktop
     /// `RichPageUsesPremiumFormatting`): anything but paragraphs of plain
     /// text.
     pub fn uses_premium_formatting(&self) -> bool {
-        self.blocks.iter().any(|block| match block {
+        self.blocks.iter().any(|block| match &**block {
             RichBlock::Paragraph { text, .. } => {
                 !crate::composer::parse_format_markup(text).1.is_empty()
             }
@@ -92,7 +101,7 @@ impl RichDraft {
     pub fn plain_markup(&self) -> Option<String> {
         let mut lines = Vec::new();
         for block in &self.blocks {
-            match block {
+            match &**block {
                 RichBlock::Table { .. }
                 | RichBlock::Photo { .. }
                 | RichBlock::Video { .. }
@@ -171,9 +180,8 @@ fn summary_lines(block: &RichBlock, lines: &mut Vec<String>) {
     }
 }
 
-/// A parsed `pageBlock*` as the editor holds it: paragraph and heading
-/// text with its entities written as markup. List and details text is
-/// plain already.
+/// A parsed `pageBlock*` as the editor holds it: its text with its entities
+/// written as markup.
 fn editor_block(block: &RichBlock) -> RichBlock {
     match block {
         RichBlock::Paragraph {
@@ -193,6 +201,31 @@ fn editor_block(block: &RichBlock) -> RichBlock {
             level: *level,
             text: crate::composer::entities_to_markup(text, entities),
             entities: Vec::new(),
+        },
+        RichBlock::List { ordered, items } => RichBlock::List {
+            ordered: *ordered,
+            items: items
+                .iter()
+                .map(|item| RichListItem {
+                    label: String::new(),
+                    text: crate::composer::entities_to_markup(&item.text, &item.entities),
+                    entities: Vec::new(),
+                    checked: item.checked,
+                })
+                .collect(),
+        },
+        RichBlock::Collapsible {
+            header,
+            header_entities,
+            body,
+            body_entities,
+            open,
+        } => RichBlock::Collapsible {
+            header: crate::composer::entities_to_markup(header, header_entities),
+            header_entities: Vec::new(),
+            body: crate::composer::entities_to_markup(body, body_entities),
+            body_entities: Vec::new(),
+            open: *open,
         },
         other => other.clone(),
     }
