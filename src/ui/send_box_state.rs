@@ -28,7 +28,7 @@ pub(crate) struct SendBoxUi {
     /// Photos and videos being read as they join a tray
     /// (`send_box_media_check.rs`), the job that reads each.
     pub(super) media_checking: HashMap<PathBuf, u64>,
-    pub(super) media_checked: HashSet<PathBuf>,
+    pub(super) media_checked: HashMap<PathBuf, super::send_box_media_check::MediaCheck>,
     pub(super) media_check_jobs: u64,
     /// The "Paid Content" price box.
     pub(super) price: Option<PriceDialog>,
@@ -49,7 +49,7 @@ impl SendBoxUi {
             thumbnailed: HashSet::new(),
             thumbnail_jobs: 0,
             media_checking: HashMap::new(),
-            media_checked: HashSet::new(),
+            media_checked: HashMap::new(),
             media_check_jobs: 0,
             price: None,
             video_editor: None,

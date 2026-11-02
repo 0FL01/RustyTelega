@@ -13,7 +13,7 @@ use crate::ui::status_note::StatusNote;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
-use quill::composer::{AttachmentKind, ComposerAttachment};
+use quill::composer::{AttachmentKind, ComposerAttachment, is_gif_path};
 use quill::drop_modes::{
     DragEntry, DragState, DropAction, DropPlan, Zone, classify, folder_files_for_sending,
     plan_drop, zones,
@@ -98,8 +98,8 @@ impl QuillApp {
             _ => Vec::new(),
         };
         match plan_drop(action, paths, &folder_files) {
-            // Not the plan's kinds: a lone GIF goes as a GIF this way.
-            DropPlan::Attach(_) if action == DropAction::AsMedia => {
+            // The usual attach makes a lone GIF a GIF.
+            DropPlan::Attach(_) if matches!(paths, [only] if is_gif_path(only)) => {
                 self.attach_dropped_files(paths, cx);
             }
             DropPlan::Attach(planned) => {
@@ -114,6 +114,7 @@ impl QuillApp {
                     }
                     Err(note) => StatusNote::error(note),
                 });
+                self.check_tray_videos(cx);
                 cx.notify();
             }
             DropPlan::Reject(note) => {

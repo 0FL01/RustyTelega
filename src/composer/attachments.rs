@@ -167,11 +167,20 @@ impl ComposerAttachment {
             .iter()
             .partition(|att| att.extras.gif && att.extras.sound_removed);
         let mut groups = Vec::new();
-        let is_file = |att: &&Self| att.kind == AttachmentKind::Document;
+        let is_media =
+            |att: &&Self| matches!(att.kind, AttachmentKind::Photo | AttachmentKind::Video);
         groups.extend(
             together
-                .chunk_by(|a, b| is_file(a) == is_file(b))
-                .flat_map(|run| run.chunks(crate::album::ALBUM_MAX_ITEMS))
+                .chunk_by(|a, b| is_media(a) == is_media(b))
+                .flat_map(|run| {
+                    // Files in a media tray go one by one; albums are media.
+                    let size = if run.first().is_some_and(is_media) {
+                        crate::album::ALBUM_MAX_ITEMS
+                    } else {
+                        1
+                    };
+                    run.chunks(size)
+                })
                 .map(|chunk| chunk.iter().map(|att| (*att).clone()).collect()),
         );
         groups.extend(alone.into_iter().map(|att| vec![att.clone()]));

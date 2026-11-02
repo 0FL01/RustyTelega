@@ -17,9 +17,10 @@ use quill::media_viewer::READ_BYTES_LIMIT;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
-/// What reading a tray file found.
+/// What reading a tray file found. Kept by path (`SendBoxUi::media_checked`),
+/// so the same file in a second tray gets the same answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum MediaCheck {
+pub(super) enum MediaCheck {
     /// It goes as it is.
     AsIs,
     /// It goes as this JPEG.
@@ -36,13 +37,15 @@ impl QuillApp {
             .attachments()
             .filter(|attachment| needs_media_check(attachment))
             .map(|attachment| (attachment.path.clone(), attachment.kind))
-            .filter(|(path, _)| {
-                let send_box = &self.composer_ui.send_box;
-                !send_box.media_checking.contains_key(path)
-                    && !send_box.media_checked.contains(path)
-            })
             .collect();
         for (path, kind) in unread {
+            if let Some(check) = self.composer_ui.send_box.media_checked.get(&path).cloned() {
+                self.apply_media_check(&path, &check);
+                continue;
+            }
+            if self.composer_ui.send_box.media_checking.contains_key(&path) {
+                continue;
+            }
             let send_box = &mut self.composer_ui.send_box;
             send_box.media_check_jobs += 1;
             let job = send_box.media_check_jobs;
@@ -93,17 +96,23 @@ impl QuillApp {
             return;
         }
         send_box.media_checking.remove(path);
-        send_box.media_checked.insert(path.to_path_buf());
+        send_box
+            .media_checked
+            .insert(path.to_path_buf(), check.clone());
+        self.apply_media_check(path, &check);
+        // A file now needs its thumbnail.
+        self.prepare_tray_file_thumbnails(cx);
+        cx.notify();
+    }
+
+    fn apply_media_check(&mut self, path: &Path, check: &MediaCheck) {
         for attachment in self.composer_sends.attachments_at_mut(path) {
-            match &check {
+            match check {
                 MediaCheck::AsIs => {}
                 MediaCheck::Jpeg(jpeg) => attachment.extras.photo_jpeg = Some(jpeg.clone()),
                 MediaCheck::FileOnly => attachment.keep_as_file(),
             }
         }
-        // A file now needs its thumbnail.
-        self.prepare_tray_file_thumbnails(cx);
-        cx.notify();
     }
 }
 
@@ -186,8 +195,8 @@ mod tests {
 
     #[test]
     fn a_picture_telegram_cannot_take_goes_as_a_jpeg_of_the_same_size() {
-        let MediaCheck::Jpeg(jpeg) = check_photo(&fixture("halves.heic")) else {
-            panic!("HEIC decodes on this platform");
+        let MediaCheck::Jpeg(jpeg) = check_photo(&fixture("halves.jxl")) else {
+            panic!("JPEG XL decodes everywhere");
         };
         let decoded = image::open(&jpeg).expect("a JPEG");
         assert_eq!((decoded.width(), decoded.height()), (32, 16));

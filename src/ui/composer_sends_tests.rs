@@ -766,6 +766,11 @@ fn slow_mode_refuses_a_send_of_more_than_one_message_and_keeps_the_tray(cx: &mut
                 }),
             )
         });
+        app.check_tray_videos(cx);
+    });
+    vcx.run_until_parked();
+    app.update_in(&mut vcx, |app, window, cx| {
+        let group = slow_group(app);
         let before = history_len(app, group);
         app.submit_composer("caption".into(), window, cx);
         assert_eq!(history_len(app, group), before, "nothing went");

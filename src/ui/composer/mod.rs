@@ -119,6 +119,16 @@ impl QuillApp {
                     self.submit_forward_bar(text, window, cx);
                     return;
                 }
+                // A picture still being read, or getting its thumbnail,
+                // can't go by any route yet.
+                self.check_tray_videos(cx);
+                if self.tray_thumbnails_pending() || self.tray_media_checks_pending() {
+                    self.connection.set_note(StatusNote::silent(tr(
+                        keys::Q_CHAT_PREPARING_THE_FILE_SEND_AGAIN,
+                    )));
+                    cx.notify();
+                    return;
+                }
                 // Sending returns the reader to the latest messages: the
                 // position left behind is not where the chat reopens.
                 self.forget_scroll_on_return_to_latest();
@@ -172,14 +182,6 @@ impl QuillApp {
                         cx.notify();
                         return;
                     }
-                    // A picture sent as a file is still getting its thumbnail.
-                    if self.tray_thumbnails_pending() || self.tray_media_checks_pending() {
-                        self.connection.set_note(StatusNote::silent(tr(
-                            keys::Q_CHAT_PREPARING_THE_FILE_SEND_AGAIN,
-                        )));
-                        cx.notify();
-                        return;
-                    }
                     let attachments = self.pending_attachments().to_vec();
                     // The viewer's own rights in a group: text needs the
                     // basic right, each attachment its media right.
@@ -207,7 +209,7 @@ impl QuillApp {
                     // MED1: the grouping toggle decides album vs separate
                     // sends (TGX `RememberAlbumSetting`).
                     let albumable = attachments.len() >= 2
-                        && attachments.iter().all(|att| {
+                        && attachments.iter().any(|att| {
                             matches!(att.kind, AttachmentKind::Photo | AttachmentKind::Video)
                         });
                     let grouped = self.composer_group_media_effective();
@@ -393,7 +395,7 @@ impl QuillApp {
                     let reply = self.reply_for_send(cx);
                     // MED1: the grouping toggle applies to the demo too.
                     let albumable = attachments.len() >= 2
-                        && attachments.iter().all(|att| {
+                        && attachments.iter().any(|att| {
                             matches!(att.kind, AttachmentKind::Photo | AttachmentKind::Video)
                         });
                     let messages = if albumable && self.composer_group_media_effective() {
@@ -520,7 +522,7 @@ impl QuillApp {
             match attachment.kind {
                 AttachmentKind::Photo => blocks.push(quill::rich::RichBlock::Photo {
                     caption: String::new(),
-                    local_path: Some(attachment.path.clone()),
+                    local_path: Some(attachment.photo_file().to_path_buf()),
                 }),
                 AttachmentKind::Video => blocks.push(quill::rich::RichBlock::Video {
                     caption: String::new(),
@@ -700,6 +702,7 @@ impl QuillApp {
                 self.update_pending_attachments(|tray| {
                     ComposerAttachment::push_attachment(tray, att)
                 });
+                self.check_tray_videos(cx);
                 self.connection
                     .set_note(if self.pending_attachments().len() == before {
                         StatusNote::silent(tr_with(

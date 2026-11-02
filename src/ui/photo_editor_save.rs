@@ -186,6 +186,7 @@ impl QuillApp {
                 .to_string();
             attachment.path = saved.clone();
             attachment.extras.photo_jpeg = None;
+            attachment.extras.file_only = false;
             attachment.file_name = format!("{stem}.png");
             attachment.kind = quill::composer::AttachmentKind::Photo;
             let held = (!send.renders_an_edit())
