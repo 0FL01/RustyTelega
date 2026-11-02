@@ -1,5 +1,6 @@
 use crate::ids::{ChatId, RequestId};
 use crate::story_composer::{StoryMediaKind, StoryPrivacy};
+use crate::telegram::envelope::StoryListView;
 use crate::telegram::requests::*;
 use serde_json::json;
 
@@ -103,9 +104,13 @@ fn story_requests_match_1_8_67() {
     // only_local:Bool = Story` (line 13695); `openStory` / `closeStory`
     // `story_poster_chat_id:int53 story_id:int32 = Ok` (lines 13794,
     // 13799).
-    let v: serde_json::Value = serde_json::from_str(&load_active_stories(RequestId(1))).unwrap();
+    let v: serde_json::Value =
+        serde_json::from_str(&load_active_stories(RequestId(1), StoryListView::Main)).unwrap();
     assert_eq!(v["@type"], "loadActiveStories");
     assert_eq!(v["story_list"]["@type"], "storyListMain");
+    let v: serde_json::Value =
+        serde_json::from_str(&load_active_stories(RequestId(1), StoryListView::Archive)).unwrap();
+    assert_eq!(v["story_list"]["@type"], "storyListArchive");
 
     let v: serde_json::Value =
         serde_json::from_str(&get_chat_active_stories(RequestId(2), ChatId(11))).unwrap();

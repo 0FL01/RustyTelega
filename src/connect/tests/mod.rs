@@ -130,6 +130,7 @@ mod sticker_tabs;
 mod stories;
 mod story_fetch_retry;
 mod story_insights;
+mod story_lists;
 mod story_preload;
 mod story_reply_media;
 mod subsection_tabs;

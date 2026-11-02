@@ -121,6 +121,7 @@ fn driver_loads_chats_after_ready_then_send_text() {
         vec![
             "loadChats",
             "loadActiveStories",
+            "loadActiveStories",
             "getSavedNotificationSounds",
             "getScopeNotificationSettings",
             "getScopeNotificationSettings",

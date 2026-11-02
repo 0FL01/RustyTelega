@@ -48,7 +48,7 @@ context. `Single`, `Peer` and `Album` call `hideSiblings()`.
   cached sources list of one story list, main or archive, and the story
   shown per poster), `plan_step` (`subjumpFor`), `story_to_open`
   (`StoriesSource::toOpen`, the one function the tray tile and the walk
-  share), `shown_story` (`LookupShownId`) and `wants_more_tray`. Unit tests
+  share), and `shown_story` (`LookupShownId`). Unit tests
   cover each.
 - `open_story_viewer` takes a `StoryOpenScope`, carried through
   `pending_story_open`. A `Tray` open fetches the poster's active stories

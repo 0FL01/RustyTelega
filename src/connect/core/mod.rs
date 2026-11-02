@@ -7,6 +7,7 @@ use crate::ids::{ChatId, MessageId, RequestId};
 use crate::state::{ComposerLinkPreview, InstantViewPage, RequestPurpose, Session, ShutdownPhase};
 use crate::state::{GroupsPurpose, MessagesPurpose, StickersPurpose, ThreadsPurpose};
 use crate::telegram::client::OwnedEnvelope;
+use crate::telegram::envelope::StoryListView;
 use crate::telegram::envelope::{
     AiComposePayload, BotsPayload, CallsPayload, ChatsPayload, CommonPayload, GroupsPayload,
     MediaPayload, MessagesPayload, SearchPayload, SettingsPayload, StickersPayload, UsersPayload,
@@ -66,6 +67,12 @@ impl<S: JsonSender> ConnectDriver<S> {
             && owned.envelope.extra.is_some_and(|id| {
                 self.session.requests.purpose(id) == Some(RequestPurpose::LoadArchiveChats)
             });
+        // Story lists page the same way, until their 404.
+        let story_page_ok = matches!(owned.envelope.payload, EnvelopePayload::Ok)
+            .then(|| owned.envelope.extra)
+            .flatten()
+            .and_then(|id| self.session.requests.purpose(id))
+            .and_then(crate::state::story_list_of);
         let main_was_exhausted = self.session.chat_list.chats_exhausted;
         // Parity slice: a folder `loadChats` page completing with ok pages
         // on (until a 404 marks the folder exhausted in the reducer).
@@ -690,15 +697,19 @@ impl<S: JsonSender> ConnectDriver<S> {
         if let Some(folder_id) = folder_load_ok {
             self.maybe_load_folder_chats(folder_id)?;
         }
+        if let Some(list) = story_page_ok {
+            self.maybe_load_active_stories(list)?;
+        }
         // Parity slice: queued remove-from-folder edits go out once the
         // `getChatFolder` spec arrives.
         self.maybe_finish_folder_removals()?;
         self.maybe_finish_leave_deletes()?;
         if became_ready {
             // Phase 9.1: the story tray needs `updateChatActiveStories`
-            // updates; one `loadActiveStories(storyListMain)` per Ready.
+            // updates, which only cover what `loadActiveStories` reached.
             self.session.stories.reset_active_stories_paging();
-            self.maybe_load_active_stories()?;
+            self.maybe_load_active_stories(StoryListView::Main)?;
+            self.maybe_load_active_stories(StoryListView::Archive)?;
             // Parity slice: saved notification sounds (picker + custom-sound
             // playback) and per-scope default settings (`use_default_*`
             // fallback), once per Ready.

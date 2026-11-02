@@ -5,7 +5,7 @@ use crate::state::RequestPurpose;
 use crate::state::{ActiveGroupCall, LiveStoryJoinIntent};
 use crate::story_composer::{StoryMediaKind, StoryPrivacy};
 use crate::story_page::{StoryPageOp, StoryPageOpState, story_page_op_label};
-use crate::telegram::envelope::StoryContentView;
+use crate::telegram::envelope::{StoryContentView, StoryListView};
 use crate::telegram::requests::{
     activate_story_stealth_mode as activate_story_stealth_mode_request,
     can_post_story as can_post_story_request, close_story, delete_story,
@@ -27,39 +27,51 @@ use crate::telegram::requests_story::{
     set_close_friends as set_close_friends_request, set_story_album_name,
     toggle_story_is_posted_to_chat_page,
 };
+use std::time::Instant;
 
 mod albums;
 mod posting;
 mod reply_media;
 
 impl<S: JsonSender> ConnectDriver<S> {
-    /// Phase 9.1: `loadActiveStories(storyListMain)` once per Ready. The
-    /// loaded stories arrive as `updateChatActiveStories` updates and feed
-    /// the story tray above the chat list.
-    pub fn maybe_load_active_stories(&mut self) -> Result<Option<RequestId>, ConnectSendError> {
-        if !self.chats_path_active() || self.session.stories.stories_active_loaded {
-            return Ok(None);
-        }
-        if self
-            .session
-            .requests
-            .has_purpose(RequestPurpose::LoadActiveStories)
+    /// The next `loadActiveStories` page of `list`. Each `ok` asks for the
+    /// next until a 404, because TDLib sends no updates for chats past the
+    /// point loaded. The stories arrive as `updateChatActiveStories`
+    /// updates and feed the story tray above the chat list.
+    pub fn maybe_load_active_stories(
+        &mut self,
+        list: StoryListView,
+    ) -> Result<Option<RequestId>, ConnectSendError> {
+        let purpose = match list {
+            StoryListView::Main => RequestPurpose::LoadActiveStories,
+            StoryListView::Archive => RequestPurpose::LoadHiddenStories,
+        };
+        if !self.chats_path_active()
+            || !self.session.stories.paging(list).may_load(Instant::now())
+            || self.session.requests.has_purpose(purpose)
         {
             return Ok(None);
         }
-        let extra = self
-            .session
-            .request(RequestPurpose::LoadActiveStories, None);
-        match self.sender.send_json(&load_active_stories(extra)) {
-            Ok(()) => {
-                self.session.stories.stories_active_loaded = true;
-                Ok(Some(extra))
-            }
+        let extra = self.session.request(purpose, None);
+        match self.sender.send_json(&load_active_stories(extra, list)) {
+            Ok(()) => Ok(Some(extra)),
             Err(err) => {
                 self.session.requests.take(extra);
                 Err(err)
             }
         }
+    }
+
+    /// Story lists waiting out a failed page go on once the wait is over.
+    pub(crate) fn active_stories_tick(&mut self, now: Instant) -> bool {
+        let mut sent = false;
+        for list in [StoryListView::Main, StoryListView::Archive] {
+            let paging = self.session.stories.paging(list);
+            if paging.retry.is_some() && paging.may_load(now) {
+                sent |= matches!(self.maybe_load_active_stories(list), Ok(Some(_)));
+            }
+        }
+        sent
     }
 
     /// Phase 9.1: refresh one chat's active stories (`getChatActiveStories`).
