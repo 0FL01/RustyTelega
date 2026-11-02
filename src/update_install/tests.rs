@@ -223,9 +223,12 @@ fn write_app(package: &Path, app: App, payload: &[u8]) {
         let body = match app {
             App::New => {
                 "case \"$1\" in --version) echo 'Quill 999.0.0';; --build-info) echo ui;; \
-                 *) echo \"$@\" > \"$(dirname \"$0\")/../started\";; esac"
+                 *) echo \"$@\" > \"$(dirname \"$0\")/../starting\" && \
+                 mv \"$(dirname \"$0\")/../starting\" \"$(dirname \"$0\")/../started\";; esac"
             }
-            App::Old => "echo \"$@\" > \"$(dirname \"$0\")/../started\"",
+            App::Old => {
+                "echo \"$@\" > \"$(dirname \"$0\")/../starting\" && mv \"$(dirname \"$0\")/../starting\" \"$(dirname \"$0\")/../started\""
+            }
             App::BadProbe => "echo 'Quill 0.0.1'",
         };
         script(&package.join("quill"), body);
