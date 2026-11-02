@@ -421,6 +421,7 @@ mod message_poll;
 mod message_text;
 mod navigation;
 mod new_chat;
+mod notification_click_tests;
 mod notification_settings;
 mod notifications;
 mod notify_windows;
