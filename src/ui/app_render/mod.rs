@@ -650,7 +650,8 @@ impl Render for QuillApp {
                 },
             )
             .when(
-                self.pane_mode() == super::app::PaneMode::Connecting,
+                self.pane_mode() == super::app::PaneMode::Connecting
+                    && !self.disk.shows_screen(),
                 |this| {
                     // Sign-in replaces the chat layout until the account is
                     // ready; the first-run onboarding comes before it.
@@ -882,6 +883,7 @@ impl Render for QuillApp {
                     cx.listener(|this, _, _, cx| this.autoscroll_stop(cx)),
                 )
             });
+        let root = root.children(self.disk_full_cover(&auth, cx));
         // The lock screen covers the whole window, above every overlay.
         let root = root.when(self.account.passcode.locked, |this| {
             this.child(self.lock_overlay(cx))

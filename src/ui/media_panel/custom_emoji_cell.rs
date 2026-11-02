@@ -106,8 +106,9 @@ impl QuillApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let hovered = self.pickers.media_panel.hovered == Some(item.file_id);
-        // Only the hovered sticker animates; the rest stay still.
-        let animated = hovered
+        // Only the hovered sticker animates; the rest stay still. One with
+        // no thumbnail (TDLib may send none) has only itself to show.
+        let animated = (hovered || item.display_file_id().is_none())
             // The cell less its padding (`p_1`).
             .then(|| {
                 let head = panel_sticker_head(item.file_id);

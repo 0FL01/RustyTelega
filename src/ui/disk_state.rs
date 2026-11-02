@@ -3,14 +3,14 @@
 use super::app::{PaneMode, QuillApp};
 use super::message_media::format_bytes;
 use super::status_note::StatusNote;
-use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::{ActiveTheme as _, TITLE_BAR_HEIGHT};
 use gpui_kit::component::alert::Alert;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Sizable as _, h_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyWindowHandle, Context, IntoElement as _, ParentElement as _, Styled as _, Window,
-    transparent_black,
+    AnyWindowHandle, Context, InteractiveElement as _, IntoElement as _, ParentElement as _,
+    Styled as _, Window, transparent_black,
 };
 use quill::auth::{AuthAction, AuthView};
 use quill::disk_guard::{
@@ -396,9 +396,37 @@ impl QuillApp {
             return;
         }
         self.flush_leaving_draft(cx);
+        // What plays over the chats goes with the client it reads from.
+        self.close_media_viewer(cx);
+        self.close_story_viewer(cx);
+        self.close_context_menus(cx);
+        self.close_video_pip(cx);
         self.close_chat_windows_for_switch(cx);
         self.close_screen_client(cx);
         self.connection.set_note(StatusNote::silent(""));
+    }
+
+    /// The full-disk screen, under the title bar and over whatever else
+    /// the window holds, so no layer left open can hide it.
+    pub(super) fn disk_full_cover(
+        &mut self,
+        auth: &AuthView,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui_kit::AnyElement> {
+        self.disk.shows_screen().then(|| {
+            gpui_kit::div()
+                .id("disk-full-cover")
+                .debug_selector(|| "disk-full-cover".to_string())
+                .absolute()
+                .top(TITLE_BAR_HEIGHT)
+                .left_0()
+                .right_0()
+                .bottom_0()
+                .occlude()
+                .bg(cx.theme().background)
+                .child(self.onboarding(auth, false, false, false, false, cx))
+                .into_any_element()
+        })
     }
 
     pub(super) fn disk_full_view(&self) -> Option<AuthView> {

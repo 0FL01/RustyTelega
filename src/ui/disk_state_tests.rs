@@ -6,7 +6,7 @@ use gpui_kit::test::TestWindowExt as _;
 use gpui_kit::{AppContext as _, Entity, TestAppContext, VisualTestContext, px, size};
 use quill::connect::ConnectBlocker;
 use quill::disk_guard::FLOORS;
-use quill::ids::ChatId;
+use quill::ids::{ChatId, MessageId};
 use quill::lang::{keys, tr};
 use quill::settings_catalog::Page;
 
@@ -152,6 +152,31 @@ fn a_full_disk_closes_chat_windows(cx: &mut TestAppContext) {
     fill(&app, &mut vcx, Some(0));
     vcx.run_until_parked();
     assert_eq!(vcx.windows().len(), main_only);
+}
+
+/// The screen is what the user sees whatever was open over the chats: a
+/// viewer left up would hide it until someone closed the viewer.
+#[gpui_kit::test]
+fn a_full_disk_shows_its_screen_in_place_of_an_open_viewer(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_demo_app(cx, "ready-video-inline", 800.);
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.open_media_viewer(ChatId(11), MessageId(204), cx);
+    });
+    vcx.run_until_parked();
+    assert!(app.read_with(&vcx, |app, _| app.viewer.state.is_open()));
+    fill(&app, &mut vcx, Some(0));
+    assert!(app.read_with(&vcx, |app, _| !app.viewer.state.is_open()));
+    vcx.update(|window, cx| window.render_frame(cx));
+    assert!(vcx.debug_bounds("disk-full-cover").is_some());
+}
+
+#[gpui_kit::test]
+fn a_call_held_open_at_full_draws_no_full_screen(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    fill(&app, &mut vcx, Some(0));
+    app.update_in(&mut vcx, |app, _, _| app.disk.held_for_call = true);
+    vcx.update(|window, cx| window.render_frame(cx));
+    assert!(vcx.debug_bounds("disk-full-cover").is_none());
 }
 
 #[gpui_kit::test]
