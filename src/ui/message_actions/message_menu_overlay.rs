@@ -53,6 +53,9 @@ impl QuillApp {
             actions.map_or(local, |a| flag(&a))
         };
         let can_reply = allows(!is_channel_post, |a| a.can_be_replied);
+        // Until TDLib answers, a secret chat offers only what works in one,
+        // so no row shows for a frame and leaves.
+        let is_secret = self.session().is_some_and(|s| s.is_secret_chat(chat_id));
 
         let mut panel = div()
             .id("message-menu-panel")
@@ -74,7 +77,8 @@ impl QuillApp {
         // strip in its own pill above the menu, expandable to every
         // reaction it allows.
         let page = self.message_ui.menu_ui.page;
-        let strip = (message.can_react() && page == MessageMenuPage::Main)
+        let can_react = self.session().is_some_and(|s| s.can_react_to(&message));
+        let strip = (can_react && page == MessageMenuPage::Main)
             .then(|| self.reaction_strip(chat_id, message_id, &message, cx))
             .flatten();
         // Telegram Desktop's message menu: left-aligned rows with an icon,
@@ -196,11 +200,7 @@ impl QuillApp {
         }
         // Reply in Another Chat: TDLib decides per message, secret chats
         // never take part.
-        let is_secret_chat = matches!(chat_kind, Some(ChatKind::Secret { .. }));
-        if !is_secret_chat
-            && message_id.0 > 0
-            && allows(false, |a| a.can_be_replied_in_another_chat)
-        {
+        if !is_secret && message_id.0 > 0 && allows(false, |a| a.can_be_replied_in_another_chat) {
             item!(
                 order::REPLY_ELSEWHERE,
                 gpui_kit::assets::IconName::Replace,
@@ -373,13 +373,10 @@ impl QuillApp {
                 );
             }
         }
-        let is_secret = matches!(chat_kind, Some(ChatKind::Secret { .. }));
-        if !is_secret
-            && !protected
-            && allows(true, |a| a.can_be_forwarded)
-            && quill::composer::ForwardDraft::from_message(chat_id, message_id, message.pending)
-                .is_some()
-        {
+        let selectable =
+            quill::composer::ForwardDraft::from_message(chat_id, message_id, message.pending)
+                .is_some();
+        if !is_secret && !protected && allows(true, |a| a.can_be_forwarded) && selectable {
             item!(
                 50,
                 gpui_kit::assets::IconName::Forward,
@@ -394,6 +391,10 @@ impl QuillApp {
                     cx.notify();
                 }
             );
+        }
+        // Nothing leaves a secret chat, but a selection still copies and
+        // deletes there.
+        if selectable && (is_secret || (!protected && allows(true, |a| a.can_be_forwarded))) {
             item!(
                 70,
                 gpui_kit::assets::IconName::CircleCheck,
@@ -450,7 +451,7 @@ impl QuillApp {
             &message.content,
         )
         .map(|edit| edit.in_album(message.media_album_id != 0))
-        .filter(|_| allows(true, |a| a.can_be_edited))
+        .filter(|_| allows(!is_secret, |a| a.can_be_edited))
         {
             item!(
                 20,
@@ -505,7 +506,9 @@ impl QuillApp {
                 }
             );
         }
-        if allows(message.can_pin() && !is_channel_post, |a| a.can_be_pinned) {
+        if allows(message.can_pin() && !is_channel_post && !is_secret, |a| {
+            a.can_be_pinned
+        }) {
             let label = if pinned {
                 tr(keys::Q_CHAT_UNPIN)
             } else {
@@ -743,7 +746,7 @@ impl QuillApp {
             && !message.is_outgoing
             && !saved
             && !self.session().is_some_and(|s| s.is_replies_chat(chat_id))
-            && actions.is_none_or(|a| a.can_report_chat);
+            && allows(!is_secret, |a| a.can_report_chat);
         if reportable {
             let report = menu_row(
                 order::REPORT,

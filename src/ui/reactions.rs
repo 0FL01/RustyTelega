@@ -174,7 +174,7 @@ impl QuillApp {
             .histories
             .get(&chat_id.0)
             .and_then(|h| h.messages.get(&message_id.0))
-            .is_some_and(|m| m.can_react());
+            .is_some_and(|m| session.can_react_to(m));
         if can_react {
             self.toggle_reaction(chat_id, message_id, choice, cx);
         }

@@ -159,7 +159,7 @@ impl<S: JsonSender> ConnectDriver<S> {
         else {
             return Err(ConnectSendError::InvalidRequest);
         };
-        if !message.can_react() {
+        if !self.session.can_react_to(message) {
             return Err(ConnectSendError::InvalidRequest);
         }
         let purpose = if remove {
@@ -175,7 +175,8 @@ impl<S: JsonSender> ConnectDriver<S> {
         };
         match self.sender.send_json(&json) {
             Ok(()) => {
-                self.session.set_own_reaction(
+                self.session.set_own_reaction_for(
+                    extra,
                     chat_id,
                     message_id,
                     &crate::telegram::envelope::ReactionType::emoji(emoji),

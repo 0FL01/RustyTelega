@@ -38,7 +38,9 @@ impl QuillApp {
             .bg(cx.theme().background)
             .border_b_1()
             .border_color(cx.theme().border)
-            .child(selection_forward_button(count, cx))
+            .when(self.selection_forwardable(chat_id), |bar| {
+                bar.child(selection_forward_button(count, cx))
+            })
             .child(selection_delete_button(count, cx))
             .child(selection_copy_button(cx))
             .when(!self.selection_missing_files(chat_id).is_empty(), |bar| {

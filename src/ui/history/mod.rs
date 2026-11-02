@@ -390,7 +390,7 @@ fn message_corner_actions(
             )
         }),
         !message.pending && message.id.0 > 0,
-        message.can_react(),
+        session.map_or(message.can_react(), |s| s.can_react_to(message)),
     );
     if !reply && !react && fast_share.is_none() {
         return (more, px(quill::corner_buttons::span(false, false, false)));

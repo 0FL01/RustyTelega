@@ -70,7 +70,8 @@ impl QuillApp {
                 },
             ));
         }
-        if !saved {
+        // Saving there is a forward, which a secret chat does not allow.
+        if !saved && !session.is_secret_chat(chat_id) {
             rows.push(menu_row(
                 2,
                 IconName::Bookmark,

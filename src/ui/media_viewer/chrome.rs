@@ -20,6 +20,8 @@ pub(super) struct ChromeFacts {
     pub(super) kind_label: &'static str,
     pub(super) ttl: Option<ViewerTtl>,
     pub(super) protected: bool,
+    /// The item may leave its chat: not protected, not in a secret chat.
+    pub(super) can_forward: bool,
     pub(super) can_delete: bool,
     pub(super) can_set_main: bool,
     pub(super) can_report: bool,
@@ -46,6 +48,7 @@ impl QuillApp {
             kind_label,
             ttl,
             protected,
+            can_forward,
             can_delete,
             can_set_main,
             can_report,
@@ -278,7 +281,7 @@ impl QuillApp {
                             )),
                         )
                     })
-                    .when(!protected && !profile_view, |this| {
+                    .when(can_forward && !profile_view, |this| {
                         this.child(
                             icon_action(
                                 ("media-viewer-share", row_id),

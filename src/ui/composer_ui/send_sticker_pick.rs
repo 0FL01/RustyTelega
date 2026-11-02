@@ -679,7 +679,9 @@ impl QuillApp {
 
     pub(in crate::ui) fn delete_confirm_banner(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let confirm = self.message_ui.pending_delete.clone();
-        let can_revoke = confirm.as_ref().is_some_and(|c| c.can_revoke);
+        let can_revoke = confirm.as_ref().is_some_and(|c| {
+            c.can_revoke && !self.session().is_some_and(|s| s.is_secret_chat(c.chat_id))
+        });
         let revoke = confirm.as_ref().is_some_and(|c| c.revoke);
         // A paid suggested post deleted too early loses its payment.
         let warning = self.paid_post_delete_warning();
