@@ -10,14 +10,14 @@
 //! ([`device_loss`]).
 #![deny(clippy::indexing_slicing)]
 
-#[cfg(any(test, target_os = "windows"))]
-#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[cfg(any(test, target_os = "windows", target_os = "linux"))]
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 mod device_loss;
 #[cfg(any(test, target_os = "linux"))]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod vulkan;
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 pub(crate) use device_loss::{recover_after_gpu_loss, reopen_main_window};
 
 #[cfg(target_os = "linux")]
@@ -90,7 +90,7 @@ pub(crate) fn note_quit_asked() {
     QUIT_ASKED.with(|asked| asked.set(true));
 }
 
-#[cfg(any(test, target_os = "windows"))]
+#[cfg(any(test, target_os = "windows", target_os = "linux"))]
 pub(super) fn quit_asked() -> bool {
     QUIT_ASKED.with(std::cell::Cell::get)
 }

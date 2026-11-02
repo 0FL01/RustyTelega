@@ -8,8 +8,10 @@
 //! TDLib clients carry on.
 //!
 //! The platform can also give up on one window's renderer while the device
-//! still works. When that window is the main one, Quill reopens it the same
-//! way and leaves the others (a PiP) open.
+//! still works (Windows, and Linux when a window cannot adopt the recreated
+//! device). When that window is the main one, Quill reopens it the same way
+//! and leaves the others (a PiP) open. Linux has no headless step: a GPU that
+//! is gone there quits from the renderer ([`super::watch_gpu_loss`]).
 //!
 //! GPUI's own quit on the last window closing would end the process before
 //! any of this, so Quill quits explicitly instead, and does so itself when

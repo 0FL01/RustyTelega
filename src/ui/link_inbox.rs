@@ -104,7 +104,7 @@ pub fn attach_main_window(
     view: &gpui_kit::Entity<super::QuillApp>,
 ) {
     note_main_window(window, cx);
-    #[cfg(any(test, target_os = "windows"))]
+    #[cfg(any(test, target_os = "windows", target_os = "linux"))]
     window.keep_when_closed();
     #[cfg(windows)]
     {
@@ -141,7 +141,7 @@ pub fn note_main_window(window: &gpui_kit::Window, cx: &mut gpui_kit::App) {
 }
 
 /// The main window's id, once it opened.
-#[cfg_attr(not(any(test, target_os = "windows")), allow(dead_code))]
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 pub(crate) fn main_window_id(cx: &gpui_kit::App) -> Option<gpui_kit::WindowId> {
     cx.try_global::<MainWindow>()
         .map(|main| main.handle.window_id())

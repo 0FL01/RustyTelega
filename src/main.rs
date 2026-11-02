@@ -266,7 +266,7 @@ fn ui_main(args: &[String]) {
             pending_deep_link,
             start_in_tray,
         };
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         ui::startup_failure::recover_after_gpu_loss(cx, reopen_main_window);
         cx.spawn(async move |cx| {
             open_main_window(cx, launch)
@@ -302,7 +302,7 @@ fn main_window_options(
 }
 
 /// The main window again after the GPU was lost, around the app it showed.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 fn reopen_main_window(
     cx: &mut gpui_kit::AsyncApp,
     kept: gpui_kit::KeptWindow,
