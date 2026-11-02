@@ -310,21 +310,37 @@ fn strip_range(text: &str, from: usize, to: usize, out: &mut String) {
 /// takes the raw text, but the composer preview chip needs to know when
 /// to appear at all). Stdlib scan — no URL parser dependency; trailing
 /// punctuation (`,.;:!?)]'"`) is trimmed the way clients do.
+///
+/// Called for every frame of the composer, so it jumps from `://` to `://`
+/// instead of walking the words of a long draft.
 pub fn find_urls(text: &str) -> Vec<String> {
-    text.split_whitespace()
-        .filter_map(|token| {
-            let starts = |scheme: &str| {
-                let head = token.as_bytes().get(..scheme.len());
-                head.is_some_and(|head| head.eq_ignore_ascii_case(scheme.as_bytes()))
-            };
-            if !starts("http://") && !starts("https://") {
-                return None;
-            }
-            let trimmed =
-                token.trim_end_matches([',', '.', ';', ':', '!', '?', ')', ']', '\'', '"', '…']);
-            (!trimmed.is_empty()).then(|| trimmed.to_string())
-        })
-        .collect()
+    let mut urls = Vec::new();
+    for (at, _) in text.match_indices("://") {
+        let Some(before) = text.get(..at) else {
+            continue;
+        };
+        let scheme_len = ["https", "http"].into_iter().find_map(|scheme| {
+            let head = before.len().checked_sub(scheme.len())?;
+            let found = before.get(head..)?.eq_ignore_ascii_case(scheme);
+            let opens_word = before
+                .get(..head)?
+                .chars()
+                .next_back()
+                .is_none_or(char::is_whitespace);
+            (found && opens_word).then_some(scheme.len())
+        });
+        let Some(start) = scheme_len.map(|len| at - len) else {
+            continue;
+        };
+        let rest = text.get(start..).unwrap_or_default();
+        let token = rest.split(char::is_whitespace).next().unwrap_or_default();
+        let trimmed =
+            token.trim_end_matches([',', '.', ';', ':', '!', '?', ')', ']', '\'', '"', '…']);
+        if !trimmed.is_empty() {
+            urls.push(trimmed.to_string());
+        }
+    }
+    urls
 }
 
 /// Composer markup for a custom emoji: Telegram's `![fallback](tg://emoji?id=N)`.
@@ -484,6 +500,16 @@ mod tests {
     }
 
     /// MED4: composer URL detection for the preview chip.
+    #[test]
+    fn find_urls_reads_whole_words_only() {
+        assert_eq!(
+            find_urls("xhttp://a http://b://c\u{00a0}https://d\thttps://e/f?g=h. HTTP://I"),
+            ["http://b://c", "https://d", "https://e/f?g=h", "HTTP://I"]
+        );
+        assert_eq!(find_urls("http://"), ["http://"]);
+        assert!(find_urls("://").is_empty());
+    }
+
     #[test]
     fn find_urls_detects_http_links() {
         assert!(find_urls("no links here").is_empty());

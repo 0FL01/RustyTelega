@@ -39,6 +39,31 @@ fn chunks_of(text: &str) -> Vec<Chunk> {
     chunks
 }
 
+/// Bytes compared at once before looking for the one that differs: a draft
+/// can be megabytes, and it is walked on every keystroke.
+const COMPARE_STEP: usize = 64;
+
+fn shared_start(a: &[u8], b: &[u8]) -> usize {
+    let same_steps = a.chunks(COMPARE_STEP).zip(b.chunks(COMPARE_STEP));
+    let whole = same_steps.take_while(|(a, b)| a == b).count() * COMPARE_STEP;
+    let whole = whole.min(a.len()).min(b.len());
+    let rest = a.get(whole..).unwrap_or_default().iter();
+    let rest = rest.zip(b.get(whole..).unwrap_or_default());
+    whole + rest.take_while(|(a, b)| a == b).count()
+}
+
+fn shared_end(a: &[u8], b: &[u8]) -> usize {
+    let same_steps = a.rchunks(COMPARE_STEP).zip(b.rchunks(COMPARE_STEP));
+    let whole = same_steps.take_while(|(a, b)| a == b).count() * COMPARE_STEP;
+    let whole = whole.min(a.len()).min(b.len());
+    let (a, b) = (
+        a.get(..a.len() - whole).unwrap_or_default(),
+        b.get(..b.len() - whole).unwrap_or_default(),
+    );
+    let rest = a.iter().rev().zip(b.iter().rev());
+    whole + rest.take_while(|(a, b)| a == b).count()
+}
+
 impl MarkupBlocks {
     /// The blocks of `text`, the same as [`markup_to_blocks`] gives.
     pub fn parse(&mut self, text: &str) -> Vec<Arc<RichBlock>> {
@@ -51,14 +76,11 @@ impl MarkupBlocks {
 
     fn reparse(&mut self, text: &str) {
         let (old, new) = (self.text.as_bytes(), text.as_bytes());
-        let start = old.iter().zip(new).take_while(|(a, b)| a == b).count();
-        let shared_end = old
-            .iter()
-            .rev()
-            .zip(new.iter().rev())
-            .take(old.len().min(new.len()) - start)
-            .take_while(|(a, b)| a == b)
-            .count();
+        let start = shared_start(old, new);
+        let shared_end = shared_end(
+            old.get(start..).unwrap_or_default(),
+            new.get(start..).unwrap_or_default(),
+        );
         let touched_end = old.len() - shared_end;
 
         // The chunk the edit starts in and the one it ends in, and one more
