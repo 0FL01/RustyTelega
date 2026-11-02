@@ -1,14 +1,14 @@
 # Changes made by the Quill project
 
-This directory is gpui-pre-macos 0.3.10 from crates.io (Apache-2.0,
+This directory is gpui-pre-macos 0.3.11 from crates.io (Apache-2.0,
 `LICENSE-APACHE`), GPUI's macOS platform, used through `[patch.crates-io]` in
-Quill's `Cargo.toml`. Commit `6be84cd7` added the unmodified registry copy
+Quill's `Cargo.toml`. Commit `1398c875` added the unmodified registry copy
 (without the registry's `.cargo-ok`, `.cargo_vcs_info.json`,
 `Cargo.toml.orig` and `Cargo.lock`), so
-`git diff 6be84cd7 -- third_party/gpui-pre-macos` shows every change. (The
+`git diff 1398c875 -- third_party/gpui-pre-macos` shows every change. (The
 patch was first made on 0.3.7, carried to 0.3.8 in
 `docs/decisions/codex-gpui-kit-0.7.1.md`, where `step` kept 0.3.8's frame
-signal timestamps, and to 0.3.9 in `docs/decisions/gpui-kit-0-7-3.md`, and to 0.3.10 in `docs/decisions/gpui-kit-0-8-1.md`.)
+signal timestamps, and to 0.3.9 in `docs/decisions/gpui-kit-0-7-3.md`, to 0.3.10 in `docs/decisions/gpui-kit-0-8-1.md`, and to 0.3.11 in `docs/decisions/gpui-kit-0-9-0.md`.)
 
 The Quill project changed it in 2026 so an idle window stops costing CPU:
 
@@ -159,3 +159,11 @@ refused, as Telegram Desktop refuses them through Qt while an export runs:
   queue spinning.
   `Platform::quit` sets `quit_decided`, so the app's own quit, `restart`
   included, reaches `terminate:` without asking.
+
+0.3.11 note (`docs/decisions/gpui-kit-0-9-0.md`): upstream paces windows with a
+`CAMetalDisplayLink` on macOS 14 and later. Quill does not wire it up. Every
+window stays on the `CVDisplayLink` path above, because the idle pacing, the
+frame waker and `present_timing` are built on it. `MetalFrames`, `FrameSource`
+and `metal_frame` were removed, and `start_display_link` lost its `window_state`
+parameter. `MacWindowState` now lives in an `Rc` as upstream's does, so the
+delayed drawable release carries its weak handle in `dispatch2::MainThreadBound`.
