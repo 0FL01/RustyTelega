@@ -344,7 +344,7 @@ impl QuillApp {
         self.playback.inline_videos.begin_render(
             self.windows.scope,
             target,
-            self.history.width.get(),
+            self.history.pane_width.get(),
             cx,
         );
         let surface = self.history_userpic_surface();
