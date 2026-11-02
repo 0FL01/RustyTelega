@@ -317,12 +317,13 @@ impl QuillApp {
     /// platforms render an explanatory line instead of the switch.
     pub(in crate::ui) fn general_autostart_section(&self, cx: &mut Context<Self>) -> AnyElement {
         if !quill::autostart::supported() {
-            return self.appearance_section(
+            let note = self.appearance_section(
                 cx,
                 tr(keys::Q_PREFS_LAUNCH_AT_LOGIN),
                 tr(keys::Q_PREFS_AUTOSTART_IS_NOT_AVAILABLE_ON),
                 div().into_any_element(),
             );
+            return self.setting_spot(&["system.launch_at_login"], note, cx);
         }
         let on = quill::autostart::is_enabled();
         let control = Switch::new("general-autostart-switch")
@@ -334,12 +335,13 @@ impl QuillApp {
                 }
                 cx.notify();
             }));
-        self.appearance_toggle_section(
+        let row = self.appearance_toggle_section(
             cx,
             tr(keys::Q_PREFS_LAUNCH_AT_LOGIN),
             tr(keys::Q_PREFS_START_QUILL_AUTOMATICALLY_WHEN_YOU),
             control.into_any_element(),
-        )
+        );
+        self.setting_spot(&["system.launch_at_login"], row, cx)
     }
 
     /// The handler is read on a thread (Linux): draw again when it lands.
@@ -429,12 +431,13 @@ impl QuillApp {
                 }))
                 .into_any_element(),
         };
-        self.appearance_toggle_section(
+        let row = self.appearance_toggle_section(
             cx,
             tr(keys::Q_PREFS_OPEN_TELEGRAM_LINKS_WITH_QUILL),
             &hint,
             control,
-        )
+        );
+        self.setting_spot(&["system.open_links"], row, cx)
     }
 
     pub(in crate::ui) fn appearance_send_key_section(&self, cx: &mut Context<Self>) -> AnyElement {

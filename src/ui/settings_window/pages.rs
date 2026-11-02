@@ -121,10 +121,30 @@ impl QuillApp {
             }
             Page::Power => column.children(cards([self.appearance_power_section(cx)])),
             Page::System => {
-                let mut system = vec![
-                    self.general_autostart_section(cx),
-                    self.general_link_handler_section(cx),
-                ];
+                let tray_ready = quill::tray::tray_available();
+                let tray_options = self.tray_options(tray_ready);
+                let tray =
+                    quill::tray::tray_setting_switches(tray_ready, self.appearance.show_tray_icon);
+                let autostart = self.general_autostart_section(cx);
+                let autostart = self.setting_stand_in(
+                    !tray_options.tray_icon,
+                    &["system.tray_icon"],
+                    autostart,
+                    cx,
+                );
+                let autostart = self.setting_stand_in(
+                    !tray.start_in_tray,
+                    &["system.start_in_tray"],
+                    autostart,
+                    cx,
+                );
+                let autostart = self.setting_stand_in(
+                    !tray.run_in_background,
+                    &["system.when_closed"],
+                    autostart,
+                    cx,
+                );
+                let mut system = vec![autostart, self.general_link_handler_section(cx)];
                 system.extend(self.general_send_to_section(cx));
                 column
                     .children(cards(system))

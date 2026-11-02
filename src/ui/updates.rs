@@ -296,26 +296,39 @@ impl QuillApp {
             )
             .children(Self::update_progress_bar("quill-update-progress", &control))
             .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    // While it downloads the status line above says so.
-                    .when(
-                        !matches!(
-                            control,
-                            UpdateControl::Downloading { .. } | UpdateControl::Restarting
-                        ),
-                        |row| {
-                            row.child(self.update_control_button(
-                                "quill-update-button",
-                                &control,
-                                cx,
-                            ))
-                        },
-                    )
-                    .children(self.release_page_button(&control, cx)),
+                self.setting_stand_in(
+                    self.known_release().is_none(),
+                    &["about.release_notes"],
+                    self.setting_spot(
+                        &["about.check_updates"],
+                        div()
+                            .flex()
+                            .gap_2()
+                            // While it downloads the status line above says so.
+                            .when(
+                                !matches!(
+                                    control,
+                                    UpdateControl::Downloading { .. } | UpdateControl::Restarting
+                                ),
+                                |row| {
+                                    row.child(self.update_control_button(
+                                        "quill-update-button",
+                                        &control,
+                                        cx,
+                                    ))
+                                },
+                            )
+                            .children(self.release_page_button(&control, cx))
+                            .into_any_element(),
+                        cx,
+                    ),
+                    cx,
+                ),
             )
-            .children(self.update_release_notes(cx));
+            .children(
+                self.update_release_notes(cx)
+                    .map(|notes| self.setting_spot(&["about.release_notes"], notes, cx)),
+            );
         if matches!(self.settings.update_state, UpdateState::Installed(_)) {
             section = section.child(
                 div().flex().child(
@@ -434,31 +447,51 @@ impl QuillApp {
                     .child(tr(keys::Q_OPS_ABOUT_QUILL)),
             )
             .child(
-                div()
-                    .id("about-quill-version")
-                    .role(Role::Label)
-                    .aria_label(version.clone())
-                    .text_sm()
-                    .child(version),
+                self.setting_spot(
+                    &["about.version"],
+                    div()
+                        .id("about-quill-version")
+                        .role(Role::Label)
+                        .aria_label(version.clone())
+                        .text_sm()
+                        .child(version)
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .child(
-                div()
-                    .id("about-quill-disclaimer")
-                    .role(Role::Label)
-                    .aria_label(quill::about::DISCLAIMER)
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(quill::about::DISCLAIMER),
+                self.setting_spot(
+                    &["about.about_quill"],
+                    div()
+                        .id("about-quill-disclaimer")
+                        .role(Role::Label)
+                        .aria_label(quill::about::DISCLAIMER)
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(quill::about::DISCLAIMER)
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .child(
-                Button::new("about-whats-new")
-                    .label(tr(keys::Q_PREFS_WHATS_NEW))
-                    .on_click(cx.listener(|this, _, _, cx| this.open_whats_new(cx))),
+                self.setting_spot(
+                    &["about.whats_new"],
+                    Button::new("about-whats-new")
+                        .label(tr(keys::Q_PREFS_WHATS_NEW))
+                        .on_click(cx.listener(|this, _, _, cx| this.open_whats_new(cx)))
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .child(
-                Button::new("open-source-licenses")
-                    .label(tr(keys::Q_OPS_OPEN_SOURCE_LICENSES))
-                    .on_click(cx.listener(|this, _, _, cx| this.open_license_notices(cx))),
+                self.setting_spot(
+                    &["about.licenses"],
+                    Button::new("open-source-licenses")
+                        .label(tr(keys::Q_OPS_OPEN_SOURCE_LICENSES))
+                        .on_click(cx.listener(|this, _, _, cx| this.open_license_notices(cx)))
+                        .into_any_element(),
+                    cx,
+                ),
             )
             .into_any_element()
     }

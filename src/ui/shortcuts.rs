@@ -72,6 +72,6 @@ impl QuillApp {
                     .child(chips),
             );
         }
-        body.into_any_element()
+        self.setting_spot(&["shortcuts.reference"], body.into_any_element(), cx)
     }
 }

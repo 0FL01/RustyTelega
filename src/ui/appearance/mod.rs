@@ -500,22 +500,30 @@ impl QuillApp {
         body.extend(this.tray_icon_sections(tray_available, cx));
         if tray.start_in_tray {
             body.push(
-                this.appearance_toggle_section(
+                this.setting_spot(
+                    &["system.start_in_tray"],
+                    this.appearance_toggle_section(
+                        cx,
+                        tr(keys::Q_PREFS_START_IN_TRAY),
+                        tr(keys::Q_PREFS_OPEN_QUILL_FROM_ITS_TRAY),
+                        Switch::new("general-start-in-tray")
+                            .checked(this.appearance.start_in_tray)
+                            .accessibility_label(tr(keys::Q_PREFS_START_QUILL_IN_THE_SYSTEM))
+                            .on_click(cx.listener(|this, &on, _, cx| {
+                                this.set_appearance(cx, |a| a.start_in_tray = on)
+                            }))
+                            .into_any_element(),
+                    ),
                     cx,
-                    tr(keys::Q_PREFS_START_IN_TRAY),
-                    tr(keys::Q_PREFS_OPEN_QUILL_FROM_ITS_TRAY),
-                    Switch::new("general-start-in-tray")
-                        .checked(this.appearance.start_in_tray)
-                        .accessibility_label(tr(keys::Q_PREFS_START_QUILL_IN_THE_SYSTEM))
-                        .on_click(cx.listener(|this, &on, _, cx| {
-                            this.set_appearance(cx, |a| a.start_in_tray = on)
-                        }))
-                        .into_any_element(),
                 ),
             );
         }
         if tray.run_in_background {
-            body.push(this.appearance_close_behavior_section(cx));
+            body.push(this.setting_spot(
+                &["system.when_closed"],
+                this.appearance_close_behavior_section(cx),
+                cx,
+            ));
         }
         body.extend(this.native_frame_section(super::window_frame::supported(), cx));
         body
@@ -529,7 +537,7 @@ impl QuillApp {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         supported.then(|| {
-            self.appearance_toggle_section(
+            let row = self.appearance_toggle_section(
                 cx,
                 tr(keys::SETTINGS_NATIVE_FRAME),
                 tr(keys::Q_PREFS_THE_SYSTEM_DRAWS_THE_TITLE),
@@ -540,7 +548,8 @@ impl QuillApp {
                         this.set_appearance(cx, |a| a.native_window_frame = on)
                     }))
                     .into_any_element(),
-            )
+            );
+            self.setting_spot(&["system.window_frame"], row, cx)
         })
     }
 
