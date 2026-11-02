@@ -226,6 +226,7 @@ impl QuillApp {
             .wheel(phase, delta_down, at_bottom, active, now);
         self.pull_step(step, target, cx);
         if step.redraw || self.history.pull.machine.animating(now) {
+            self.notify_conversation(cx);
             cx.notify();
         }
         step.consumed
@@ -415,15 +416,7 @@ impl QuillApp {
                         return;
                     }
                     let consumed = app
-                        .update(cx, |this, cx| {
-                            // GPUI clears a visible tooltip on a wheel event with
-                            // `window.refresh()`, which replays a cached view's last
-                            // frame — tooltip included. Dirtying the conversation
-                            // slice makes the next frame drop it (the "React" hint
-                            // otherwise stays put after the message scrolls away).
-                            this.notify_conversation(cx);
-                            this.pull_wheel(event, window, cx)
-                        })
+                        .update(cx, |this, cx| this.pull_wheel(event, window, cx))
                         .unwrap_or(false);
                     if consumed {
                         cx.stop_propagation();

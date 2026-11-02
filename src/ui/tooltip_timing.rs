@@ -59,4 +59,71 @@ mod tests {
             assert_eq!(show_delay(cx), SHOW_DELAY);
         });
     }
+
+    #[cfg(feature = "demo-capture")]
+    mod wheel {
+        use gpui_kit::{
+            AnyView, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
+            Modifiers, ParentElement as _, Render, ScrollDelta, ScrollEvent, ScrollSource,
+            StatefulInteractiveElement as _, StyleRefinement, Styled as _, TestAppContext,
+            TouchPhase, VisualTestContext, Window, div, point, px, size,
+        };
+
+        struct Tip;
+
+        impl Render for Tip {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                div().debug_selector(|| "tip".to_string()).child("hint")
+            }
+        }
+
+        struct Owner;
+
+        impl Render for Owner {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                div()
+                    .id("owner")
+                    .size_full()
+                    .tooltip(|_, cx| cx.new(|_| Tip).into())
+            }
+        }
+
+        struct Slices {
+            owner: Entity<Owner>,
+        }
+
+        impl Render for Slices {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                let slice =
+                    AnyView::from(self.owner.clone()).cached(StyleRefinement::default().size_full());
+                div().size_full().child(slice)
+            }
+        }
+
+        /// Nothing notifies the slice: the frame after the wheel leaves the
+        /// view cache out on its own.
+        #[gpui_kit::test]
+        fn a_wheel_drops_a_tooltip_shown_from_a_cached_view(cx: &mut TestAppContext) {
+            let handle = cx.open_window(size(px(300.), px(300.)), |_, cx| {
+                let owner = cx.new(|_| Owner);
+                Slices { owner }
+            });
+            let mut vcx = VisualTestContext::from_window(handle.into(), cx);
+            vcx.run_until_parked();
+            let over = point(px(50.), px(50.));
+            vcx.simulate_mouse_move(over, None, Modifiers::none());
+            vcx.executor().advance_clock(super::SHOW_DELAY * 2);
+            vcx.run_until_parked();
+            assert!(vcx.debug_bounds("tip").is_some(), "the tooltip shows");
+            vcx.simulate_event(ScrollEvent {
+                position: over,
+                delta: ScrollDelta::Pixels(point(px(0.), px(-20.))),
+                modifiers: Modifiers::default(),
+                touch_phase: TouchPhase::Moved,
+                source: ScrollSource::Pointer,
+            });
+            vcx.run_until_parked();
+            assert!(vcx.debug_bounds("tip").is_none(), "the wheel dropped it");
+        }
+    }
 }
