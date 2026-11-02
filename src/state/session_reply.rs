@@ -651,11 +651,7 @@ impl Session {
         self.chats_shown().iter().any(|shown| {
             *shown != chat_id
                 && self.histories.get(&shown.0).is_some_and(|history| {
-                    history.messages.values().any(|message| {
-                        message.reply_to.as_ref().is_some_and(|reply| {
-                            reply.chat_id == chat_id && reply.message_id == message_id
-                        })
-                    })
+                    history.messages.replies_to(chat_id.0, message_id.0)
                 })
         })
     }

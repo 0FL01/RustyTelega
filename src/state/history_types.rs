@@ -296,6 +296,10 @@ pub struct HistoryMessages {
     removed_floor: u64,
     revision: u64,
     ids_revision: u64,
+    /// The (chat, message) pairs the messages reply to, with the
+    /// `revision` they were collected at: rebuilt when asked after a
+    /// change, so a lookup for another chat's update walks nothing.
+    replies: std::sync::Mutex<(u64, HashSet<(i64, i64)>)>,
 }
 
 impl Default for HistoryMessages {
@@ -308,6 +312,7 @@ impl Default for HistoryMessages {
             removed_floor: 0,
             revision: 0,
             ids_revision: 0,
+            replies: std::sync::Mutex::new((0, HashSet::new())),
         }
     }
 }
@@ -341,6 +346,21 @@ impl HistoryMessages {
     /// place.
     pub fn ids_revision(&self) -> u64 {
         self.ids_revision
+    }
+
+    /// Whether a message here replies to `message_id` of `chat_id`.
+    pub fn replies_to(&self, chat_id: i64, message_id: i64) -> bool {
+        let mut replies = crate::locks::lock_or_recover(&self.replies);
+        if replies.0 != self.revision {
+            replies.1 = self
+                .map
+                .values()
+                .filter_map(|message| message.reply_to.as_ref())
+                .map(|reply| (reply.chat_id.0, reply.message_id.0))
+                .collect();
+            replies.0 = self.revision;
+        }
+        replies.1.contains(&(chat_id, message_id))
     }
 
     /// Messages stored or changed after `revision` (an earlier value of
