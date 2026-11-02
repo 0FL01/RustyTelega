@@ -351,6 +351,9 @@ fn removing_cards_before_and_past_the_tenth_sends_the_rest_in_order(cx: &mut Tes
         assert_eq!(names, expected);
     });
     vcx.update(|window, cx| window.render_frame(cx));
+    // The reads a drop starts; a Send waits for them.
+    app.update_in(&mut vcx, |app, _, cx| app.check_tray_videos(cx));
+    vcx.run_until_parked();
     app.update_in(&mut vcx, |app, window, cx| {
         app.composer_ui.group_media = Some(true);
         app.submit_composer(String::new(), window, cx);
