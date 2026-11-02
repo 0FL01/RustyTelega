@@ -31,8 +31,11 @@ impl QuillApp {
             (None, None) => tr(keys::Q_OPS_NOT_AVAILABLE).to_string(),
         };
         let stale = prefs.download_dir.is_some() && configured.is_none();
-        let mut section = div().flex().flex_col().gap_2();
-        section = section
+        let section = div().flex().flex_col().gap_2();
+        let folder = div()
+            .flex()
+            .flex_col()
+            .gap_2()
             .child(section_header(tr(keys::Q_OPS_DOWNLOAD_FOLDER)))
             .child(div().id("download-folder-path").text_sm().child(shown))
             .when(stale, |this| {
@@ -70,8 +73,11 @@ impl QuillApp {
                                 })),
                         )
                     }),
-            )
-            .child(
+            );
+        let section = section.child(self.setting_spot(&["data.download_folder"], folder, cx));
+        let section = section.child(
+            self.setting_spot(
+                &["data.ask_where_to_save"],
                 div()
                     .flex()
                     .items_center()
@@ -102,7 +108,9 @@ impl QuillApp {
                                 cx.notify();
                             })),
                     ),
-            );
+                cx,
+            ),
+        );
         section
     }
 
@@ -138,7 +146,11 @@ impl QuillApp {
             session.and_then(|s| s.settings.privacy_data.network_usage.clone());
         let loading = session.is_some_and(|s| s.settings.privacy_data.network_loading);
         let mut section = div().flex().flex_col().gap_2();
-        section = section.child(section_header(tr(keys::Q_OPS_NETWORK_USAGE)));
+        section = section.child(self.setting_spot(
+            &["data.network_usage"],
+            section_header(tr(keys::Q_OPS_NETWORK_USAGE)),
+            cx,
+        ));
         let Some(usage) = usage else {
             return section.child(
                 div()
