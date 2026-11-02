@@ -458,7 +458,7 @@ impl QuillApp {
     }
 
     /// A kit dialog is open (its app-side flag is set).
-    pub(in crate::ui) fn kit_dialog_open(&self) -> bool {
+    pub(super) fn kit_dialog_open(&self) -> bool {
         QuillShell::first_open(self).is_some()
     }
 }
