@@ -83,6 +83,13 @@ impl QuillApp {
             self.mark_read_from_notification(chat_id, cx);
             return;
         }
+        // Behind the passcode the window comes forward and nothing opens
+        // (Telegram Desktop `openNotificationMessage`).
+        if self.account.passcode.locked {
+            cx.activate(true);
+            window.activate_window();
+            return;
+        }
         // A chat with a window of its own takes the click (Telegram
         // Desktop `windowForShowingHistory`); the main window stays behind.
         if self.routed_to_chat_window(chat_id, cx) {
@@ -90,10 +97,14 @@ impl QuillApp {
         }
         cx.activate(true);
         window.activate_window();
+        // The viewer does not stay over the chat (`MainWidget::showHistory`).
+        if self.viewer.state.is_open() {
+            self.close_media_viewer(cx);
+        }
         self.select_listed_chat(chat_id, window, cx);
-        if action == NotificationAction::Reply {
-            self.composer
-                .update(cx, |input, cx| input.focus(window, cx));
+        // A kit dialog keeps the keys until it closes.
+        if self.open_chat_id() == Some(chat_id) && !self.kit_dialog_open() {
+            self.focus_opened_chat(window, cx);
         }
     }
 

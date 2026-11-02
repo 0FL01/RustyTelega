@@ -461,9 +461,10 @@ impl QuillApp {
         self.notify_sidebar(cx);
     }
 
-    /// `HistoryWidget::setInnerFocus`: a chat opened from the keyboard hands
-    /// the keys to its composer. A chat without one leaves them in the list.
-    fn focus_opened_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// `HistoryWidget::setInnerFocus`: a chat opened from the keyboard or a
+    /// notification hands the keys to its composer. A chat without one leaves
+    /// them where they are.
+    pub(super) fn focus_opened_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let open = self.session().is_some_and(|s| s.open_chat.is_some());
         if open && self.composer_available(self.pane_mode()) {
             self.composer
