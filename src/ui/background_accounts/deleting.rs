@@ -237,6 +237,7 @@ impl QuillApp {
             |this, deletion, cx| match deletion {
                 Deletion::Done { .. } => {
                     this.background.wiping = false;
+                    this.disk_accounts_wiped();
                     this.start_connection(cx);
                 }
                 // Nothing opens in this run; the next start deletes the

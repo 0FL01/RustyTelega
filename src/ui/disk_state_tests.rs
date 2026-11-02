@@ -525,6 +525,24 @@ fn a_switch_drops_the_previous_accounts_storage_figures(cx: &mut TestAppContext)
 }
 
 #[gpui_kit::test]
+fn storage_figures_go_on_after_every_account_was_wiped(cx: &mut TestAppContext) {
+    use quill::ids::AccountKey;
+    let (app, mut vcx) = new_app(cx);
+    app.update_in(&mut vcx, |app, _, cx| {
+        app.disk_account_switched(AccountKey("second".into()), cx);
+        app.disk_accounts_wiped();
+        let files = super::AccountFiles {
+            account: AccountKey::primary(),
+            cache_folder: None,
+            database_bytes: Some(5 << 20),
+        };
+        app.note_account_files(files, cx)
+    });
+    let shown = app.read_with(&vcx, |app, _| app.disk.database_bytes);
+    assert_eq!(shown, Some(5 << 20));
+}
+
+#[gpui_kit::test]
 fn a_running_update_download_waits_for_space_and_starts_again(cx: &mut TestAppContext) {
     use quill::updater::{DownloadProgress, ReleaseInfo, UpdateState};
     let (app, mut vcx) = new_app(cx);

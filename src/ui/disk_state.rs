@@ -205,6 +205,13 @@ impl QuillApp {
     /// once (Manage local storage must not show the previous account's
     /// database), and the new ones are read now instead of at the next
     /// reading, up to 30 s away.
+    /// The lock-screen log out deleted every account and the next one on
+    /// screen comes without a switch: until one is recorded, any reading is
+    /// that account's.
+    pub(super) fn disk_accounts_wiped(&mut self) {
+        self.disk.on_screen = None;
+    }
+
     pub(super) fn disk_account_switched(
         &mut self,
         account: quill::ids::AccountKey,
