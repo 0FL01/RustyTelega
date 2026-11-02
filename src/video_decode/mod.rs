@@ -343,13 +343,36 @@ struct AudioShared {
     /// Where the sound of the current generation starts (f64 bits): the
     /// seek target, 0 at open. Stored before `generation` is bumped.
     origin: AtomicU64,
-    /// Seqlock-style: the position of the next sample the output will
-    /// play (f64 bits), tagged with the generation it belongs to.
+    /// The position of the next sample the output will play and the
+    /// generation it belongs to, in one word so that neither is read
+    /// without the other ([`PlayedMark`]).
     played: AtomicU64,
-    played_generation: AtomicU64,
     /// The output let go of the tap: sound is decoded for nobody.
     detached: AtomicBool,
     starved: AtomicBool,
+}
+
+/// A position in whole microseconds (44 bits, half a year) under the low
+/// bits of its generation. An output still writing for a seek that has
+/// passed marks an old generation, which reads as no position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PlayedMark(u64);
+
+impl PlayedMark {
+    const MICROS_BITS: u32 = 44;
+    const MICROS_MASK: u64 = (1 << Self::MICROS_BITS) - 1;
+    /// A mark no generation reads: nothing has played yet.
+    const NOTHING: Self = Self(u64::MAX);
+
+    fn new(generation: u64, secs: f64) -> Self {
+        let micros = (secs.max(0.0) * 1e6).round() as u64;
+        Self(generation << Self::MICROS_BITS | micros.min(Self::MICROS_MASK - 1))
+    }
+
+    fn of(self, generation: u64) -> Option<f64> {
+        let same = self.0 >> Self::MICROS_BITS == generation & (u64::MAX >> Self::MICROS_BITS);
+        (same && self != Self::NOTHING).then(|| (self.0 & Self::MICROS_MASK) as f64 / 1e6)
+    }
 }
 
 #[derive(Default)]
@@ -380,8 +403,8 @@ impl AudioShared {
         queue.buffered = 0;
         self.origin.store(secs.to_bits(), Ordering::Release);
         let generation = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
-        self.played.store(secs.to_bits(), Ordering::Release);
-        self.played_generation.store(generation, Ordering::Release);
+        self.played
+            .store(PlayedMark::new(generation, secs).0, Ordering::Release);
     }
 
     fn drained(&self) -> bool {
@@ -391,10 +414,7 @@ impl AudioShared {
     /// Where the output is, if it has played anything since the last seek.
     fn played(&self) -> Option<f64> {
         let generation = self.generation.load(Ordering::Acquire);
-        let before = self.played_generation.load(Ordering::Acquire);
-        let value = f64::from_bits(self.played.load(Ordering::Acquire));
-        let after = self.played_generation.load(Ordering::Acquire);
-        (before == generation && after == generation).then_some(value)
+        PlayedMark(self.played.load(Ordering::Acquire)).of(generation)
     }
 
     /// What is heard, if the output has played anything since the last seek.
@@ -546,12 +566,10 @@ impl AudioTap {
     }
 
     fn publish_played(&self, played: f64) {
-        self.shared
-            .played
-            .store(played.to_bits(), Ordering::Release);
-        self.shared
-            .played_generation
-            .store(self.generation, Ordering::Release);
+        self.shared.played.store(
+            PlayedMark::new(self.generation, played).0,
+            Ordering::Release,
+        );
     }
 
     fn set_sounding(&mut self, sounding: bool) {

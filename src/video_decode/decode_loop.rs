@@ -2,7 +2,7 @@
 
 use super::{
     AUDIO_HIGH_SECS, AUDIO_LOW_SECS, AudioQueue, AudioShared, AudioTap, Clock, Demuxer, IDLE_WAIT,
-    Item, PixelOutput, SYNC_TOLERANCE, Shared, State, VideoFrame, lock,
+    Item, PixelOutput, PlayedMark, SYNC_TOLERANCE, Shared, State, VideoFrame, lock,
 };
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -111,8 +111,7 @@ impl Decoder {
                 queue: Mutex::new(AudioQueue::default()),
                 generation: AtomicU64::new(0),
                 origin: AtomicU64::new(0f64.to_bits()),
-                played: AtomicU64::new(0f64.to_bits()),
-                played_generation: AtomicU64::new(u64::MAX),
+                played: AtomicU64::new(PlayedMark::NOTHING.0),
                 detached: AtomicBool::new(false),
                 starved: AtomicBool::new(true),
             });
