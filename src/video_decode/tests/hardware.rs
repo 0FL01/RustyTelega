@@ -121,7 +121,7 @@ fn a_hardware_failure_at_the_end_after_a_seek_repeats_no_picture() {
         PixelOutput::Bgra,
     );
     let mut demuxer =
-        FfiDemuxer::open_stand_in(&clip, &options(true), StandIn::FailAtEnd).expect("open");
+        FfiDemuxer::open_stand_in(&clip, &options(true), StandIn::DrainFails).expect("open");
     demuxer.seek(0.0).expect("seek");
     let failing = decode(demuxer, PixelOutput::Bgra);
     assert!(!failing.finished.hardware, "software after the failure");

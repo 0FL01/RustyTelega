@@ -650,9 +650,10 @@ impl Session {
     pub fn shows_cross_chat_reply_to(&self, chat_id: ChatId, message_id: MessageId) -> bool {
         self.chats_shown().iter().any(|shown| {
             *shown != chat_id
-                && self.histories.get(&shown.0).is_some_and(|history| {
-                    history.messages.replies_to(chat_id.0, message_id.0)
-                })
+                && self
+                    .histories
+                    .get(&shown.0)
+                    .is_some_and(|history| history.messages.replies_to(chat_id.0, message_id.0))
         })
     }
 

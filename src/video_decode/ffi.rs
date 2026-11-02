@@ -36,7 +36,7 @@ const HW_FAIL_AT_END: i32 = 4;
 pub(super) enum StandIn {
     FailThirdPicture,
     FailThirdPictureAndReopen,
-    FailAtEnd,
+    DrainFails,
 }
 
 #[repr(C)]
@@ -399,7 +399,7 @@ impl FfiDemuxer {
         let hw = match stand_in {
             StandIn::FailThirdPicture => HW_FAIL_THIRD_PICTURE,
             StandIn::FailThirdPictureAndReopen => HW_FAIL_THIRD_PICTURE_AND_REOPEN,
-            StandIn::FailAtEnd => HW_FAIL_AT_END,
+            StandIn::DrainFails => HW_FAIL_AT_END,
         };
         Self::open_with(path, options, hw)
     }

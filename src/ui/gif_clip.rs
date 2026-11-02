@@ -359,7 +359,10 @@ impl GifClip {
         let mut played = elapsed.saturating_sub(waited);
         if !decoded.complete && played > length {
             if let Some(started) = started {
-                decoded.waited = Some((started, waited.saturating_add(played - length)));
+                decoded.waited = Some((
+                    started,
+                    waited.saturating_add(played.saturating_sub(length)),
+                ));
             }
             played = length;
         }

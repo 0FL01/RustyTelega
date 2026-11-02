@@ -198,6 +198,15 @@ impl PlaybackUi {
     }
 }
 
+/// A GIF decode running for a message.
+pub(crate) struct GifDecode {
+    /// Set when playback stops; the decode then ends before its next frame.
+    pub(super) cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// The clip, once its first picture is in: a replay while the rest
+    /// still decodes plays it at once.
+    pub(super) first: Option<std::sync::Arc<super::gif_clip::GifClip>>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::PlaybackUi;
@@ -326,13 +335,4 @@ mod tests {
         assert_eq!(ui.active_position_secs(), None);
         assert!(!ui.is_playing());
     }
-}
-
-/// A GIF decode running for a message.
-pub(crate) struct GifDecode {
-    /// Set when playback stops; the decode then ends before its next frame.
-    pub(super) cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    /// The clip, once its first picture is in: a replay while the rest
-    /// still decodes plays it at once.
-    pub(super) first: Option<std::sync::Arc<super::gif_clip::GifClip>>,
 }
