@@ -616,7 +616,7 @@ fn os_open_now(target: &std::ffi::OsStr) -> OsOpen {
     open_off_thread(target, shell_execute)
 }
 
-#[cfg(all(windows, not(any(test, feature = "test-support"))))]
+#[cfg(all(windows, any(test, not(feature = "test-support"))))]
 fn shell_execute(target: &std::ffi::OsStr) -> bool {
     use std::os::windows::ffi::OsStrExt;
     use windows::Win32::System::Com::{
@@ -910,6 +910,18 @@ mod tests {
             std::panic::resume_unwind(Box::new("the shell call died"))
         }));
         assert!(block_on(answer).is_err());
+    }
+
+    /// The real `ShellExecuteW` on a file that is not there: it answers
+    /// "not opened" on the opener thread instead of claiming success.
+    #[cfg(windows)]
+    #[test]
+    fn windows_a_failing_shell_execute_answers_not_opened() {
+        let gone = crate::scratch::unique_dir("quill-shell-execute").join("missing-file.pdf");
+        assert!(!gone.exists());
+        assert!(!shell_execute(gone.as_os_str()));
+        let answer = pending(open_off_thread(gone.as_os_str(), shell_execute));
+        assert_eq!(block_on(answer), Ok(false));
     }
 
     #[test]

@@ -521,3 +521,10 @@ so its `test-support` feature comes through Quill's `demo-capture`).
 The Quill project also changed it in 2026 so text glyphs can be swept: the atlas
 forwards `text_glyph_count` and `remove_text_glyphs_unused_since` to its
 `AtlasState` (see gpui-pre's `QUILL-CHANGES.md`).
+
+The Quill project added two Windows runner tests in 2026 that need no GPU:
+`timer_thread::tests` checks that twenty 1 ms waits on the timer thread's
+waitable timer end well inside twenty 15.6 ms system ticks, and
+`file_picker_tests` checks that a shell item for a file with a non-ASCII name
+gives back its exact path. CI runs them with `cargo test -p gpui-pre-windows
+--lib --locked -- timer_thread::tests file_picker_tests`.
