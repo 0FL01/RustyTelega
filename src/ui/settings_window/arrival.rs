@@ -205,14 +205,17 @@ mod tests {
         assert!(at(500) > 0. && at(500) < PEAK);
         assert_eq!(wash_opacity(WAIT + RISE, false), PEAK);
         assert_eq!(wash_opacity(WAIT + RISE + HOLD, false), PEAK);
-        assert!(wash_opacity(TOTAL - FALL / 2, false) < PEAK);
+        assert!(wash_opacity(TOTAL.saturating_sub(FALL / 2), false) < PEAK);
         assert_eq!(wash_opacity(TOTAL, false), 0.);
     }
 
     #[test]
     fn reduced_motion_shows_the_wash_without_fades() {
         assert_eq!(wash_opacity(WAIT, true), PEAK);
-        assert_eq!(wash_opacity(TOTAL - Duration::from_millis(1), true), PEAK);
+        assert_eq!(
+            wash_opacity(TOTAL.saturating_sub(Duration::from_millis(1)), true),
+            PEAK
+        );
         assert_eq!(wash_opacity(TOTAL, true), 0.);
     }
 

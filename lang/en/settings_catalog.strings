@@ -26,8 +26,6 @@
 "qll_settings_advanced_sec_settings_file" = "Settings backup";
 "qll_settings_advanced_split_profile_media" = "Split profile media tab into photos and videos";
 "qll_settings_calls_accept_on_device" = "Accept calls on this device";
-"qll_settings_calls_input_device" = "Microphone device";
-"qll_settings_calls_output_device" = "Speaker device";
 "qll_settings_calls_ptt_delay" = "Push-to-talk release delay";
 "qll_settings_calls_ptt_shortcut" = "Push-to-talk shortcut";
 "qll_settings_calls_system_sound_prefs" = "Open system sound preferences";
@@ -41,7 +39,6 @@
 "qll_settings_data_clear_cache" = "Clear cached files";
 "qll_settings_devices_accept_calls" = "Accept calls on a session";
 "qll_settings_devices_accept_secret_chats" = "Accept secret chats on a session";
-"qll_settings_folders_archive_collapsed" = "Collapse archive";
 "qll_settings_folders_sec_tabs" = "Folder tabs";
 "qll_settings_notifications_attention_dock" = "Bounce the Dock icon";
 "qll_settings_notifications_attention_taskbar" = "Flash the taskbar icon";
@@ -85,7 +82,6 @@
 "qll_settings_privacy_system_unlock" = "Unlock with system authentication";
 "qll_settings_privacy_voice_messages" = "Who can send me voice messages";
 "qll_settings_shortcuts_reference" = "Shortcuts reference";
-"qll_settings_system_touch_bar" = "Disable Touch Bar";
 "qll_settings_back_to_chats" = "Back to chats";
 "qll_settings_log_out_warning" = "Logging out ends all your secret chats, and media downloaded on this device is erased.";
 "lng_settings_logout" = "Log out";
