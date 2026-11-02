@@ -200,18 +200,22 @@ impl QuillApp {
                     .child(tr(keys::Q_PREFS_PAYMENTS)),
             )
             .child(
-                div().flex().flex_col().gap_1().child(
-                    Button::new("privacy-clear-payment-info")
-                        .small()
-                        .label(tr(keys::Q_PREFS_CLEAR_SAVED_PAYMENT_SHIPPING_INFO))
-                        .custom(super::security::quiet_danger(cx))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.open_group_confirm(
-                                ChatId(0),
-                                GroupConfirmAction::ClearPaymentInfo,
-                                cx,
-                            );
-                        })),
+                self.setting_spot(
+                    &["privacy.clear_payment"],
+                    div().flex().flex_col().gap_1().child(
+                        Button::new("privacy-clear-payment-info")
+                            .small()
+                            .label(tr(keys::Q_PREFS_CLEAR_SAVED_PAYMENT_SHIPPING_INFO))
+                            .custom(super::security::quiet_danger(cx))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.open_group_confirm(
+                                    ChatId(0),
+                                    GroupConfirmAction::ClearPaymentInfo,
+                                    cx,
+                                );
+                            })),
+                    ),
+                    cx,
                 ),
             )
             .child(
@@ -242,25 +246,29 @@ impl QuillApp {
                     .child(tr(keys::Q_PREFS_FREQUENT_CONTACTS)),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_2()
-                    .child(
-                        div()
-                            .text_sm()
-                            .child(tr(keys::Q_PREFS_SUGGEST_FREQUENT_CONTACTS)),
-                    )
-                    .child(
-                        Switch::new("privacy-suggest-frequent-contacts")
-                            .checked(enabled)
-                            .accessibility_label(tr(keys::Q_PREFS_SUGGEST_FREQUENT_CONTACTS))
-                            .on_click(cx.listener(|this, &on: &bool, _, cx| {
-                                this.set_top_chats_disabled(!on, cx);
-                            })),
-                    ),
+                self.setting_spot(
+                    &["privacy.frequent_contacts"],
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .px_2()
+                        .child(
+                            div()
+                                .text_sm()
+                                .child(tr(keys::Q_PREFS_SUGGEST_FREQUENT_CONTACTS)),
+                        )
+                        .child(
+                            Switch::new("privacy-suggest-frequent-contacts")
+                                .checked(enabled)
+                                .accessibility_label(tr(keys::Q_PREFS_SUGGEST_FREQUENT_CONTACTS))
+                                .on_click(cx.listener(|this, &on: &bool, _, cx| {
+                                    this.set_top_chats_disabled(!on, cx);
+                                })),
+                        ),
+                    cx,
+                ),
             )
             .child(
                 div()
@@ -286,42 +294,46 @@ impl QuillApp {
 
         let mut section = div().flex().flex_col().gap_1();
         section = section.child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .px_1()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            div()
-                                .text_sm()
-                                .font_semibold()
-                                .child(tr(keys::Q_PREFS_BLOCKED_USERS)),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground)
-                                .child(format!("{total}")),
-                        ),
-                )
-                .child(
-                    Button::new("privacy-block-add")
-                        .small()
-                        .label(tr(keys::Q_PREFS_BLOCK))
-                        .ghost()
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.privacy.block_picker_open = true;
-                            if let Some(live) = this.live.as_mut() {
-                                let _ = live.driver.fetch_contacts();
-                            }
-                            cx.notify();
-                        })),
-                ),
+            self.setting_spot(
+                &["privacy.blocked"],
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px_1()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_semibold()
+                                    .child(tr(keys::Q_PREFS_BLOCKED_USERS)),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(format!("{total}")),
+                            ),
+                    )
+                    .child(
+                        Button::new("privacy-block-add")
+                            .small()
+                            .label(tr(keys::Q_PREFS_BLOCK))
+                            .ghost()
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.privacy.block_picker_open = true;
+                                if let Some(live) = this.live.as_mut() {
+                                    let _ = live.driver.fetch_contacts();
+                                }
+                                cx.notify();
+                            })),
+                    ),
+                cx,
+            ),
         );
         if error && list.is_empty() {
             section = section.child(

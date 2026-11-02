@@ -315,42 +315,51 @@ impl QuillApp {
             .unwrap_or(false);
         let error = session.and_then(|s| s.settings.privacy_data.error.clone());
         let mut section = div().flex().flex_col().gap_1();
-        section = section.child(
-            div()
-                .text_sm()
-                .font_semibold()
-                .px_1()
-                .child(tr(keys::Q_PREFS_SECURITY_AND_CONTENT)),
-        );
+        let heading = div()
+            .text_sm()
+            .font_semibold()
+            .px_1()
+            .child(tr(keys::Q_PREFS_SECURITY_AND_CONTENT))
+            .into_any_element();
+        section = section.child(self.setting_stand_in(
+            !can_ignore,
+            &["privacy.sensitive_content"],
+            heading,
+            cx,
+        ));
         if can_ignore {
             section = section.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_2()
-                    .py_1()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .child(div().text_sm().child(tr(keys::Q_PREFS_SHOW_18_CONTENT)))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(tr(keys::SETTINGS_SENSITIVE_ABOUT)),
-                            ),
-                    )
-                    .child(
-                        Switch::new("privacy-sensitive-content")
-                            .checked(ignore)
-                            .accessibility_label(tr(keys::Q_PREFS_SHOW_18_CONTENT))
-                            .on_click(cx.listener(|this, &on: &bool, _, cx| {
-                                this.toggle_sensitive_content(on, cx);
-                            })),
-                    ),
+                self.setting_spot(
+                    &["privacy.sensitive_content"],
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .child(div().text_sm().child(tr(keys::Q_PREFS_SHOW_18_CONTENT)))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(cx.theme().muted_foreground)
+                                        .child(tr(keys::SETTINGS_SENSITIVE_ABOUT)),
+                                ),
+                        )
+                        .child(
+                            Switch::new("privacy-sensitive-content")
+                                .checked(ignore)
+                                .accessibility_label(tr(keys::Q_PREFS_SHOW_18_CONTENT))
+                                .on_click(cx.listener(|this, &on: &bool, _, cx| {
+                                    this.toggle_sensitive_content(on, cx);
+                                })),
+                        ),
+                    cx,
+                ),
             );
         }
         let prefs = file_prefs::current();
@@ -360,32 +369,36 @@ impl QuillApp {
             format!("{} trusted", prefs.no_warning_extensions.len())
         };
         section = section.child(
-            div()
-                .id("privacy-file-open")
-                .role(gpui_kit::Role::Button)
-                .aria_label(tr(keys::Q_PREFS_FILE_OPEN_CONFIRMATIONS))
-                .tab_index(0)
-                .cursor_pointer()
-                .flex()
-                .items_center()
-                .justify_between()
-                .px_2()
-                .py_1()
-                .rounded_md()
-                .child(
-                    div()
-                        .text_sm()
-                        .child(tr(keys::Q_PREFS_FILE_OPEN_CONFIRMATIONS)),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(summary),
-                )
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.open_file_open_editor(window, cx);
-                })),
+            self.setting_spot(
+                &["privacy.file_open"],
+                div()
+                    .id("privacy-file-open")
+                    .role(gpui_kit::Role::Button)
+                    .aria_label(tr(keys::Q_PREFS_FILE_OPEN_CONFIRMATIONS))
+                    .tab_index(0)
+                    .cursor_pointer()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px_2()
+                    .py_1()
+                    .rounded_md()
+                    .child(
+                        div()
+                            .text_sm()
+                            .child(tr(keys::Q_PREFS_FILE_OPEN_CONFIRMATIONS)),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(summary),
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_file_open_editor(window, cx);
+                    })),
+                cx,
+            ),
         );
         if let Some(line) = error {
             section = section.child(div().text_xs().px_2().text_color(danger()).child(line));

@@ -865,12 +865,20 @@ impl QuillApp {
             };
             return section
                 .child(
-                    div()
-                        .id("archive-privacy-note")
-                        .px_2()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(note),
+                    self.setting_spot(
+                        &[
+                            "privacy.archive_unknown",
+                            "privacy.archive_unmuted",
+                            "privacy.archive_folders",
+                        ],
+                        div()
+                            .id("archive-privacy-note")
+                            .px_2()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(note),
+                        cx,
+                    ),
                 )
                 .into_any_element();
         };
@@ -879,34 +887,44 @@ impl QuillApp {
             if index == 0 && !mute_offered {
                 continue;
             }
+            let ids: &'static [&'static str] = match index {
+                0 => &["privacy.archive_unknown"],
+                1 if !mute_offered => &["privacy.archive_unmuted", "privacy.archive_unknown"],
+                1 => &["privacy.archive_unmuted"],
+                _ => &["privacy.archive_folders"],
+            };
             section = section.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .px_2()
-                    .py_1()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(*title)),
-                    )
-                    .child(
-                        Switch::new(format!("archive-privacy-{index}"))
-                            .checked(archive_setting_get(&settings, index))
-                            .label(tr(*label))
-                            .accessibility_label(format!("{}: {}", tr(*title), tr(*label)))
-                            .on_click(cx.listener(move |this, &on, _, cx| {
-                                this.set_archive_setting(index, on, cx);
-                            })),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(*desc)),
-                    ),
+                self.setting_spot(
+                    ids,
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .px_2()
+                        .py_1()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(*title)),
+                        )
+                        .child(
+                            Switch::new(format!("archive-privacy-{index}"))
+                                .checked(archive_setting_get(&settings, index))
+                                .label(tr(*label))
+                                .accessibility_label(format!("{}: {}", tr(*title), tr(*label)))
+                                .on_click(cx.listener(move |this, &on, _, cx| {
+                                    this.set_archive_setting(index, on, cx);
+                                })),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(*desc)),
+                        ),
+                    cx,
+                ),
             );
         }
         section.into_any_element()
