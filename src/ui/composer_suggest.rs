@@ -218,7 +218,7 @@ impl QuillApp {
     /// which only keep a popup already open (tdesktop shows suggestions
     /// for text changed by a key press).
     pub(super) fn sync_suggest_menu(&mut self, typed: bool, cx: &mut Context<Self>) {
-        let text = self.composer.read(cx).value().to_string();
+        let text = self.composer.read(cx).value();
         let range = self.composer.read(cx).selected_range();
         let mention = self.mention_trigger(cx).is_some();
         let ui = &self.composer_ui.suggest;
@@ -368,11 +368,11 @@ impl QuillApp {
     /// this does not recurse.
     pub(super) fn apply_instant_replace(
         &mut self,
-        text: &str,
+        text: &SharedString,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Option<String> {
-        let prev = std::mem::replace(&mut self.composer_ui.prev_text, text.to_string());
+    ) -> Option<SharedString> {
+        let prev = std::mem::replace(&mut self.composer_ui.prev_text, text.clone());
         let range = self.composer.read(cx).selected_range();
         if !range.is_empty() {
             return None;
@@ -389,12 +389,12 @@ impl QuillApp {
         let original = text.get(replace.range.clone())?.to_string();
         // A range edit keeps the formatting around it (codex:composer-input).
         self.replace_composer_text(replace.range.clone(), &replace.with, window, cx);
-        let new_text = self.composer.read(cx).value().to_string();
+        let new_text = self.composer.read(cx).value();
         self.composer_ui.prev_text = new_text.clone();
         // Backspace right after puts the typed text back
         // (`revertFormatReplace`).
         self.composer_ui.markdown_revert = Some(super::composer_field::MarkdownRevert {
-            text: new_text.clone(),
+            text: new_text.to_string(),
             caret: self.composer.read(cx).selected_range().start,
             restore: Some((
                 replace.range.start..replace.range.start + replace.with.len(),
@@ -409,8 +409,7 @@ impl QuillApp {
     /// `processSystemTextReplaces` return early over `kTagCode` and
     /// `IsTagPre`).
     pub(super) fn composer_caret_in_code(&self, caret: usize, cx: &App) -> bool {
-        super::composer_field::field_doc(self.composer.read(cx))
-            .spans
+        super::composer_field::field_spans(self.composer.read(cx))
             .iter()
             .any(|span| {
                 matches!(span.tag, ComposerTag::Code | ComposerTag::Pre(_))

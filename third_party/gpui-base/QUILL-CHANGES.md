@@ -219,3 +219,12 @@ the numbers.
 - `src/input/base/movement.rs`, `src/input/base/state.rs`: an arrow key on a
   caret outside the laid-out rows steps logically, and a pointer over those rows
   resolves on the nearest laid-out row.
+
+## Reading the value costs one copy per edit
+
+A keystroke on a 1 MB rich draft read `value()` about ten times, and each read
+copied the rope (sweep item X02).
+
+- `src/input/base/state.rs`: `value()` keeps its string in `value_memo` until
+  the next edit takes it. Every write to `text` clears it, and a debug assert in
+  `value()` compares the two.

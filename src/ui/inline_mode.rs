@@ -102,7 +102,7 @@ impl QuillApp {
     /// composer text. Called on every composer change (next to
     /// `sync_command_menu`).
     pub(super) fn sync_inline_mode(&mut self, cx: &mut Context<Self>) {
-        let text = self.composer.read(cx).value().to_string();
+        let text = self.composer.read(cx).value();
         let Some((username, query)) = inline_query_trigger(&text) else {
             // Trigger gone: close, and clear a typed-mode alert marker
             // (an empty stash is ours; a non-empty one belongs to a

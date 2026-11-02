@@ -174,7 +174,7 @@ impl QuillApp {
         }
         self.composer_ui.rich_editor_open = true;
         self.set_composer_markup(&rich.markup(), window, cx);
-        self.composer_ui.prev_text = self.composer.read(cx).value().to_string();
+        self.composer_ui.prev_text = self.composer.read(cx).value();
         self.composer
             .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
@@ -206,7 +206,7 @@ impl QuillApp {
             // them; a draft that could not be saved stays as text.
             if self.stored_rich_draft() == Some(&rich) {
                 self.set_composer_markup("", window, cx);
-                self.composer_ui.prev_text.clear();
+                self.composer_ui.prev_text = SharedString::default();
                 cx.notify();
                 return;
             }
