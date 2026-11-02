@@ -23,6 +23,7 @@ fn open_live_story(cx: &mut TestAppContext) -> (Entity<QuillApp>, VisualTestCont
     let handle = cx.open_window(size(px(1100.), px(900.)), move |window, cx| {
         let demo = ScreenshotDemo::named("ready-live-story");
         let view = cx.new(|cx| QuillApp::new_with_demo(window, cx, None, Some(demo)));
+        crate::ui::link_inbox::note_main_window(window, cx);
         *slot_in.borrow_mut() = Some(view.clone());
         let shell = cx.new(|_| QuillShell::new(view));
         Root::new(shell, window, cx)
@@ -91,6 +92,31 @@ fn the_slider_follows_the_volume_and_steps_by_five(cx: &mut TestAppContext) {
         app.step_stream_volume(KEY_STEP, None, cx);
     });
     assert!((volume(&app, vcx) - 1.0).abs() < 1e-6, "100 % is the top");
+}
+
+#[gpui_kit::test]
+fn the_volume_keys_follow_the_main_window_to_its_replacement(cx: &mut TestAppContext) {
+    let (app, mut vcx) = open_live_story(cx);
+    let replacement = vcx.cx.open_window(size(px(300.), px(300.)), |window, cx| {
+        let empty = cx.new(|_| gpui_kit::Empty);
+        Root::new(empty, window, cx)
+    });
+    let replacement: gpui_kit::AnyWindowHandle = replacement.into();
+    let _ = vcx.cx.update_window(replacement, |_, window, cx| {
+        crate::ui::link_inbox::note_main_window(window, cx);
+    });
+    vcx.simulate_keystrokes("down");
+    frames(&mut vcx);
+    assert!(
+        (volume(&app, &mut vcx) - 1.0).abs() < 1e-6,
+        "the old window"
+    );
+    let mut new = VisualTestContext::from_window(replacement, &vcx.cx);
+    new.simulate_keystrokes("down");
+    assert!(
+        (volume(&app, &mut new) - 0.95).abs() < 1e-6,
+        "the new window"
+    );
 }
 
 #[gpui_kit::test]
