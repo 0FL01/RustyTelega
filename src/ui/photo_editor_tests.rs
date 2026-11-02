@@ -460,10 +460,15 @@ fn the_held_send_going_out_closes_an_editor_open_on_its_tray(cx: &mut TestAppCon
     let (app, mut vcx) = new_app(cx);
     let first = picture("held-a.png", 89, 11);
     let second = picture("held-b.png", 97, 13);
-    app.update_in(&mut vcx, |app, window, cx| {
+    app.update_in(&mut vcx, |app, _, cx| {
         let tray = vec![attachment(&first), attachment(&second)];
         app.update_pending_attachments(|items| *items = tray)
             .expect("an open chat");
+        // The reads a drop starts, done before the edit.
+        app.check_tray_videos(cx);
+    });
+    vcx.run_until_parked();
+    app.update_in(&mut vcx, |app, window, cx| {
         let item = app.tray_item(0).expect("the first card");
         let pixels = image::open(&first).expect("decodes").to_rgba8();
         app.viewer.photo_editor = Some(PhotoEditor::new(EditorPurpose::Attachment(item), pixels));
@@ -494,10 +499,15 @@ fn a_tap_while_a_send_waits_opens_no_editor(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
     let first = picture("wait-a.png", 107, 11);
     let second = picture("wait-b.png", 109, 13);
-    app.update_in(&mut vcx, |app, window, cx| {
+    app.update_in(&mut vcx, |app, _, cx| {
         let tray = vec![attachment(&first), attachment(&second)];
         app.update_pending_attachments(|items| *items = tray)
             .expect("an open chat");
+        // The reads a drop starts, done before the edit.
+        app.check_tray_videos(cx);
+    });
+    vcx.run_until_parked();
+    app.update_in(&mut vcx, |app, window, cx| {
         let item = app.tray_item(0).expect("the first card");
         let pixels = image::open(&first).expect("decodes").to_rgba8();
         app.viewer.photo_editor = Some(PhotoEditor::new(EditorPurpose::Attachment(item), pixels));
