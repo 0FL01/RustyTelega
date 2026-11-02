@@ -283,6 +283,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: cargo check (UI, all targets)
         run: cargo check --features demo-capture --all-targets --locked
+      # Windows behavior no hardware is needed for: renames onto a file a
+      # real handle holds, a failing ShellExecuteW, the timer thread's
+      # resolution and the file picker's path.
+      - name: tests (Windows file, shell and timer behavior)
+        run: >-
+          cargo test --no-default-features --locked --lib --
+          export::copy::tests::windows_ settings::tests::windows_ platform::tests::windows_
+      - name: tests (vendored GPUI timer and file picker)
+        run: >-
+          cargo test -p gpui-pre-windows -p quill --lib --features quill/demo-capture --locked --
+          timer_thread::tests file_picker_tests
 
   # Launch smoke on Windows (docs/decisions/ci-launch-smoke.md): the real window
   # on a hosted runner without a GPU (WARP). Pushes only, not a required check.

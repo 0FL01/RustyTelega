@@ -2359,3 +2359,39 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod file_picker_tests {
+    use super::file_system_path;
+    use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
+    use windows::Win32::UI::Shell::{IShellItem, SHCreateItemFromParsingName};
+    use windows::core::HSTRING;
+
+    /// What a picked item hands back is the file's exact path, with names
+    /// outside ASCII and outside the BMP intact.
+    #[test]
+    fn a_picked_file_gives_back_its_exact_path() {
+        // SAFETY: the shell item calls below need an apartment on this
+        // thread; a second initialization is harmless.
+        let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        let dir = std::env::temp_dir().join(format!("quill-picker-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("שלום 🎉 report.pdf");
+        std::fs::write(&file, b"x").unwrap();
+        // The runner's temp folder can be an 8.3 short name; the picker
+        // reports the long one.
+        let file = dunce::canonicalize(&file).unwrap();
+
+        // SAFETY: the name is a valid HSTRING and no bind context is passed.
+        let item: IShellItem =
+            unsafe { SHCreateItemFromParsingName(&HSTRING::from(file.as_path()), None) }.unwrap();
+        let picked = file_system_path(&item).unwrap();
+
+        assert_eq!(picked, file);
+        let _ = std::fs::remove_dir_all(&dir);
+        if com.is_ok() {
+            // SAFETY: matches the successful `CoInitializeEx` above.
+            unsafe { CoUninitialize() };
+        }
+    }
+}

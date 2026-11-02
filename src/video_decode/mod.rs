@@ -881,12 +881,14 @@ impl Player {
         // Held for a first picture after a seek that nobody paints, while
         // the sound plays on past it: the decode thread already paces the
         // pictures on the sound (`paint_floor`), so the clock follows it.
+        // With no sound to follow, time starts once the picture is ready.
         let clock = self.clock();
-        if clock.held
-            && clock.is_playing()
-            && let Some(heard) = self.heard().filter(|&heard| heard > clock.position(now))
-        {
-            self.with_clock(|clock| clock.follow(heard, now));
+        if clock.held && clock.is_playing() {
+            if let Some(heard) = self.heard().filter(|&heard| heard > clock.position(now)) {
+                self.with_clock(|clock| clock.follow(heard, now));
+            } else if !self.has_sound() && !lock(&self.shared.state).video.is_empty() {
+                self.with_clock(|clock| clock.release(now));
+            }
         }
         let position = self.position_at(now);
         // Running without a picture shown since the seek: released above.

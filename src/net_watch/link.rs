@@ -35,6 +35,49 @@ pub(super) fn resolve(gateway: IpAddr) {
     if let Ok(socket) = std::net::UdpSocket::bind((any, 0)) {
         let _ = socket.send_to(&[], (gateway, 9));
     }
+    #[cfg(target_os = "macos")]
+    if gateway.is_ipv6() {
+        look_for_the_answer(gateway);
+    }
+}
+
+/// Gaps between looks at an NDP entry: the system tries for 3 s.
+#[cfg(any(target_os = "macos", test))]
+const NDP_LOOKS: [std::time::Duration; 4] = [
+    std::time::Duration::from_millis(100),
+    std::time::Duration::from_millis(400),
+    std::time::Duration::from_secs(1),
+    std::time::Duration::from_secs(2),
+];
+
+#[cfg(any(target_os = "macos", test))]
+fn look_until_answered(
+    mut wait: impl FnMut(std::time::Duration),
+    mut answered: impl FnMut() -> bool,
+) {
+    for gap in NDP_LOOKS {
+        wait(gap);
+        if answered() {
+            return;
+        }
+    }
+}
+
+/// macOS reports no new NDP entry, and configd writes nothing for it (it
+/// does for ARP), so the answer to [`resolve`] has to be looked for.
+#[cfg(target_os = "macos")]
+fn look_for_the_answer(gateway: IpAddr) {
+    static RESOLVING: Resolving = Resolving::new();
+    let Some(resolving) = RESOLVING.begin(gateway) else {
+        return;
+    };
+    let _ = crate::thread_guard::spawn_guarded("quill-net-neighbour", move || {
+        let _resolving = resolving;
+        look_until_answered(std::thread::sleep, || {
+            super::network_changed();
+            !super::still_resolving(gateway)
+        });
+    });
 }
 
 #[cfg(target_os = "macos")]
@@ -211,7 +254,7 @@ fn hardware_from_text(text: &str) -> Option<[u8; 6]> {
 
 /// One neighbour resolve in flight per IP version, so a slow ARP answer
 /// does not hold up the IPv6 router's, nor the other way round.
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 struct Resolving {
     v4: std::sync::atomic::AtomicBool,
     v6: std::sync::atomic::AtomicBool,
@@ -219,10 +262,10 @@ struct Resolving {
 
 /// A resolve in flight; its IP version is free again on drop, including
 /// when the thread that holds it never starts.
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 struct Resolve(&'static std::sync::atomic::AtomicBool);
 
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 impl Resolving {
     const fn new() -> Self {
         Self {
@@ -241,7 +284,7 @@ impl Resolving {
     }
 }
 
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 impl Drop for Resolve {
     fn drop(&mut self) {
         self.0.store(false, std::sync::atomic::Ordering::Release);
@@ -370,6 +413,37 @@ mod backend {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+    use std::time::Duration;
+
+    #[test]
+    fn looking_for_an_ndp_answer_stops_at_the_answer() {
+        let (waited, looks) = (Cell::new(Duration::ZERO), Cell::new(0));
+        super::look_until_answered(
+            |gap| waited.set(waited.get() + gap),
+            || {
+                looks.set(looks.get() + 1);
+                looks.get() == 2
+            },
+        );
+        assert_eq!(looks.get(), 2);
+        assert_eq!(waited.get(), Duration::from_millis(500));
+    }
+
+    #[test]
+    fn a_router_that_never_answers_ends_the_looks_after_the_systems_tries() {
+        let (waited, looks) = (Cell::new(Duration::ZERO), Cell::new(0));
+        super::look_until_answered(
+            |gap| waited.set(waited.get() + gap),
+            || {
+                looks.set(looks.get() + 1);
+                false
+            },
+        );
+        assert_eq!(looks.get(), 4);
+        assert!(waited.get() > Duration::from_secs(3));
+    }
+
     #[test]
     fn an_ipv4_router_still_resolving_does_not_hold_up_the_ipv6_one() {
         static RESOLVING: super::Resolving = super::Resolving::new();

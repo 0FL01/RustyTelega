@@ -261,14 +261,23 @@ fn is_gateway(ip: IpAddr) -> bool {
         .any(|gateway| gateway == ip)
 }
 
+/// Whether `gateway`'s link-layer address is still awaited.
+#[cfg(target_os = "macos")]
+fn still_resolving(gateway: IpAddr) -> bool {
+    lock_or_recover(tracker())
+        .resolving
+        .contains(&Some(gateway))
+}
+
 fn network_changed() {
     let route = route_now();
     let mut tracker = lock_or_recover(tracker());
     let resolve = tracker.gateways_to_resolve(route);
     let moved = tracker.observe(route);
     drop(tracker);
-    // The answer comes back as a neighbour change (Linux), or from the
-    // background resolve `link::of` starts (Windows).
+    // The answer comes back as a neighbour change (Linux), from the
+    // background resolve `link::of` starts (Windows), or from looks at the
+    // NDP table (macOS IPv6). configd reports it on macOS IPv4.
     resolve.into_iter().for_each(link::resolve);
     if moved {
         crate::wake::UPDATES.poke();
