@@ -1,6 +1,7 @@
 //! Request purposes for stories, story albums and close friends.
-use crate::state::LiveStoryPurpose;
 use crate::state::request_purpose::flat_purposes;
+use crate::state::{LiveStoryPurpose, RequestPurpose};
+use crate::telegram::envelope::StoryListView;
 
 /// In-flight requests for stories, story albums and close friends; wrapped as
 /// [`RequestPurpose::Stories`].
@@ -9,6 +10,9 @@ pub enum StoriesPurpose {
     /// Phase 9.1: `loadActiveStories` (`storyListMain`). The stories
     /// arrive as `updateChatActiveStories` updates; feed the story tray.
     LoadActiveStories,
+    /// `loadActiveStories` (`storyListArchive`): hidden stories, which ring
+    /// their chats in the list.
+    LoadHiddenStories,
     /// Phase 9.1: `getChatActiveStories`. Response is `chatActiveStories`;
     /// handled like `updateChatActiveStories`.
     GetChatActiveStories,
@@ -131,8 +135,18 @@ pub enum StoriesPurpose {
     Live(LiveStoryPurpose),
 }
 
+/// The story list a `loadActiveStories` purpose pages.
+pub fn story_list_of(purpose: RequestPurpose) -> Option<StoryListView> {
+    match purpose {
+        RequestPurpose::LoadActiveStories => Some(StoryListView::Main),
+        RequestPurpose::LoadHiddenStories => Some(StoryListView::Archive),
+        _ => None,
+    }
+}
+
 flat_purposes!(Stories(StoriesPurpose) {
     LoadActiveStories,
+    LoadHiddenStories,
     GetChatActiveStories,
     GetStory,
     OpenStory,

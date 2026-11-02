@@ -228,8 +228,8 @@ impl Session {
 
     /// A stories request answered `ok`.
     pub(crate) fn apply_stories_ok(&mut self, pending: Option<&PendingRequest>) {
-        if pending.is_some_and(|p| p.purpose == RequestPurpose::LoadActiveStories) {
-            self.stories.stories_active_retry = None;
+        if let Some(list) = pending.and_then(|p| story_list_of(p.purpose)) {
+            self.stories.paging_mut(list).retry = None;
         }
     }
 }

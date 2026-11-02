@@ -1,16 +1,21 @@
 use super::{formatted_caption, reaction_type_custom_emoji, reaction_type_emoji};
 use crate::ids::{ChatId, RequestId};
 use crate::story_composer::StoryMediaKind;
+use crate::telegram::envelope::StoryListView;
 use serde_json::{Value, json};
 
 /// Phase 9.1: `loadActiveStories` (TDLib 1.8.67, `schema/td_api.tl:13762`).
 /// The loaded stories arrive as `updateChatActiveStories` updates — they
 /// feed the story tray above the chat list.
-pub fn load_active_stories(extra: RequestId) -> String {
+pub fn load_active_stories(extra: RequestId, list: StoryListView) -> String {
+    let story_list = match list {
+        StoryListView::Main => "storyListMain",
+        StoryListView::Archive => "storyListArchive",
+    };
     json!({
         "@type": "loadActiveStories",
         "@extra": extra.as_extra(),
-        "story_list": {"@type": "storyListMain"}
+        "story_list": {"@type": story_list}
     })
     .to_string()
 }
