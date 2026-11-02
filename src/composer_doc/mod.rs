@@ -373,7 +373,7 @@ impl DisjointRanges {
         Self(spans.into_iter().map(|span| span.range).collect())
     }
 
-    fn overlapping(&self, range: &Range<usize>) -> &[Range<usize>] {
+    pub(crate) fn overlapping(&self, range: &Range<usize>) -> &[Range<usize>] {
         let first = self.0.partition_point(|other| other.end <= range.start);
         let rest = self.0.get(first..).unwrap_or_default();
         let count = rest.partition_point(|other| other.start < range.end);

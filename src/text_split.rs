@@ -13,6 +13,7 @@
 
 use crate::composer::{parse_format_markup, scan_work};
 use crate::composer_doc::{ComposerDoc, ComposerTag, DisjointRanges, DocSpan};
+use unicode_segmentation::UnicodeSegmentation as _;
 
 /// UTF-16 code units of `text`.
 pub fn utf16_len(text: &str) -> usize {
@@ -96,6 +97,17 @@ impl Cuts {
     }
 }
 
+/// The last character boundary at or before `hard` in `text` from `from`.
+/// `hard` itself when one character alone is wider than the limit.
+fn whole_graphemes(text: &str, from: usize, hard: usize) -> usize {
+    let part = text.get(from..hard).unwrap_or_default();
+    // Read on past `hard`: only the text after it says whether it ends one.
+    let rest = text.get(from..).unwrap_or_default();
+    let ends = rest.grapheme_indices(true).map(|(rel, _)| rel);
+    let last = ends.take_while(|&rel| rel <= part.len()).last();
+    last.filter(|&rel| rel > 0).map_or(hard, |rel| from + rel)
+}
+
 enum Cut {
     At(usize),
     RestFits,
@@ -126,7 +138,7 @@ fn next_cut(text: &str, from: usize, limit: usize, cuts: &Cuts) -> Cut {
             let cut = best()
                 .find(|&at| cuts.clean(at))
                 .or_else(|| best().find(|&at| cuts.outside_emoji(at, from) == at))
-                .unwrap_or_else(|| cuts.outside_emoji(hard, from));
+                .unwrap_or_else(|| cuts.outside_emoji(whole_graphemes(text, from, hard), from));
             return if cut > from { Cut::At(cut) } else { Cut::Stuck };
         }
         hard = at + ch.len_utf8();
@@ -169,9 +181,28 @@ impl SplitText {
         }
         let cuts = Cuts::of(&doc);
         let text = doc.text.as_str();
+        let code = doc
+            .spans
+            .iter()
+            .filter(|span| matches!(span.tag, ComposerTag::Pre(_)))
+            .map(|span| DocSpan::new(span.range.clone(), ComposerTag::Bold));
+        let code = DisjointRanges::of(code);
+        // Indentation is part of code: at most the line break goes there.
         let skip_space = |at: usize| {
             let rest = text.get(at..).unwrap_or_default();
-            text.len() - rest.trim_start().len()
+            // A code block's blank tail would come back as literal fences.
+            let code_left = code
+                .around(at)
+                .and_then(|block| text.get(at..block.end))
+                .filter(|left| !left.trim().is_empty());
+            if code_left.is_some() {
+                return at + usize::from(rest.starts_with('\n'));
+            }
+            let end = text.len() - rest.trim_start().len();
+            code.overlapping(&(at..end))
+                .iter()
+                .find(|block| block.start > at)
+                .map_or(end, |block| block.start)
         };
         let mut ranges = Vec::new();
         let mut from = skip_space(0);
@@ -179,7 +210,10 @@ impl SplitText {
             match next_cut(text, from, limit, &cuts) {
                 Cut::At(cut) => {
                     let head = text.get(from..cut).unwrap_or_default();
-                    ranges.push(from..from + head.trim_end().len());
+                    let kept = head.trim_end().len();
+                    if kept > 0 {
+                        ranges.push(from..from + kept);
+                    }
                     from = skip_space(cut);
                 }
                 Cut::RestFits => {
@@ -244,6 +278,58 @@ mod tests {
         assert!(!left.text.contains('*'));
         assert_eq!(left.spans.len(), 1, "one bold span over the rest");
         assert_eq!(left.spans[0].range, 0..left.text.len());
+    }
+
+    #[test]
+    fn a_hard_cut_keeps_a_flag_whole() {
+        let text = format!("x{}", "🇺🇸".repeat(10));
+        let parts = split_markup_text(&text, 16);
+        assert_eq!(parts.concat(), text);
+        for part in &parts {
+            let halves = part
+                .chars()
+                .filter(|c| ('\u{1F1E6}'..='\u{1F1FF}').contains(c))
+                .count();
+            assert!(halves % 2 == 0, "a flag cut in two: {parts:?}");
+        }
+    }
+
+    #[test]
+    fn a_hard_cut_keeps_a_combining_mark_with_its_letter() {
+        let text = format!("x{}", "e\u{301}".repeat(20));
+        let parts = split_markup_text(&text, 16);
+        assert_eq!(parts.concat(), text);
+        for part in parts.iter().skip(1) {
+            assert_ne!(part.chars().next(), Some('\u{301}'), "{parts:?}");
+        }
+    }
+
+    #[test]
+    fn a_character_wider_than_the_limit_is_still_cut() {
+        let text = format!("a{}b", "\u{301}".repeat(20));
+        let parts = split_markup_text(&text, 8);
+        assert_eq!(parts.concat(), text);
+        assert!(parts.len() > 1);
+    }
+
+    #[test]
+    fn a_cut_inside_a_code_block_keeps_the_next_line_indented() {
+        let code = "fn f() {\n    let a = 1;\n    let b = 2;\n    let c = 3;\n}";
+        let parts = split_markup_text(&format!("```\n{code}\n```"), 30);
+        assert!(parts.len() > 1);
+        let texts: Vec<String> = parts
+            .iter()
+            .map(|p| ComposerDoc::from_markup(p).text)
+            .collect();
+        assert_eq!(texts.join("\n"), code);
+    }
+
+    #[test]
+    fn a_code_block_after_a_cut_keeps_its_first_indent() {
+        let words = "word ".repeat(6);
+        let parts = split_markup_text(&format!("{words}\n```\n    x = 1\n```"), 32);
+        let last = parts.last().map(|part| ComposerDoc::from_markup(part).text);
+        assert_eq!(last.as_deref(), Some("    x = 1"), "{parts:?}");
     }
 
     #[test]
