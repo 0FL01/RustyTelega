@@ -1397,12 +1397,6 @@ impl WindowsPlatformInner {
         lparam: LPARAM,
     ) -> LRESULT {
         let handled = match msg {
-            WM_GPUI_CLOSE_ONE_WINDOW
-            | WM_GPUI_TASK_DISPATCHED_ON_MAIN_THREAD
-            | WM_GPUI_DOCK_MENU_ACTION
-            | WM_GPUI_KEYBOARD_LAYOUT_CHANGED
-            | WM_GPUI_DISPLAYS_CHANGED
-            | WM_GPUI_GPU_DEVICE_LOST => self.handle_gpui_events(msg, wparam, lparam),
             WM_POWERBROADCAST => self.handle_power_broadcast(wparam, lparam),
             WM_DISPLAYCHANGE => self.handle_display_change(handle),
             WM_QUERYENDSESSION => self.handle_query_end_session(handle, lparam),

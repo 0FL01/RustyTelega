@@ -657,7 +657,7 @@ mod tests {
         ] {
             let texture = state
                 .backend
-                .push_texture(size(DevicePixels(8), DevicePixels(8)), kind)?;
+                .push_texture(size(DevicePixels(8), DevicePixels(8)), kind, TileClass::Glyphs)?;
             texture.upload(
                 Point::default(),
                 &AtlasUpload::new(

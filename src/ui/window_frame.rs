@@ -127,10 +127,8 @@ pub(crate) fn window_decorations() -> Option<WindowDecorations> {
 /// under it, so it was skipped and slipped a whole vsync, to about 50 ms (a
 /// clip alone in a chat window with the main window focused: 17 frames/s
 /// instead of 23; with everything animating, 23 instead of 29). Just under
-/// two 60 Hz vsyncs, that frame is let through. At 120 Hz, three vsyncs
-/// (25 ms) are still held and the fourth (33.3 ms, 3.3 ms over) is not, so an
-/// unfocused window draws every fourth vsync, where the default's cap fell
-/// on the fourth and slipped some frames to the fifth (41.7 ms).
+/// two 60 Hz vsyncs, that frame is let through. At 120 Hz, GPUI's pacer keeps
+/// the 30 ms cadence by alternating three and four vsyncs (25 and 33.3 ms).
 pub(crate) const INACTIVE_FRAME_INTERVAL: std::time::Duration =
     std::time::Duration::from_millis(30);
 

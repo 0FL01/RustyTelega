@@ -2608,10 +2608,11 @@ impl WgpuRenderer {
         if let Attempt::Recreate { adapters } = attempt {
             let instance = WgpuContext::instance(Some(Box::new(window.clone())));
             let surface = create_surface(&instance, window_handle.as_raw())?;
-            let context = WgpuContext::new_on(instance, &surface, self.compositor_gpu, adapters)?;
+            let context =
+                WgpuContext::new_on(instance, &surface, &config, self.compositor_gpu, adapters)?;
             return install_once_built(
                 context,
-                |context| self.rebuild(gpu_context, context, surface, config),
+                |context| self.rebuild(gpu_context, context, surface, config, true),
                 |context| *gpu_context.borrow_mut() = Some(context),
             );
         }
@@ -2622,7 +2623,7 @@ impl WgpuRenderer {
             anyhow::bail!("the recovered GPU context is gone");
         };
         let surface = create_surface(&context.instance, window_handle.as_raw())?;
-        self.rebuild(&gpu_context, context, surface, config)
+        self.rebuild(&gpu_context, context, surface, config, false)
     }
 
     /// Replace this renderer with one on `context`, keeping its atlas and
@@ -2634,6 +2635,7 @@ impl WgpuRenderer {
         context: &WgpuContext,
         surface: wgpu::Surface<'static>,
         config: WgpuSurfaceConfig,
+        surface_configured: bool,
     ) -> anyhow::Result<()> {
         self.state = RendererState::Released;
         self.atlas.handle_device_lost(context);
@@ -2643,7 +2645,7 @@ impl WgpuRenderer {
             context,
             surface,
             config,
-            needs_new_context,
+            surface_configured,
             self.compositor_gpu,
             self.atlas.clone(),
         )?;

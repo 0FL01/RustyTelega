@@ -145,7 +145,7 @@ impl WgpuContext {
         config: &WgpuSurfaceConfig,
         compositor_gpu: Option<CompositorGpuHint>,
     ) -> anyhow::Result<Self> {
-        Self::new_on(instance, surface, compositor_gpu, Adapters::Any)
+        Self::new_on(instance, surface, config, compositor_gpu, Adapters::Any)
     }
 
     /// Quill: a context on the first adapter of the kinds `adapters` admits.

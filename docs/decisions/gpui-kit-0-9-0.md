@@ -116,6 +116,8 @@ works out break points with `icu_segmenter`.
   match exactly. Text bubbles came out 1 pt narrower in the demo chat. The other
   differences under 0.1% are in small text and emoji. Menus differ because the
   older build predates the poll redesign.
-- CI builds and tests Linux and Windows and runs the Metal tests.
+- CI builds and tests Linux and Windows and runs the Metal tests. An independent
+  review of the first push found Linux, Windows and the Metal tests did not
+  compile; all three were fixed before merge.
 - `scripts/test-frame-idle.sh` for the pacing rules. Idle CPU, real video and real
   HDR displays were not measured here.
