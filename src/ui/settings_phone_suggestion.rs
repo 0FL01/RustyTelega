@@ -53,7 +53,6 @@ impl QuillApp {
                 .gap_1()
                 .px_3()
                 .py_2()
-                .mb_2()
                 .rounded_md()
                 .border_1()
                 .border_color(border)
