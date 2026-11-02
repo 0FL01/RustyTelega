@@ -103,6 +103,11 @@ impl QuillApp {
 
     /// The Activity section: filters, rows, Show more and Clear.
     pub(super) fn agent_activity_section(&self, cx: &mut Context<Self>) -> AnyElement {
+        let body = self.agent_activity_body(cx);
+        self.setting_spot(&["agent_access.activity"], body, cx)
+    }
+
+    fn agent_activity_body(&self, cx: &mut Context<Self>) -> AnyElement {
         let account = self.agent_settings_account();
         let log = visible_activity(&account);
         if log.is_empty() {

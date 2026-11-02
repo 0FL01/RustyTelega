@@ -127,22 +127,6 @@ impl AgentPageUi {
     }
 }
 
-/// The section a search result opens.
-pub(super) fn section_for_entry(id: &str) -> Option<Section> {
-    let name = id.strip_prefix("agent_access.")?;
-    Some(match name {
-        "allow" | "reset_token" | "connected" => Section::Connection,
-        "chats" | "all_chats" | "contacts" | "add_chat" => Section::Chats,
-        "tools" | "raw_calls" => Section::Tools,
-        "always_asks" => Section::AlwaysAsks,
-        "window" | "takeover_effect" => Section::Window,
-        "confirm_sends" => Section::Confirmations,
-        "activity" => Section::Activity,
-        "connect" => Section::Connect,
-        _ => return None,
-    })
-}
-
 fn section_title(section: Section) -> &'static str {
     tr(match section {
         Section::Connection => keys::Q_AGENT_PAGE_SEC_CONNECTION,

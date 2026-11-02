@@ -136,11 +136,20 @@ impl QuillApp {
                     },
                     cx,
                 );
-                grant_row(tr(title).into(), hint.map(Into::into), control, None, muted)
+                let row = grant_row(tr(title).into(), hint.map(Into::into), control, None, muted);
+                if id == "all-chats" {
+                    self.setting_spot(&["agent_access.all_chats"], row, cx)
+                } else {
+                    row
+                }
             })
             .collect();
         section = section
-            .child(group(Some(tr(keys::Q_AGENT_GRANTS_TITLE)), rows))
+            .child(self.setting_spot(
+                &["agent_access.chats"],
+                group(Some(tr(keys::Q_AGENT_GRANTS_TITLE)), rows).into_any_element(),
+                cx,
+            ))
             .child(
                 div()
                     .id("agent-grants-caption")
@@ -148,17 +157,26 @@ impl QuillApp {
                     .text_color(muted)
                     .child(tr(keys::Q_AGENT_GRANTS_CAPTION)),
             )
-            .child(group(
-                None,
-                [switch_row(
-                    "agent-contacts-switch",
-                    tr(keys::Q_AGENT_CONTACTS_TITLE),
-                    Some(tr(keys::Q_AGENT_CONTACTS_HINT)),
-                    chats.contacts,
-                    cx.listener(|this, &next: &bool, _, cx| this.set_agent_contacts(next, cx)),
+            .child(
+                self.setting_spot(
+                    &["agent_access.contacts"],
+                    group(
+                        None,
+                        [switch_row(
+                            "agent-contacts-switch",
+                            tr(keys::Q_AGENT_CONTACTS_TITLE),
+                            Some(tr(keys::Q_AGENT_CONTACTS_HINT)),
+                            chats.contacts,
+                            cx.listener(|this, &next: &bool, _, cx| {
+                                this.set_agent_contacts(next, cx)
+                            }),
+                            cx,
+                        )],
+                    )
+                    .into_any_element(),
                     cx,
-                )],
-            ));
+                ),
+            );
         section
             .children(self.agent_added_chats(&chats.added, cx))
             .child(
@@ -272,7 +290,7 @@ impl QuillApp {
                 .collect()
         };
         if let Some(picker) = self.agent_ui.page.picker.as_ref() {
-            rows.push(action_row(
+            let add = action_row(
                 tr(keys::Q_AGENT_PAGE_ADD_CHAT),
                 Some(tr(keys::Q_AGENT_PAGE_ADD_CHAT_HINT).into()),
                 div()
@@ -288,10 +306,17 @@ impl QuillApp {
                             .small(),
                     ),
                 cx,
-            ));
+            );
+            rows.push(self.setting_spot(&["agent_access.add_chat"], add, cx));
         }
+        let added_group = group(Some(tr(keys::Q_AGENT_CHATS_TITLE)), rows).into_any_element();
         vec![
-            group(Some(tr(keys::Q_AGENT_CHATS_TITLE)), rows).into_any_element(),
+            self.setting_stand_in(
+                self.agent_ui.page.picker.is_none(),
+                &["agent_access.add_chat"],
+                added_group,
+                cx,
+            ),
             div()
                 .id("agent-chats-caption")
                 .text_xs()
