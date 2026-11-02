@@ -740,13 +740,43 @@ fn the_first_ready_sets_tdesktops_cache_limits_once() {
         Some(serde_json::json!(true))
     );
     let paths = f.1.paths.clone();
+    assert!(
+        !crate::data_settings::load_data_storage_prefs(&paths).storage_limits_seeded,
+        "not before TDLib has them"
+    );
+    let mut f = f;
+    ingest(
+        &mut f.1,
+        &f.4,
+        &f.3,
+        r#"{"@type":"updateOption","name":"use_storage_optimizer","value":{"@type":"optionValueBoolean","value":true}}"#,
+    );
     assert!(crate::data_settings::load_data_storage_prefs(&paths).storage_limits_seeded);
+    cleanup(f);
+}
+
+#[test]
+fn limits_tdlib_never_took_are_sent_again_on_the_next_ready() {
+    let mut f = fixture();
+    assert!(!f.1.session.settings.data_storage.storage_limits_seeded);
+    f.2.sent.lock().unwrap().clear();
+    f.1.maybe_seed_storage_limits().unwrap();
+    assert!(
+        requests_of(&f.2, "setOption").is_empty(),
+        "once per session"
+    );
+    // The process died before the echo: a new session starts unseeded.
+    f.1.session.settings.storage_limits_seed_sent = false;
+    f.1.maybe_seed_storage_limits().unwrap();
+    assert_eq!(requests_of(&f.2, "setOption").len(), 4);
     cleanup(f);
 }
 
 #[test]
 fn a_later_start_or_an_earlier_choice_is_left_alone() {
     let mut f = fixture();
+    f.1.session.settings.data_storage.storage_limits_seeded = true;
+    f.1.session.settings.storage_limits_seed_sent = false;
     f.2.sent.lock().unwrap().clear();
     f.1.maybe_seed_storage_limits().unwrap();
     assert!(requests_of(&f.2, "setOption").is_empty(), "seeded once");
