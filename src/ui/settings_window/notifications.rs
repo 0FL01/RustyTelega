@@ -80,14 +80,19 @@ impl QuillApp {
             .child(stack(look))
             .child(group(
                 None,
-                [danger_row(
-                    "settings-row-reset-notifications",
-                    IconName::RotateCcw,
-                    tr(keys::Q_PREFS_RESET_ALL),
-                    cx.listener(|this, _, _, cx| {
-                        this.notify.notifications_confirm = Some(NotificationsConfirm::ResetAll);
-                        cx.notify();
-                    }),
+                [self.setting_spot(
+                    &["notifications.reset_all"],
+                    danger_row(
+                        "settings-row-reset-notifications",
+                        IconName::RotateCcw,
+                        tr(keys::Q_PREFS_RESET_ALL),
+                        cx.listener(|this, _, _, cx| {
+                            this.notify.notifications_confirm =
+                                Some(NotificationsConfirm::ResetAll);
+                            cx.notify();
+                        }),
+                        cx,
+                    ),
                     cx,
                 )],
             ))

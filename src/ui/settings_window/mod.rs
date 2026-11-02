@@ -14,6 +14,7 @@ mod agent_page;
 mod agent_switch;
 mod agent_tools;
 mod agent_window;
+mod arrival;
 mod log_out;
 mod notifications;
 mod pages;
@@ -23,6 +24,7 @@ mod search;
 mod sidebar;
 
 pub(in crate::ui) use agent_page::AgentPageUi;
+pub(in crate::ui) use arrival::Arrival;
 pub(in crate::ui) use search::SettingsSearch;
 
 use super::actions::{CancelSearch, OpenChatSearch, OpenSearch};
@@ -79,6 +81,7 @@ impl QuillApp {
             self.leave_settings_page(page);
         }
         self.settings.search.close();
+        self.settings.arrival = None;
         self.settings.app_theme.editor_read = None;
         self.settings.open = false;
         self.settings.page = None;
@@ -100,6 +103,8 @@ impl QuillApp {
         if let Some(old) = self.settings.page {
             self.leave_settings_page(old);
         }
+        self.settings.arrival = None;
+        self.settings.page_scroll.set_offset(point(px(0.), px(0.)));
         self.settings.page = Some(page);
         match page {
             Page::Notifications => self.fetch_notification_settings(),
@@ -172,6 +177,7 @@ impl QuillApp {
     ) -> AnyElement {
         let narrow = f32::from(window.viewport_size().width) < NARROW;
         self.settle_settings_search(window, cx);
+        self.settle_arrival(window, cx);
         self.settings_search_input(window, cx);
         if !window.has_active_dialog(cx) && window.focused(cx).is_none() {
             window.focus(&self.settings.focus, cx);
@@ -268,11 +274,8 @@ impl QuillApp {
             div()
                 .id(SharedString::from(format!("settings-page-{}", page.id())))
                 .debug_selector(move || format!("settings-page-{}", page.id()))
-                .when(page == Page::AgentAccess && sub.is_none(), |this| {
-                    this.track_scroll(&self.agent_ui.page.scroll)
-                })
-                .when(page == Page::DataStorage && sub.is_none(), |this| {
-                    this.track_scroll(&self.settings.storage_scroll.page)
+                .when(sub.is_none(), |this| {
+                    this.track_scroll(self.settings_page_scroll(page))
                 })
                 .size_full()
                 .overflow_y_scroll()

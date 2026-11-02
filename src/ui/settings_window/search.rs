@@ -170,16 +170,17 @@ impl QuillApp {
     }
 
     /// Open what a result points at, remember it, and leave search.
-    fn open_search_target(&mut self, target: Target, cx: &mut Context<Self>) {
+    pub(super) fn open_search_target(&mut self, target: Target, cx: &mut Context<Self>) {
         let recent = self.search_recent();
         recent.record(target.id());
         let recent = recent.clone();
         quill::settings::save_settings_search_recent(&QuillApp::appearance_paths(), &recent);
         self.settings.search.pending_clear = true;
         self.show_settings_page(target.page(), cx);
-        if let Some(section) = super::agent_page::section_for_entry(target.id()) {
-            self.agent_ui.page.scroll_to = Some(super::agent_page::Spot::Section(section));
-        }
+        self.settings.arrival = match target {
+            Target::Page(_) => None,
+            Target::Entry(entry) => Some(super::Arrival::new(entry.id)),
+        };
     }
 
     /// Esc in the field: clear it and give the page back.
