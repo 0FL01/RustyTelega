@@ -344,7 +344,7 @@ mod tests {
     use super::{
         List, Panel, Pass, RESIZE_PASSES, Seen, State, Sweep, Windows, note_sweep, survives, unseen,
     };
-    use gpui_kit::px;
+    use gpui_kit::{Pixels, px};
     use quill::ids::ChatId;
     use std::collections::HashSet;
 
