@@ -44,6 +44,34 @@ impl QuillApp {
         if !custom::native_switch_shown(support) && !custom_active {
             return None;
         }
+        let display = custom_active
+            .then(|| self.notify_display_choice(prefs.display, cx))
+            .flatten();
+        let title = div()
+            .font_semibold()
+            .text_sm()
+            .child(tr(keys::SETTINGS_NATIVE_TITLE))
+            .into_any_element();
+        // Rows this platform or state does not show land on the title.
+        let title = self.setting_stand_in(
+            !custom::native_switch_shown(support),
+            &["notifications.native", "notifications.native_windows"],
+            title,
+            cx,
+        );
+        let title = self.setting_stand_in(
+            !(custom_active && platform == NotifyPlatform::Windows),
+            &["notifications.focus_mode"],
+            title,
+            cx,
+        );
+        let title = self.setting_stand_in(display.is_none(), &["notifications.display"], title, cx);
+        let title = self.setting_stand_in(
+            !custom_active,
+            &["notifications.position", "notifications.count"],
+            title,
+            cx,
+        );
         let mut section = div()
             .id("notify-options-section")
             .flex()
@@ -54,12 +82,7 @@ impl QuillApp {
             .rounded_md()
             .border_1()
             .border_color(cx.theme().border)
-            .child(
-                div()
-                    .font_semibold()
-                    .text_sm()
-                    .child(tr(keys::SETTINGS_NATIVE_TITLE)),
-            );
+            .child(title);
         if custom::native_switch_shown(support) {
             let label = if platform == NotifyPlatform::Windows {
                 tr(keys::SETTINGS_USE_WINDOWS)
@@ -67,7 +90,7 @@ impl QuillApp {
                 tr(keys::SETTINGS_USE_NATIVE_NOTIFICATIONS)
             };
             let native = prefs.native.unwrap_or(support.by_default);
-            section = section.child(switch_row(
+            let row = switch_row(
                 "notify-native-toggle",
                 label,
                 native,
@@ -78,6 +101,11 @@ impl QuillApp {
                     }
                     cx.notify();
                 }),
+            );
+            section = section.child(self.setting_spot(
+                &["notifications.native", "notifications.native_windows"],
+                row,
+                cx,
             ));
         }
         if !custom_active {
@@ -86,7 +114,7 @@ impl QuillApp {
         // Only the custom windows check Focus mode (tdesktop
         // `advancedWrap`).
         if platform == NotifyPlatform::Windows {
-            section = section.child(switch_row(
+            let row = switch_row(
                 "notify-focus-toggle",
                 tr(keys::SETTINGS_SKIP_IN_FOCUS),
                 prefs.skip_in_focus,
@@ -94,12 +122,20 @@ impl QuillApp {
                     quill::notify_prefs::update(|prefs| prefs.skip_in_focus = on);
                     cx.notify();
                 }),
-            ));
+            );
+            section = section.child(self.setting_spot(&["notifications.focus_mode"], row, cx));
         }
-        section = section.children(self.notify_display_choice(prefs.display, cx));
-        section
+        section = section.children(display);
+        let position = div()
+            .flex()
+            .flex_col()
+            .gap_2()
             .child(sub_heading(tr(keys::SETTINGS_NOTIFICATIONS_POSITION), cx))
-            .child(self.notify_corner_picker(prefs.corner, cx))
+            .child(self.notify_corner_picker(prefs.corner, cx));
+        let count = div()
+            .flex()
+            .flex_col()
+            .gap_2()
             .child(sub_heading(tr(keys::SETTINGS_NOTIFICATIONS_COUNT), cx))
             .child(
                 (1..=custom::MAX_COUNT)
@@ -113,7 +149,10 @@ impl QuillApp {
                         this.custom_notify_settings_changed(cx);
                         cx.notify();
                     })),
-            )
+            );
+        section
+            .child(self.setting_spot(&["notifications.position"], position, cx))
+            .child(self.setting_spot(&["notifications.count"], count, cx))
             .into_any_element()
             .into()
     }
@@ -152,15 +191,13 @@ impl QuillApp {
                 this.custom_notify_settings_changed(cx);
                 cx.notify();
             }));
-        Some(
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .child(sub_heading(tr(keys::SETTINGS_NOTIFICATIONS_DISPLAY), cx))
-                .child(group)
-                .into_any_element(),
-        )
+        let block = div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(sub_heading(tr(keys::SETTINGS_NOTIFICATIONS_DISPLAY), cx))
+            .child(group);
+        Some(self.setting_spot(&["notifications.display"], block, cx))
     }
 
     /// tdesktop's screen drawing with a slot in each corner: the chosen

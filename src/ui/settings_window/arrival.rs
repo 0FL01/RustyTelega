@@ -165,6 +165,22 @@ impl QuillApp {
             })
             .into_any_element()
     }
+
+    /// `setting_spot` for entries whose own row is not on the page right
+    /// now: `element` stands in for them while `absent` holds.
+    pub(in crate::ui) fn setting_stand_in(
+        &self,
+        absent: bool,
+        ids: &'static [&'static str],
+        element: AnyElement,
+        cx: &App,
+    ) -> AnyElement {
+        if absent {
+            self.setting_spot(ids, element, cx)
+        } else {
+            element
+        }
+    }
 }
 
 #[cfg(test)]

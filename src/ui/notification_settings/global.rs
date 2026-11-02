@@ -84,11 +84,12 @@ impl QuillApp {
         &self,
         cx: &mut Context<Self>,
         id: &str,
+        spot: &'static [&'static str],
         label: &str,
         checked: bool,
         apply: fn(&mut BadgePrefs, bool),
     ) -> AnyElement {
-        div()
+        let row = div()
             .flex()
             .items_center()
             .justify_between()
@@ -106,8 +107,8 @@ impl QuillApp {
                     .on_click(cx.listener(move |this, &on, _, cx| {
                         this.set_badge_pref(|p| apply(p, on), cx);
                     })),
-            )
-            .into_any_element()
+            );
+        self.setting_spot(spot, row, cx)
     }
 
     /// Slice parity:chatlist-badge-settings: app badge counter
@@ -151,6 +152,7 @@ impl QuillApp {
             .child(self.badge_switch_row(
                 cx,
                 "include-muted",
+                &["notifications.badge_muted"],
                 tr(keys::Q_PREFS_INCLUDE_MUTED_CHATS),
                 prefs.include_muted,
                 |p, on| p.include_muted = on,
@@ -158,6 +160,7 @@ impl QuillApp {
             .child(self.badge_switch_row(
                 cx,
                 "include-archived",
+                &["notifications.badge_archived"],
                 tr(keys::Q_PREFS_INCLUDE_ARCHIVED_CHATS),
                 prefs.include_archived,
                 |p, on| p.include_archived = on,
@@ -165,6 +168,7 @@ impl QuillApp {
             .child(self.badge_switch_row(
                 cx,
                 "include-muted-folders",
+                &["notifications.badge_folders"],
                 tr(keys::SETTINGS_INCLUDE_MUTED_FOLDERS),
                 prefs.include_muted_folders,
                 |p, on| p.include_muted_folders = on,
@@ -172,6 +176,7 @@ impl QuillApp {
             .child(self.badge_switch_row(
                 cx,
                 "count-messages",
+                &["notifications.badge_count_messages"],
                 tr(keys::Q_PREFS_COUNT_UNREAD_MESSAGES_OFF_COUNT),
                 prefs.count_messages,
                 |p, on| p.count_messages = on,
@@ -237,25 +242,29 @@ impl QuillApp {
                     .child(tr(keys::SETTINGS_EVENTS_TITLE)),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::SETTINGS_EVENTS_JOINED)),
-                    )
-                    .child(
-                        Switch::new("contact-joined-toggle")
-                            .checked(on)
-                            .accessibility_label(tr(keys::SETTINGS_EVENTS_JOINED))
-                            .on_click(cx.listener(|this, &on, _, cx| {
-                                this.set_contact_joined_notifications(on, cx);
-                            })),
-                    ),
+                self.setting_spot(
+                    &["notifications.contact_joined"],
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(keys::SETTINGS_EVENTS_JOINED)),
+                        )
+                        .child(
+                            Switch::new("contact-joined-toggle")
+                                .checked(on)
+                                .accessibility_label(tr(keys::SETTINGS_EVENTS_JOINED))
+                                .on_click(cx.listener(|this, &on, _, cx| {
+                                    this.set_contact_joined_notifications(on, cx);
+                                })),
+                        ),
+                    cx,
+                ),
             )
             .into_any_element()
     }

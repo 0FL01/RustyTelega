@@ -389,6 +389,17 @@ impl QuillApp {
             .session()
             .is_some_and(|s| s.settings.scope_notification_settings.contains_key(&scope));
         let muted = settings.mute_for > 0;
+        // The three sections repeat each setting: search lands on the first.
+        let first = NotificationSettingsScope::ALL.first() == Some(&scope);
+        let spot = move |ids: &'static [&'static str]| -> &'static [&'static str] {
+            if first { ids } else { &[] }
+        };
+        let volume = self.scope_volume_row(scope, settings.sound_id, cx);
+        let sound_ids = if volume.is_some() {
+            spot(&["notifications.sound"])
+        } else {
+            spot(&["notifications.sound", "notifications.volume_by_chat_type"])
+        };
         let sound_label = match settings.sound_id {
             -1 => tr(keys::SETTINGS_NOTIFICATIONS_DISPLAY_DEFAULT).to_string(),
             0 => tr(keys::SETTINGS_NO_BLOCKED_USERS).to_string(),
@@ -456,114 +467,130 @@ impl QuillApp {
                             }),
                     ),
             )
-            .child(preset_row)
+            .child(self.setting_spot(spot(&["notifications.mute"]), preset_row, cx))
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::Q_PREFS_SHOW_MESSAGE_PREVIEW)),
-                    )
-                    .child(
-                        // Phase 6: kit Switch (was: On/Off ghost button).
-                        Switch::new(format!("scope-preview-{scope:?}"))
-                            .checked(settings.show_preview)
-                            .accessibility_label(tr(keys::Q_PREFS_SHOW_MESSAGE_PREVIEW))
-                            .on_click(cx.listener(move |this, &on, _, cx| {
-                                this.apply_scope_preview(scope, on, cx);
-                            })),
-                    ),
+                self.setting_spot(
+                    spot(&["notifications.preview"]),
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(keys::Q_PREFS_SHOW_MESSAGE_PREVIEW)),
+                        )
+                        .child(
+                            // Phase 6: kit Switch (was: On/Off ghost button).
+                            Switch::new(format!("scope-preview-{scope:?}"))
+                                .checked(settings.show_preview)
+                                .accessibility_label(tr(keys::Q_PREFS_SHOW_MESSAGE_PREVIEW))
+                                .on_click(cx.listener(move |this, &on, _, cx| {
+                                    this.apply_scope_preview(scope, on, cx);
+                                })),
+                        ),
+                    cx,
+                ),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::Q_PREFS_NOTIFY_ABOUT_MENTIONS)),
-                    )
-                    .child(
-                        // Parity slice: mention-notification override per scope
-                        // (schema: disable_mention_notifications).
-                        Switch::new(format!("scope-mentions-{scope:?}"))
-                            .checked(!settings.disable_mention_notifications)
-                            .accessibility_label(tr(keys::Q_PREFS_NOTIFY_ABOUT_MENTIONS))
-                            .on_click(cx.listener(move |this, &on, _, cx| {
-                                this.apply_scope_mention_notif(scope, on, cx);
-                            })),
-                    ),
+                self.setting_spot(
+                    spot(&["notifications.mentions"]),
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(keys::Q_PREFS_NOTIFY_ABOUT_MENTIONS)),
+                        )
+                        .child(
+                            // Parity slice: mention-notification override per scope
+                            // (schema: disable_mention_notifications).
+                            Switch::new(format!("scope-mentions-{scope:?}"))
+                                .checked(!settings.disable_mention_notifications)
+                                .accessibility_label(tr(keys::Q_PREFS_NOTIFY_ABOUT_MENTIONS))
+                                .on_click(cx.listener(move |this, &on, _, cx| {
+                                    this.apply_scope_mention_notif(scope, on, cx);
+                                })),
+                        ),
+                    cx,
+                ),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::Q_PREFS_NOTIFY_ABOUT_PINNED_MESSAGES)),
-                    )
-                    .child(
-                        // Parity slice: pinned-message-notification override
-                        // per scope (schema: disable_pinned_message_notifications).
-                        Switch::new(format!("scope-pinned-{scope:?}"))
-                            .checked(!settings.disable_pinned_message_notifications)
-                            .accessibility_label(tr(keys::Q_PREFS_NOTIFY_ABOUT_PINNED_MESSAGES))
-                            .on_click(cx.listener(move |this, &on, _, cx| {
-                                this.apply_scope_pinned_notif(scope, on, cx);
-                            })),
-                    ),
+                self.setting_spot(
+                    spot(&["notifications.pinned"]),
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(keys::Q_PREFS_NOTIFY_ABOUT_PINNED_MESSAGES)),
+                        )
+                        .child(
+                            // Parity slice: pinned-message-notification override
+                            // per scope (schema: disable_pinned_message_notifications).
+                            Switch::new(format!("scope-pinned-{scope:?}"))
+                                .checked(!settings.disable_pinned_message_notifications)
+                                .accessibility_label(tr(keys::Q_PREFS_NOTIFY_ABOUT_PINNED_MESSAGES))
+                                .on_click(cx.listener(move |this, &on, _, cx| {
+                                    this.apply_scope_pinned_notif(scope, on, cx);
+                                })),
+                        ),
+                    cx,
+                ),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr_with(
-                                keys::Q_PREFS_SOUND,
-                                &[("sound_label", &sound_label.to_string())],
-                            )),
-                    )
-                    .child(
-                        Button::new(format!("scope-sound-{:?}", scope))
-                            .small()
-                            .label(
-                                if self.notify.defaults_sound_picker
-                                    == Some(SoundPickerTarget::Scope(scope))
-                                {
-                                    tr(keys::Q_PREFS_HIDE)
-                                } else {
-                                    tr(keys::Q_PREFS_CHANGE)
-                                },
-                            )
-                            .ghost()
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                let target = SoundPickerTarget::Scope(scope);
-                                this.notify.defaults_sound_picker =
-                                    if this.notify.defaults_sound_picker == Some(target) {
-                                        None
+                self.setting_spot(
+                    sound_ids,
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr_with(
+                                    keys::Q_PREFS_SOUND,
+                                    &[("sound_label", &sound_label.to_string())],
+                                )),
+                        )
+                        .child(
+                            Button::new(format!("scope-sound-{:?}", scope))
+                                .small()
+                                .label(
+                                    if self.notify.defaults_sound_picker
+                                        == Some(SoundPickerTarget::Scope(scope))
+                                    {
+                                        tr(keys::Q_PREFS_HIDE)
                                     } else {
-                                        Some(target)
-                                    };
-                                cx.notify();
-                            })),
-                    ),
+                                        tr(keys::Q_PREFS_CHANGE)
+                                    },
+                                )
+                                .ghost()
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    let target = SoundPickerTarget::Scope(scope);
+                                    this.notify.defaults_sound_picker =
+                                        if this.notify.defaults_sound_picker == Some(target) {
+                                            None
+                                        } else {
+                                            Some(target)
+                                        };
+                                    cx.notify();
+                                })),
+                        ),
+                    cx,
+                ),
             );
         if self.notify.defaults_sound_picker == Some(SoundPickerTarget::Scope(scope)) {
             section = section.child(self.notification_sound_picker(
@@ -573,55 +600,66 @@ impl QuillApp {
                 saved_sounds,
             ));
         }
-        if loaded {
-            section = section.children(self.scope_volume_row(scope, settings.sound_id, cx));
+        if let Some(row) = volume {
+            section = section.child(self.setting_spot(
+                spot(&["notifications.volume_by_chat_type"]),
+                row,
+                cx,
+            ));
         }
         section = section
             .child(
-                // Parity slice: story fields of `scopeNotificationSettings`
-                // (schema line 3369-3375) — no story-sound picker (the
-                // message-sound picker above already covers the per-scope
-                // sound choice).
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::Q_PREFS_MUTE_STORY_NOTIFICATIONS)),
-                    )
-                    .child(
-                        Switch::new(format!("scope-story-mute-{scope:?}"))
-                            .checked(settings.mute_stories)
-                            .accessibility_label(tr(keys::Q_PREFS_MUTE_STORY_NOTIFICATIONS))
-                            .on_click(cx.listener(move |this, &on, _, cx| {
-                                this.apply_scope_story_mute(scope, on, cx);
-                            })),
-                    ),
+                self.setting_spot(
+                    spot(&["notifications.story_mute"]), // Parity slice: story fields of `scopeNotificationSettings`
+                    // (schema line 3369-3375) — no story-sound picker (the
+                    // message-sound picker above already covers the per-scope
+                    // sound choice).
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(keys::Q_PREFS_MUTE_STORY_NOTIFICATIONS)),
+                        )
+                        .child(
+                            Switch::new(format!("scope-story-mute-{scope:?}"))
+                                .checked(settings.mute_stories)
+                                .accessibility_label(tr(keys::Q_PREFS_MUTE_STORY_NOTIFICATIONS))
+                                .on_click(cx.listener(move |this, &on, _, cx| {
+                                    this.apply_scope_story_mute(scope, on, cx);
+                                })),
+                        ),
+                    cx,
+                ),
             )
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(tr(keys::Q_PREFS_SHOW_STORY_POSTER)),
-                    )
-                    .child(
-                        Switch::new(format!("scope-story-poster-{scope:?}"))
-                            .checked(settings.show_story_poster)
-                            .accessibility_label(tr(keys::Q_PREFS_SHOW_STORY_POSTER))
-                            .on_click(cx.listener(move |this, &on, _, cx| {
-                                this.apply_scope_story_poster(scope, on, cx);
-                            })),
-                    ),
+                self.setting_spot(
+                    spot(&["notifications.story_poster"]),
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child(tr(keys::Q_PREFS_SHOW_STORY_POSTER)),
+                        )
+                        .child(
+                            Switch::new(format!("scope-story-poster-{scope:?}"))
+                                .checked(settings.show_story_poster)
+                                .accessibility_label(tr(keys::Q_PREFS_SHOW_STORY_POSTER))
+                                .on_click(cx.listener(move |this, &on, _, cx| {
+                                    this.apply_scope_story_poster(scope, on, cx);
+                                })),
+                        ),
+                    cx,
+                ),
             );
         // Parity slice: per-scope notification exceptions
         // (`getChatNotificationSettingsExceptions`) — fetched on dialog
@@ -638,39 +676,43 @@ impl QuillApp {
             (None, false) => "—".to_string(),
         };
         section = section.child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(tr_with(
-                            keys::Q_PREFS_EXCEPTIONS,
-                            &[("exceptions_label", &exceptions_label.to_string())],
-                        )),
-                )
-                .child(
-                    Button::new(format!("scope-exceptions-{scope:?}"))
-                        .small()
-                        .label(if self.notify.defaults_exceptions_scope == Some(scope) {
-                            tr(keys::Q_PREFS_HIDE)
-                        } else {
-                            tr(keys::Q_PREFS_VIEW)
-                        })
-                        .ghost()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.notify.defaults_exceptions_scope =
-                                if this.notify.defaults_exceptions_scope == Some(scope) {
-                                    None
-                                } else {
-                                    Some(scope)
-                                };
-                            cx.notify();
-                        })),
-                ),
+            self.setting_spot(
+                spot(&["notifications.exceptions"]),
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(tr_with(
+                                keys::Q_PREFS_EXCEPTIONS,
+                                &[("exceptions_label", &exceptions_label.to_string())],
+                            )),
+                    )
+                    .child(
+                        Button::new(format!("scope-exceptions-{scope:?}"))
+                            .small()
+                            .label(if self.notify.defaults_exceptions_scope == Some(scope) {
+                                tr(keys::Q_PREFS_HIDE)
+                            } else {
+                                tr(keys::Q_PREFS_VIEW)
+                            })
+                            .ghost()
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.notify.defaults_exceptions_scope =
+                                    if this.notify.defaults_exceptions_scope == Some(scope) {
+                                        None
+                                    } else {
+                                        Some(scope)
+                                    };
+                                cx.notify();
+                            })),
+                    ),
+                cx,
+            ),
         );
         if self.notify.defaults_exceptions_scope == Some(scope) {
             section = section.child(self.exceptions_list(cx, scope));
