@@ -70,6 +70,17 @@ fn a_page_result_opens_at_the_top_without_a_highlight(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn reopening_settings_starts_at_the_top(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    land(&app, vcx, "notifications.reset_all");
+    app.update(vcx, |app, _| app.close_settings());
+    app.read_with(vcx, |app, _| {
+        assert_eq!(app.settings.page_scroll.offset().y, px(0.));
+    });
+}
+
+#[gpui_kit::test]
 fn every_setting_has_a_place_to_land(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
     let vcx = &mut vcx;

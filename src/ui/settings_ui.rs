@@ -566,7 +566,8 @@ impl QuillApp {
             )
             .child(
                 self.setting_spot(
-                    &["chats.hq_round_videos"], // Phase 6: kit Switch (was: clickable row with a ●/○ bullet).
+                    // Phase 6: kit Switch (was: clickable row with a ●/○ bullet).
+                    &["chats.hq_round_videos"],
                     div()
                         .id("media-pref-hq-round")
                         .flex()

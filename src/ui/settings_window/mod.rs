@@ -82,6 +82,7 @@ impl QuillApp {
         }
         self.settings.search.close();
         self.settings.arrival = None;
+        self.settings.page_scroll.set_offset(point(px(0.), px(0.)));
         self.settings.app_theme.editor_read = None;
         self.settings.open = false;
         self.settings.page = None;
@@ -120,7 +121,7 @@ impl QuillApp {
         }
     }
 
-    fn leave_settings_page(&mut self, page: Page) {
+    pub(super) fn leave_settings_page(&mut self, page: Page) {
         match page {
             Page::Notifications => self.leave_notification_settings(),
             Page::Language => self.leave_language_settings(),

@@ -394,7 +394,9 @@ impl QuillApp {
         let spot = move |ids: &'static [&'static str]| -> &'static [&'static str] {
             if first { ids } else { &[] }
         };
-        let volume = self.scope_volume_row(scope, settings.sound_id, cx);
+        let volume = loaded
+            .then(|| self.scope_volume_row(scope, settings.sound_id, cx))
+            .flatten();
         let sound_ids = if volume.is_some() {
             spot(&["notifications.sound"])
         } else {
@@ -610,7 +612,8 @@ impl QuillApp {
         section = section
             .child(
                 self.setting_spot(
-                    spot(&["notifications.story_mute"]), // Parity slice: story fields of `scopeNotificationSettings`
+                    // Parity slice: story fields of `scopeNotificationSettings`
+                    spot(&["notifications.story_mute"]),
                     // (schema line 3369-3375) — no story-sound picker (the
                     // message-sound picker above already covers the per-scope
                     // sound choice).

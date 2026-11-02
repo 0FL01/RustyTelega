@@ -176,6 +176,10 @@ impl QuillApp {
         let recent = recent.clone();
         quill::settings::save_settings_search_recent(&QuillApp::appearance_paths(), &recent);
         self.settings.search.pending_clear = true;
+        // A screen of the page may be covering the row.
+        if self.settings.page == Some(target.page()) {
+            self.leave_settings_page(target.page());
+        }
         self.show_settings_page(target.page(), cx);
         if let Target::Entry(entry) = target {
             if entry.experimental {

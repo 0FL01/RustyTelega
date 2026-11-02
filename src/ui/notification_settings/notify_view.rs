@@ -111,7 +111,8 @@ impl QuillApp {
                 ))
                 .child(
                     self.setting_spot(
-                        &["notifications.photo_previews"], // The photo is part of the message: hidden with the text.
+                        // The photo is part of the message: hidden with the text.
+                        &["notifications.photo_previews"],
                         div()
                             .flex()
                             .items_center()

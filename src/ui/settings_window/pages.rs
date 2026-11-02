@@ -133,6 +133,18 @@ impl QuillApp {
                     cx,
                 );
                 let autostart = self.setting_stand_in(
+                    !tray_options.taskbar_icon,
+                    &["system.taskbar_icon"],
+                    autostart,
+                    cx,
+                );
+                let autostart = self.setting_stand_in(
+                    !tray_options.monochrome_icon,
+                    &["system.monochrome_icon"],
+                    autostart,
+                    cx,
+                );
+                let autostart = self.setting_stand_in(
                     !tray.start_in_tray,
                     &["system.start_in_tray"],
                     autostart,

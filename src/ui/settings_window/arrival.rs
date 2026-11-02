@@ -1,7 +1,8 @@
 //! Landing on a setting from search: the page opens with the row centered
 //! and a fading accent wash over it (tdesktop `HighlightWidget`). Which row
 //! and how lit it is both follow from one `Arrival`, so a row that shows up
-//! late (a page still loading) gets the rest of the same highlight.
+//! or moves late (a page still loading) is centered again and gets the rest
+//! of the same highlight.
 #![deny(clippy::indexing_slicing)]
 
 use super::QuillApp;
@@ -30,8 +31,11 @@ pub(in crate::ui) struct Arrival {
     target: &'static str,
     /// Where the row sits, once it has been laid out.
     row: Rc<Cell<Option<Bounds<Pixels>>>>,
-    /// When the row was centered: the wash runs from here.
+    /// When the row was first centered: the wash runs from here.
     landed: Option<Instant>,
+    /// The row's top in the page when last centered. It moves when what
+    /// stood in for the row gives way to it, or content loads above it.
+    centered_at: Option<Pixels>,
 }
 
 impl Arrival {
@@ -40,6 +44,7 @@ impl Arrival {
             target,
             row: Rc::default(),
             landed: None,
+            centered_at: None,
         }
     }
 }
@@ -97,32 +102,37 @@ impl QuillApp {
         let Some(arrival) = &self.settings.arrival else {
             return;
         };
-        match (arrival.landed, arrival.row.get()) {
-            (Some(landed), _) if landed.elapsed() >= TOTAL => {
-                self.settings.arrival = None;
-                return;
-            }
-            (Some(_), _) => {}
-            (None, None) => return,
-            (None, Some(row)) => {
-                if let Some(page) = self.settings.page {
-                    let scroll = self.settings_scroll(page);
-                    let viewport = scroll.bounds();
-                    let offset = scroll.offset();
-                    let top = row.top() - viewport.top() - offset.y;
-                    let max = scroll.max_offset().y;
-                    let y = centered_top(top, row.size.height, viewport.size.height, max);
-                    scroll.set_offset(point(offset.x, -y));
-                }
+        if arrival
+            .landed
+            .is_some_and(|landed| landed.elapsed() >= TOTAL)
+        {
+            self.settings.arrival = None;
+            return;
+        }
+        let row = arrival.row.get();
+        if let Some(row) = row
+            && let Some(page) = self.settings.page
+        {
+            let scroll = self.settings_scroll(page);
+            let viewport = scroll.bounds();
+            let offset = scroll.offset();
+            let top = row.top() - viewport.top() - offset.y;
+            if arrival.centered_at != Some(top) {
+                let max = scroll.max_offset().y;
+                let y = centered_top(top, row.size.height, viewport.size.height, max);
+                scroll.set_offset(point(offset.x, -y));
                 if let Some(arrival) = &mut self.settings.arrival {
-                    arrival.landed = Some(Instant::now());
+                    arrival.centered_at = Some(top);
+                    arrival.landed.get_or_insert_with(Instant::now);
                 }
                 // The offset changes on the next frame and paints nothing
                 // on its own.
                 window.on_next_frame(|window, _| window.refresh());
             }
         }
-        self.request_animation_tick(60, cx);
+        if row.is_some() {
+            self.request_animation_tick(60, cx);
+        }
     }
 
     /// A setting's place on its page: search lands here. `ids` are the
