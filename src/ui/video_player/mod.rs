@@ -33,7 +33,7 @@ mod live_surface;
 pub(super) mod pacing;
 mod picture;
 mod rotate;
-mod surface;
+pub(crate) mod surface;
 mod transport;
 
 #[cfg(target_os = "macos")]

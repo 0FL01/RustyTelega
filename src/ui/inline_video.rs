@@ -173,10 +173,11 @@ impl InlineTile {
     }
 
     /// Bytes of BGRA a player decoding at `edge` holds at most: `queued`
-    /// pictures ahead, the one shown and the idle buffers its pool keeps.
+    /// pictures ahead, the one shown and any idle buffers its pool keeps.
     pub(super) fn decode_bytes(self, edge: u32, queued: usize) -> usize {
         let (w, h) = self.decoded_size(edge);
-        w as usize * h as usize * 4 * (queued + 1 + quill::video_decode::BGRA_KEPT)
+        let idle = super::video_player::surface::idle_bgra_buffers();
+        w as usize * h as usize * 4 * (queued + 1 + idle)
     }
 
     /// Whether the clip is small enough to play inline in software
@@ -650,7 +651,7 @@ mod tests {
         assert_eq!(tiny.decoded_size(tiny.decode_edge(2.)), (100, 80));
         assert_eq!(
             tiny.decode_bytes(720, 3),
-            100 * 80 * 4 * (3 + 1 + quill::video_decode::BGRA_KEPT)
+            100 * 80 * 4 * (3 + 1 + crate::ui::video_player::surface::idle_bgra_buffers())
         );
         assert_eq!(
             InlineTile::media(crate::ui::message_media::MediaFrameKind::Video, 0, 0, 0)

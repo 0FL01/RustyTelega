@@ -1043,10 +1043,14 @@ mod tests {
     #[test]
     fn the_budget_counts_the_queue_the_inline_decoder_keeps() {
         // `OpenOptions::inline` keeps three pictures ahead of the one shown,
-        // and its BGRA pool up to three idle buffers.
+        // and a BGRA pool three idle buffers, which NV12 surfaces let go.
         let queued = quill::video_decode::OpenOptions::inline(320).video_frames;
         assert_eq!(queued, 3);
         let gif = InlineTile::media(crate::ui::message_media::MediaFrameKind::Gif, 1280, 720, 0);
-        assert_eq!(gif.decode_bytes(320, queued), 320 * 180 * 4 * 7);
+        let idle = if cfg!(target_os = "macos") { 3 } else { 0 };
+        assert_eq!(
+            gif.decode_bytes(320, queued),
+            320 * 180 * 4 * (queued + 1 + idle)
+        );
     }
 }

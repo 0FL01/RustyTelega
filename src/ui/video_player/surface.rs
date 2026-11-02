@@ -20,6 +20,16 @@ use std::sync::Arc;
 /// ([`draw_state`]); a refused frame is shown as an image.
 pub(super) const NV12_SURFACES: bool = cfg!(not(target_os = "macos"));
 
+/// Idle BGRA buffers an in-process player keeps: none where its pictures are
+/// NV12 surfaces, which let the pool go.
+pub(crate) fn idle_bgra_buffers() -> usize {
+    if NV12_SURFACES {
+        0
+    } else {
+        quill::video_decode::BGRA_KEPT
+    }
+}
+
 /// The decoder's colour description as the GPUI core's.
 pub(super) fn gpui_color(color: quill::video_decode::YuvColor) -> gpui_kit::YuvColor {
     use quill::video_decode::YuvMatrix as Core;
