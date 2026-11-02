@@ -16,7 +16,9 @@
 use std::path::PathBuf;
 
 /// Local paths of the files on the clipboard, if it holds copied files.
-#[cfg(target_os = "macos")]
+// Tests leave the machine's real pasteboard alone: a file copied in Finder
+// would answer them.
+#[cfg(all(target_os = "macos", not(test)))]
 pub(super) fn copied_file_paths() -> Vec<PathBuf> {
     use objc2_app_kit::{NSPasteboard, NSPasteboardTypeFileURL};
     use objc2_foundation::NSURL;
@@ -39,7 +41,7 @@ pub(super) fn copied_file_paths() -> Vec<PathBuf> {
         .collect()
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), test))]
 pub(super) fn copied_file_paths() -> Vec<PathBuf> {
     Vec::new()
 }

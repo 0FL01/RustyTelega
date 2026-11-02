@@ -35,6 +35,9 @@ impl<S: JsonSender> ConnectDriver<S> {
                 extras.push(extra);
             }
         }
+        if let Some(chat_id) = self.session.open_chat {
+            self.download_chat_look_files(chat_id.0, false);
+        }
         let ids = self.session.thumb_file_ids_to_download();
         for file_id in ids {
             if let Some(extra) = self.download_file(file_id, THUMB_DOWNLOAD_PRIORITY)? {

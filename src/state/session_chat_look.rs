@@ -1,7 +1,10 @@
 //! Per-chat wallpaper and emoji chat theme: the reducer side
 //! (`chat.background`, `chat.theme`, `updateEmojiChatThemes`).
 use super::*;
-use crate::telegram::envelope::{ChatBackground, ChatThemeRef, EmojiChatTheme, ThemeSettings};
+use crate::ids::FileId;
+use crate::telegram::envelope::{
+    BackgroundType, ChatBackground, ChatThemeRef, EmojiChatTheme, ThemeSettings,
+};
 
 impl Session {
     /// Track a background's file and thumbnail so downloads update them.
@@ -83,10 +86,59 @@ impl Session {
     /// over the theme's background).
     pub fn chat_wallpaper(&self, chat_id: i64, dark: bool) -> Option<(&Background, i32)> {
         if let Some(own) = self.chats_state.chat_backgrounds.get(&chat_id) {
-            return Some((&own.background, own.dark_theme_dimming));
+            let background = match self.own_background_theme(&own.background) {
+                Some(theme) => theme.settings(dark).background.as_ref(),
+                None => Some(&own.background),
+            };
+            if let Some(background) = background {
+                return Some((background, own.dark_theme_dimming));
+            }
         }
         self.chat_theme_settings(chat_id, dark)
             .and_then(|s| s.background.as_ref())
             .map(|b| (b, 0))
+    }
+
+    /// The emoji theme a `backgroundTypeChatTheme` wallpaper names (boosted
+    /// channels and groups set one); it holds no picture of its own.
+    fn own_background_theme(&self, background: &Background) -> Option<&EmojiChatTheme> {
+        let BackgroundType::ChatTheme { name } = &background.kind else {
+            return None;
+        };
+        self.chats_state
+            .emoji_chat_themes
+            .iter()
+            .find(|t| &t.name == name)
+    }
+
+    /// The files of the wallpapers one chat can show in either mode: its
+    /// own and its theme's. With `all_themes` (a picker is open), every
+    /// emoji theme's too.
+    pub fn chat_look_file_ids(&self, chat_id: i64, all_themes: bool) -> Vec<FileId> {
+        let chats = &self.chats_state;
+        let own = chats.chat_backgrounds.get(&chat_id);
+        let themes =
+            chats
+                .chat_gift_themes
+                .get(&chat_id)
+                .into_iter()
+                .chain(own.and_then(|c| self.own_background_theme(&c.background)))
+                .chain(chats.emoji_chat_themes.iter().filter(|t| {
+                    all_themes || chats.chat_theme_names.get(&chat_id) == Some(&t.name)
+                }));
+        let mut ids: Vec<FileId> = own
+            .map(|c| &c.background)
+            .into_iter()
+            .chain(
+                themes
+                    .flat_map(|t| [&t.light, &t.dark])
+                    .filter_map(|settings| settings.background.as_ref()),
+            )
+            .filter_map(|background| background.file.as_ref())
+            .map(|file| file.id)
+            .collect();
+        ids.sort_unstable_by_key(|id| id.0);
+        ids.dedup();
+        ids
     }
 }

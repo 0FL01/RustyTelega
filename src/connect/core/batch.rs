@@ -29,6 +29,19 @@ pub(crate) struct BatchState {
     pub(crate) media_passes: usize,
 }
 
+/// Whether the envelope may give the open chat a wallpaper file to fetch;
+/// nothing else asks for it.
+pub(super) fn changes_chat_look(payload: &EnvelopePayload) -> bool {
+    matches!(
+        payload,
+        EnvelopePayload::Chats(
+            ChatsPayload::UpdateChatBackground { .. }
+                | ChatsPayload::UpdateChatTheme { .. }
+                | ChatsPayload::UpdateEmojiChatThemes(_)
+        )
+    )
+}
+
 impl<S: JsonSender> ConnectDriver<S> {
     /// Start a poll batch: ingesting envelopes then skips per-envelope
     /// work that `end_batch` does once (chat-list sorting, resolving the

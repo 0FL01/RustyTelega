@@ -2,6 +2,7 @@
 //! `updateDefaultBackground` (`schema/td_api.tl:739`, `:742`, `:11317`) and
 //! the fills and types they carry (`:8771`-`:8801`).
 
+use super::json_helpers::int64;
 use super::message_media::{ParsedFile, parse_file};
 use serde_json::Value;
 
@@ -164,7 +165,7 @@ pub(crate) fn parse_background(value: &Value) -> Option<Background> {
         return None;
     }
     Some(Background {
-        id: value.get("id").and_then(Value::as_i64)?,
+        id: int64(value.get("id"))?,
         is_default: value
             .get("is_default")
             .and_then(Value::as_bool)
@@ -207,6 +208,17 @@ pub(crate) fn parse_backgrounds(value: &Value) -> Option<Vec<Background>> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_background_id_arrives_as_a_string() {
+        let photo = parse_background(&json!({
+            "@type":"background","id":"6012836012836012836","name":"",
+            "document":{"@type":"document","document":{"@type":"file","id":7,"size":10}},
+            "type":{"@type":"backgroundTypeWallpaper","is_blurred":false,"is_moving":false}
+        }))
+        .unwrap();
+        assert_eq!(photo.id, 6012836012836012836);
+    }
 
     #[test]
     fn parses_each_background_type() {

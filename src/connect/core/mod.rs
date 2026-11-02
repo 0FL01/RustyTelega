@@ -194,6 +194,7 @@ impl<S: JsonSender> ConnectDriver<S> {
             EnvelopePayload::Stickers(StickersPayload::TrendingStickerSets { .. })
         ) && view_purpose == Some(RequestPurpose::GetTrendingStickerSets);
         let thumbs_after = shown_message
+            || batch::changes_chat_look(&owned.envelope.payload)
             || matches!(
                 owned.envelope.payload,
                 EnvelopePayload::Messages(MessagesPayload::Messages(_))

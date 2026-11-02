@@ -10,6 +10,9 @@ use crate::telegram::requests::{
     set_default_background_local,
 };
 
+/// `downloadFile` priority of a shown chat's wallpaper.
+const CHAT_LOOK_DOWNLOAD_PRIORITY: i32 = 8;
+
 impl<S: JsonSender> ConnectDriver<S> {
     /// `getInstalledBackgrounds` for a theme. Deduped while in flight.
     pub fn fetch_installed_backgrounds(
@@ -286,45 +289,10 @@ impl<S: JsonSender> ConnectDriver<S> {
     /// Download the wallpaper files one chat shows: its own, its theme's,
     /// and (while a picker is open) every emoji theme's.
     pub fn download_chat_look_files(&mut self, chat_id: i64, all_themes: bool) {
-        let mut files: Vec<&crate::telegram::envelope::ParsedFile> = Vec::new();
-        if let Some(own) = self.session.chats_state.chat_backgrounds.get(&chat_id) {
-            files.extend(own.background.file.as_ref());
-        }
-        if let Some(gift) = self.session.chats_state.chat_gift_themes.get(&chat_id) {
-            for settings in [&gift.light, &gift.dark] {
-                files.extend(settings.background.as_ref().and_then(|b| b.file.as_ref()));
+        for id in self.session.chat_look_file_ids(chat_id, all_themes) {
+            if self.session.should_download(id) {
+                let _ = self.download_file(id, CHAT_LOOK_DOWNLOAD_PRIORITY);
             }
-        }
-        let themes = self
-            .session
-            .chats_state
-            .emoji_chat_themes
-            .iter()
-            .filter(|t| {
-                all_themes
-                    || self.session.chats_state.chat_theme_names.get(&chat_id) == Some(&t.name)
-            });
-        for theme in themes {
-            for settings in [&theme.light, &theme.dark] {
-                files.extend(settings.background.as_ref().and_then(|b| b.file.as_ref()));
-            }
-        }
-        let ids: Vec<FileId> = files
-            .into_iter()
-            .filter(|f| {
-                !self
-                    .session
-                    .media
-                    .files
-                    .get(&f.id.0)
-                    .unwrap_or(f)
-                    .local
-                    .is_downloading_completed
-            })
-            .map(|f| f.id)
-            .collect();
-        for id in ids {
-            let _ = self.download_file(id, 8);
         }
     }
 
