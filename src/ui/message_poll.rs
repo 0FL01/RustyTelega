@@ -16,9 +16,8 @@ use quill::ids::{ChatId, MessageId};
 use quill::lang::{Key, keys, tr, tr_with, trn_decimal};
 use quill::local_time::now_unix;
 use quill::poll::{
-    PollMark, PollRow, can_offer_add_option, can_view_poll_voters, option_is_rtl,
-    poll_ends_in_label, poll_results_hidden, poll_row, poll_vote_restriction_label,
-    quiz_explanation,
+    PollMark, PollRow, can_offer_add_option, can_view_poll_voters, poll_ends_in_label, poll_is_rtl,
+    poll_results_hidden, poll_row, poll_vote_restriction_label, quiz_explanation,
 };
 use quill::telegram::envelope::{PollContent, PollOption, PollType};
 
@@ -100,7 +99,7 @@ fn total_label(poll: &quill::telegram::Poll) -> String {
 /// and the total. Before a vote a row is a circle (a square with multiple
 /// answers) and the text; after it, the percentage, the text and a bar, with
 /// a mark on the chosen or correct option (`Poll::Options::paintAnswer`).
-/// Each option reads in its own direction. Vote taps go through
+/// Every row keeps to the side the first option reads from. Vote taps go through
 /// `setPollAnswer` (`QuillApp::vote_on_poll`); counts refresh live via
 /// `updatePoll`.
 pub(super) fn poll_body(
@@ -326,7 +325,7 @@ fn result_bar(fill: f32, color: Hsla, rtl: bool) -> Div {
     )
 }
 
-/// One poll option, laid out from the edge its text starts at. Tappable
+/// One poll option, laid out from the poll's side. Tappable
 /// while the poll is open.
 pub(super) fn poll_option_row(
     chat_id: ChatId,
@@ -339,7 +338,7 @@ pub(super) fn poll_option_row(
     cx: &mut Context<QuillApp>,
 ) -> AnyElement {
     let state = poll_row(poll, index, option);
-    let rtl = option_is_rtl(&option.text, &poll.question);
+    let rtl = poll_is_rtl(poll);
     let multiple = poll.allows_multiple_answers;
     let correct = matches!(
         state,
