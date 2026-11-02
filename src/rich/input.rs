@@ -1,85 +1,137 @@
 //! Rich text: `RichBlock`s and composer markup into TDLib input JSON.
 use super::*;
+use std::cmp::Reverse;
+use std::iter::Peekable;
+use std::ops::Range;
 
 // ---------------------------------------------------------------------------
 // Editor (outgoing)
 // ---------------------------------------------------------------------------
 
-/// Build one `RichText` node from clean text + M1 markup entities.
-/// Entities whose bytes are not a range of `text` are dropped; overlapping
-/// entities keep the longest span (the markup parser doesn't nest).
+/// How deep formatting nests in a `RichText`. The composer has fewer kinds of
+/// span than this, and TDLib's JSON reader bounds its depth: spans past it
+/// lose their formatting, not their text.
+const MAX_RICH_NESTING: usize = 16;
+
+#[derive(Clone, Copy)]
+struct RichSpan<'a> {
+    start: usize,
+    end: usize,
+    entity: &'a ComposerEntity,
+}
+
+/// Spans ordered by start, longest first, each lying wholly inside any span
+/// it starts in: one that runs past another's end is cut there, and its rest
+/// goes on as a span of its own.
+fn nested_spans<'a>(mut spans: Vec<RichSpan<'a>>) -> Vec<RichSpan<'a>> {
+    let order = |span: &RichSpan<'_>| (Reverse(span.start), span.end);
+    spans.sort_by_key(order);
+    let mut out = Vec::with_capacity(spans.len());
+    let mut open: Vec<usize> = Vec::new();
+    while let Some(mut span) = spans.pop() {
+        while open.last().is_some_and(|&end| end <= span.start) {
+            open.pop();
+        }
+        if let Some(&end) = open.last()
+            && span.end > end
+        {
+            let rest = RichSpan { start: end, ..span };
+            span.end = end;
+            let at = spans.partition_point(|other| order(other) < order(&rest));
+            spans.insert(at, rest);
+        }
+        open.push(span.end);
+        out.push(span);
+    }
+    out
+}
+
+/// The `RichText` nodes of `range`, taking the spans that start in it.
+fn rich_nodes<'a>(
+    text: &str,
+    range: Range<usize>,
+    spans: &mut Peekable<impl Iterator<Item = RichSpan<'a>>>,
+    depth: usize,
+) -> Vec<Value> {
+    let mut parts = Vec::new();
+    let mut pos = range.start;
+    while let Some(span) = spans.next_if(|span| span.start < range.end) {
+        if span.start > pos {
+            parts.push(plain(text.get(pos..span.start).unwrap_or_default()));
+        }
+        let inner = if depth < MAX_RICH_NESTING {
+            rich_nodes(text, span.start..span.end, spans, depth + 1)
+        } else {
+            while spans.next_if(|inner| inner.start < span.end).is_some() {}
+            vec![plain(text.get(span.start..span.end).unwrap_or_default())]
+        };
+        let run = text.get(span.start..span.end).unwrap_or_default();
+        parts.push(styled_node(span.entity, run, joined(inner)));
+        pos = span.end;
+    }
+    if pos < range.end {
+        parts.push(plain(text.get(pos..range.end).unwrap_or_default()));
+    }
+    parts
+}
+
+fn joined(mut parts: Vec<Value>) -> Value {
+    match parts.len() {
+        0 => plain(""),
+        1 => parts.pop().unwrap_or_else(|| plain("")),
+        _ => json!({ "@type": "richTexts", "texts": parts }),
+    }
+}
+
+/// `inner`, the text of `run`, under `entity`'s formatting.
+fn styled_node(entity: &ComposerEntity, run: &str, inner: Value) -> Value {
+    match entity.kind {
+        crate::composer::FormatKind::Bold => json!({ "@type": "richTextBold", "text": inner }),
+        crate::composer::FormatKind::Italic => json!({ "@type": "richTextItalic", "text": inner }),
+        crate::composer::FormatKind::Underline => {
+            json!({ "@type": "richTextUnderline", "text": inner })
+        }
+        crate::composer::FormatKind::Strikethrough => {
+            json!({ "@type": "richTextStrikethrough", "text": inner })
+        }
+        crate::composer::FormatKind::Spoiler => {
+            json!({ "@type": "richTextSpoiler", "text": inner })
+        }
+        // `RichText` has no pre node — fixed-width is the honest mapping.
+        crate::composer::FormatKind::Code | crate::composer::FormatKind::Pre => {
+            json!({ "@type": "richTextFixed", "text": inner })
+        }
+        // Rich text has no custom-emoji node: the fallback emoji stays.
+        crate::composer::FormatKind::CustomEmoji => inner,
+        // Nor a date node: the text the date was written as stays.
+        crate::composer::FormatKind::DateTime => inner,
+        crate::composer::FormatKind::TextUrl | crate::composer::FormatKind::MentionName => {
+            if entity.url == run {
+                inner
+            } else {
+                json!({ "@type": "richTextUrl", "text": inner, "url": entity.url, "is_cached": false })
+            }
+        }
+        // Block quotes are block-level; inside a rich paragraph the text
+        // survives and the marker is dropped.
+        crate::composer::FormatKind::BlockQuote => inner,
+    }
+}
+
+/// Build one `RichText` node from clean text + M1 markup entities, nested as
+/// the markup nests them. Entities whose bytes are not a range of `text` are
+/// dropped.
 pub fn formatted_to_rich_text(text: &str, entities: &[ComposerEntity]) -> Value {
-    let mut spans: Vec<(usize, usize, &ComposerEntity)> = entities
+    let spans = entities
         .iter()
         .filter_map(|entity| {
-            let bytes = entity.bytes.clone();
-            text.get(bytes.clone())?;
-            (bytes.end > bytes.start).then_some((bytes.start, bytes.end, entity))
+            let (start, end) = (entity.bytes.start, entity.bytes.end);
+            text.get(start..end)?;
+            (end > start).then_some(RichSpan { start, end, entity })
         })
         .collect();
-    spans.sort_by_key(|(start, end, _)| (*start, std::cmp::Reverse(*end)));
-    let mut kept: Vec<(usize, usize, &ComposerEntity)> = Vec::new();
-    for span in spans {
-        if kept
-            .last()
-            .is_none_or(|(_, prev_end, _)| span.0 >= *prev_end)
-        {
-            kept.push(span);
-        }
-    }
-    if kept.is_empty() {
-        return json!({ "@type": "richTextPlain", "text": text });
-    }
-    let mut parts: Vec<Value> = Vec::new();
-    let mut pos = 0;
-    for (start, end, entity) in kept {
-        if start > pos {
-            parts.push(json!({ "@type": "richTextPlain", "text": text.get(pos..start).unwrap_or_default() }));
-        }
-        let run = text.get(start..end).unwrap_or_default();
-        let node = match entity.kind {
-            crate::composer::FormatKind::Bold => {
-                json!({ "@type": "richTextBold", "text": plain(run) })
-            }
-            crate::composer::FormatKind::Italic => {
-                json!({ "@type": "richTextItalic", "text": plain(run) })
-            }
-            crate::composer::FormatKind::Underline => {
-                json!({ "@type": "richTextUnderline", "text": plain(run) })
-            }
-            crate::composer::FormatKind::Strikethrough => {
-                json!({ "@type": "richTextStrikethrough", "text": plain(run) })
-            }
-            crate::composer::FormatKind::Spoiler => {
-                json!({ "@type": "richTextSpoiler", "text": plain(run) })
-            }
-            // `RichText` has no pre node — fixed-width is the honest mapping.
-            crate::composer::FormatKind::Code | crate::composer::FormatKind::Pre => {
-                json!({ "@type": "richTextFixed", "text": plain(run) })
-            }
-            // Rich text has no custom-emoji node: the fallback emoji stays.
-            crate::composer::FormatKind::CustomEmoji => plain(run),
-            // Nor a date node: the text the date was written as stays.
-            crate::composer::FormatKind::DateTime => plain(run),
-            crate::composer::FormatKind::TextUrl | crate::composer::FormatKind::MentionName => {
-                if entity.url == run {
-                    plain(run)
-                } else {
-                    json!({ "@type": "richTextUrl", "text": plain(run), "url": entity.url, "is_cached": false })
-                }
-            }
-            // Block quotes are block-level; inside a rich paragraph the text
-            // survives and the marker is dropped.
-            crate::composer::FormatKind::BlockQuote => plain(run),
-        };
-        parts.push(node);
-        pos = end;
-    }
-    if pos < text.len() {
-        parts
-            .push(json!({ "@type": "richTextPlain", "text": text.get(pos..).unwrap_or_default() }));
-    }
-    json!({ "@type": "richTexts", "texts": parts })
+    let mut spans = nested_spans(spans).into_iter().peekable();
+    joined(rich_nodes(text, 0..text.len(), &mut spans, 0))
 }
 
 fn plain(text: &str) -> Value {
@@ -278,6 +330,64 @@ pub fn input_rich_message(blocks: &[RichBlock]) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn formatting_inside_bold_is_sent() {
+        let link = block_rich_text("**see [docs](https://example.com) now**").to_string();
+        assert!(link.contains("https://example.com"), "{link}");
+        let italic = block_rich_text("**a *b* c**").to_string();
+        assert!(italic.contains("richTextItalic"), "{italic}");
+    }
+
+    #[test]
+    fn spans_that_cross_are_both_kept_in_order() {
+        use crate::composer::{ComposerEntity, FormatKind};
+        let entity = |bytes, kind| ComposerEntity {
+            offset: 0,
+            length: 0,
+            bytes,
+            kind,
+            url: String::new(),
+            language: String::new(),
+        };
+        let crossing = [
+            entity(0..4, FormatKind::Bold),
+            entity(2..6, FormatKind::Italic),
+        ];
+        assert_eq!(
+            formatted_to_rich_text("abcdef", &crossing),
+            json!({"@type": "richTexts", "texts": [
+                {"@type": "richTextBold", "text": {"@type": "richTexts", "texts": [
+                    {"@type": "richTextPlain", "text": "ab"},
+                    {"@type": "richTextItalic", "text": {"@type": "richTextPlain", "text": "cd"}},
+                ]}},
+                {"@type": "richTextItalic", "text": {"@type": "richTextPlain", "text": "ef"}},
+            ]})
+        );
+    }
+
+    #[test]
+    fn formatting_past_the_depth_limit_keeps_its_text() {
+        use crate::composer::{ComposerEntity, FormatKind};
+        let text = "x".repeat(40);
+        let spans: Vec<ComposerEntity> = (0..20)
+            .map(|at| ComposerEntity {
+                offset: 0,
+                length: 0,
+                bytes: at..40 - at,
+                kind: FormatKind::Bold,
+                url: String::new(),
+                language: String::new(),
+            })
+            .collect();
+        let sent = formatted_to_rich_text(&text, &spans).to_string();
+        let plain_text: usize = sent
+            .split("\"text\":\"")
+            .skip(1)
+            .map(|rest| rest.chars().take_while(|ch| *ch == 'x').count())
+            .sum();
+        assert_eq!(plain_text, 40, "{sent}");
+    }
 
     #[test]
     fn input_page_block_json_shapes() {
