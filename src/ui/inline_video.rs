@@ -648,7 +648,10 @@ mod tests {
     fn small_clips_are_never_upscaled() {
         let tiny = InlineTile::media(crate::ui::message_media::MediaFrameKind::Video, 100, 80, 0);
         assert_eq!(tiny.decoded_size(tiny.decode_edge(2.)), (100, 80));
-        assert_eq!(tiny.decode_bytes(720, 3), 100 * 80 * 4 * 4);
+        assert_eq!(
+            tiny.decode_bytes(720, 3),
+            100 * 80 * 4 * (3 + 1 + quill::video_decode::BGRA_KEPT)
+        );
         assert_eq!(
             InlineTile::media(crate::ui::message_media::MediaFrameKind::Video, 0, 0, 0)
                 .decoded_size(300),
