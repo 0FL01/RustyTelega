@@ -1292,6 +1292,7 @@ pub struct KeptWindow {
     id: WindowId,
     root: Option<AnyView>,
     focus: Option<FocusId>,
+    element_states: FxHashMap<(GlobalElementId, TypeId), ElementStateBox>,
     next_frame_callbacks: Vec<FrameCallback>,
     display_observers: SubscriberSet<(), AnyObserver>,
     focus_listeners: SubscriberSet<(), AnyWindowFocusListener>,
@@ -2527,6 +2528,7 @@ impl Window {
             id: self.handle.id,
             root: self.root.take(),
             focus: self.focus,
+            element_states: mem::take(&mut self.rendered_frame.element_states),
             next_frame_callbacks: self.next_frame_callbacks.take(),
             display_observers: mem::replace(&mut self.display_observers, SubscriberSet::new()),
             focus_listeners: mem::replace(&mut self.focus_listeners, SubscriberSet::new()),
@@ -2567,6 +2569,7 @@ impl Window {
             id,
             root: _,
             focus,
+            element_states,
             next_frame_callbacks,
             display_observers,
             focus_listeners,
@@ -2579,6 +2582,7 @@ impl Window {
             pending_input_observers,
         } = kept;
         self.focus = focus;
+        self.rendered_frame.element_states = element_states;
         self.next_frame_callbacks
             .borrow_mut()
             .extend(next_frame_callbacks);

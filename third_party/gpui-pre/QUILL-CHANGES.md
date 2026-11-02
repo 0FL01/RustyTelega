@@ -556,7 +556,8 @@ be replaced without rebuilding what it showed
 (`src/ui/startup_failure/device_loss.rs` in Quill):
 
 - `src/window.rs`: `Window::keep_when_closed`, `KeptWindow` (the root view,
-  focus, next-frame callbacks and every `SubscriberSet` a window owns) and
+  focus, the last frame's element states, next-frame callbacks and every
+  `SubscriberSet` a window owns) and
   `Window::take_over`, which moves them into a new window.
 - `src/app.rs`: `App::take_kept_window`, and `update_window_erased` follows a
   replaced window's id to its replacement, so handles and async window
