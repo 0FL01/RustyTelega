@@ -526,3 +526,18 @@ fn badge_count_adds_forum_topics() {
     with_totals(&mut session);
     assert_eq!(badge_count(&session, &prefs), 44 + 30 + 11);
 }
+
+/// A forum the user left drops out of every list, but its loaded topics
+/// stay: they count in no badge.
+#[test]
+fn badge_count_skips_topics_of_a_forum_the_user_left() {
+    let mut session = session_with(&[]);
+    let mut left = chat(1, 0);
+    left.is_forum = Some(true);
+    left.my_member_status = Some(crate::telegram::envelope::ChannelMemberStatus::Left);
+    session.chats.insert(1, left);
+    session.threads.forum_topics.insert(1, vec![topic(1, 3)]);
+    assert_eq!(badge_count(&session, &BadgePrefs::default()), 0);
+    with_totals(&mut session);
+    assert_eq!(badge_count(&session, &BadgePrefs::default()), 44 + 30);
+}
