@@ -483,9 +483,10 @@ impl Unserved {
 impl Drop for Unserved {
     fn drop(&mut self) {
         if let Some(stream) = self.0.take() {
+            // No flush: on Windows it waits for the client to read, and this
+            // runs on the accept thread. A dropped pipe keeps its bytes.
             let mut out = &stream;
             let _ = out.write_all(b"busy\n");
-            let _ = out.flush();
         }
     }
 }
