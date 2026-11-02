@@ -2,26 +2,107 @@
 #![deny(clippy::indexing_slicing)]
 
 use super::app::QuillApp;
+use super::message_media::bubble_accent;
 use super::polls::option_thumb::{PollMediaView, option_thumb};
 use super::pressable::PressableDiv;
+use super::synthetic::BubbleLook;
 use super::*;
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::*;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
 use quill::ids::{ChatId, MessageId};
-use quill::lang::{keys, tr, tr_with};
+use quill::lang::{Key, keys, tr, tr_with, trn_decimal};
 use quill::local_time::now_unix;
 use quill::poll::{
-    can_offer_add_option, can_view_poll_voters, poll_bar_fraction, poll_ends_in_label,
-    poll_results_hidden, poll_vote_restriction_label, quiz_explanation, voter_count_label,
+    PollMark, PollRow, can_offer_add_option, can_view_poll_voters, option_is_rtl,
+    poll_ends_in_label, poll_results_hidden, poll_row, poll_vote_restriction_label,
+    quiz_explanation,
 };
 use quill::telegram::envelope::{PollContent, PollOption, PollType};
-/// Phase 4.2: `messagePoll` row — the question, one tappable option row per
-/// option with a percentage bar and voter count, chosen option(s) marked;
-/// closed polls render results without voting affordance. Vote taps go
-/// through `setPollAnswer` (`QuillApp::vote_on_poll`); counts refresh live
-/// via `updatePoll`.
+
+/// The room before an option's text: wide enough for a semibold "100%",
+/// so the text starts at one place before and after voting.
+const LEAD_WIDTH: Pixels = px(34.);
+const LEAD_GAP: Pixels = px(6.);
+const MARK_SIZE: Pixels = px(16.);
+const RADIO_SIZE: Pixels = px(18.);
+const BAR_HEIGHT: Pixels = px(4.);
+
+/// A poll's colors on its bubble: the accent on an incoming one, the
+/// bubble's own text color on a filled outgoing one, where the accent would
+/// vanish. Text the poll does not recolor inherits from the bubble.
+#[derive(Clone, Copy)]
+pub(super) struct PollInk {
+    accent: Hsla,
+    muted: Hsla,
+    on_accent: Hsla,
+    correct: Hsla,
+    wrong: Hsla,
+}
+
+impl PollInk {
+    pub(super) fn new(on_fill: bool, look: &BubbleLook, cx: &App) -> Self {
+        if on_fill {
+            let accent = look.outgoing_text();
+            return Self {
+                accent,
+                muted: accent.opacity(0.7),
+                on_accent: look.outgoing_fill().into(),
+                correct: accent,
+                wrong: accent,
+            };
+        }
+        Self {
+            accent: bubble_accent(false, cx),
+            muted: text_muted().into(),
+            on_accent: gpui_kit::white(),
+            correct: success().into(),
+            wrong: danger().into(),
+        }
+    }
+
+    fn mark(self, mark: PollMark) -> Hsla {
+        match mark {
+            PollMark::Correct => self.correct,
+            PollMark::Wrong => self.wrong,
+            PollMark::None | PollMark::Chosen => self.accent,
+        }
+    }
+}
+
+/// The caption under the question, as tdesktop words it.
+fn kind_key(poll: &quill::telegram::Poll) -> Key {
+    let quiz = matches!(poll.poll_type, PollType::Quiz { .. });
+    match (poll.is_closed, quiz, poll.is_anonymous) {
+        (true, ..) => keys::POLLS_CLOSED,
+        (false, true, true) => keys::POLLS_ANONYMOUS_QUIZ,
+        (false, true, false) => keys::POLLS_PUBLIC_QUIZ,
+        (false, false, true) => keys::POLLS_ANONYMOUS,
+        (false, false, false) => keys::POLLS_PUBLIC,
+    }
+}
+
+/// The total under the options.
+fn total_label(poll: &quill::telegram::Poll) -> String {
+    let quiz = matches!(poll.poll_type, PollType::Quiz { .. });
+    let total = i64::from(poll.total_voter_count);
+    match (total, quiz) {
+        (0, true) => tr(keys::POLLS_ANSWERS_NONE).to_string(),
+        (0, false) => tr(keys::POLLS_VOTES_NONE).to_string(),
+        (_, true) => trn_decimal(keys::POLLS_ANSWERS_COUNT, total),
+        (_, false) => trn_decimal(keys::POLLS_VOTES_COUNT, total),
+    }
+}
+
+/// Phase 4.2: `messagePoll` row: the question, a caption, one row per option
+/// and the total. Before a vote a row is a circle (a square with multiple
+/// answers) and the text; after it, the percentage, the text and a bar, with
+/// a mark on the chosen or correct option (`Poll::Options::paintAnswer`).
+/// Each option reads in its own direction. Vote taps go through
+/// `setPollAnswer` (`QuillApp::vote_on_poll`); counts refresh live via
+/// `updatePoll`.
 pub(super) fn poll_body(
     chat_id: ChatId,
     message_id: MessageId,
@@ -31,18 +112,22 @@ pub(super) fn poll_body(
     // The bubble's room: a plain bubble has no padding to take off the
     // width, a narrow history lowers the floor.
     room: crate::ui::history::bubble_width::BubbleRoom,
+    ink: PollInk,
     cx: &mut Context<QuillApp>,
 ) -> AnyElement {
     let poll = &content.poll;
-    let kind_label = match &poll.poll_type {
-        PollType::Quiz { .. } => tr(keys::Q_MEDIA_QUIZ),
-        PollType::Regular => tr(keys::CONTEXT_POLL_MESSAGE_TAB),
+    let rtl = super::bidi_line::aligns_end(&poll.question);
+    let caption = |text: String, color: Hsla| {
+        div()
+            .text_xs()
+            .text_color(color)
+            .when(rtl, |this| this.w_full().text_right())
+            .child(text)
     };
     let mut body = div()
         .id(("poll", message_id.0 as u64))
         .flex()
         .flex_col()
-        .gap_1()
         .mt_1()
         // Telegram Desktop `Poll::countOptimalSize`: never narrower than
         // `msgFileMinWidth`; the question and answers widen it.
@@ -52,26 +137,7 @@ pub(super) fn poll_body(
                 .text_sm()
                 .font_semibold(),
         );
-    if !content.description.is_empty() {
-        body = body.child(
-            div()
-                .text_xs()
-                .text_color(text_muted())
-                .child(super::bidi_line::aligned_block(content.description.clone())),
-        );
-    }
-    let mut meta = format!(
-        "{} · {} · {}",
-        kind_label,
-        voter_count_label(poll.total_voter_count),
-        if poll.is_closed {
-            "closed"
-        } else if poll.is_anonymous {
-            "anonymous"
-        } else {
-            "public"
-        },
-    );
+    let mut meta = tr(kind_key(poll)).to_string();
     // B15: "Restrict to Subscribers" and the absolute deadline
     // (`lng_polls_results_in_*`-style "ends in …").
     if poll.members_only {
@@ -81,39 +147,33 @@ pub(super) fn poll_body(
         meta.push_str(" · ");
         meta.push_str(&ends);
     }
-    body = body.child(div().text_xs().text_color(text_muted()).child(meta));
-    // B15: "Hide results" — `lng_polls_results_after_close`.
-    let results_hidden = poll_results_hidden(poll);
-    if results_hidden {
+    body = body.child(caption(meta, ink.muted).mt_0p5());
+    if !content.description.is_empty() {
         body = body.child(
             div()
+                .mt_1()
                 .text_xs()
-                .text_color(text_muted())
-                .child(tr(keys::POLLS_ENDS_TOAST)),
+                .text_color(ink.muted)
+                .child(super::bidi_line::aligned_block(content.description.clone())),
         );
+    }
+    // B15: "Hide results" — `lng_polls_results_after_close`.
+    if poll_results_hidden(poll) {
+        body = body.child(caption(tr(keys::POLLS_ENDS_TOAST).to_string(), ink.muted).mt_1());
     }
     // B4: `pollVoteRestrictionReason*` (schema `td_api.tl:494`-`:510`) —
     // a human reason instead of a dead tap.
     if let Some(reason) = &poll.vote_restriction_reason {
-        body = body.child(
-            div()
-                .text_xs()
-                .text_color(warning_orange())
-                .child(poll_vote_restriction_label(reason)),
-        );
+        body = body
+            .child(caption(poll_vote_restriction_label(reason), warning_orange().into()).mt_1());
     }
+    let mut options = div().flex().flex_col().mt_1();
     for (index, option) in poll.options.iter().enumerate() {
-        body = body.child(poll_option_row(
-            chat_id,
-            message_id,
-            index,
-            option,
-            poll,
-            results_hidden,
-            media,
-            cx,
+        options = options.child(poll_option_row(
+            chat_id, message_id, index, option, poll, media, ink, cx,
         ));
     }
+    body = body.child(options);
     // B15: "Add an Option" (`addPollOption`) when the server allows it
     // (`messagePoll.can_add_option`).
     if can_offer_add_option(content.can_add_option, poll) {
@@ -121,7 +181,7 @@ pub(super) fn poll_body(
             Button::new(format!("poll-add-option-{}", message_id.0))
                 .label(tr(keys::Q_MEDIA_ADD_AN_OPTION))
                 .ghost()
-                .text_color(accent())
+                .text_color(ink.accent)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.open_poll_add_option(chat_id, message_id, window, cx);
                 })),
@@ -133,28 +193,37 @@ pub(super) fn poll_body(
     if let Some(explanation) = quiz_explanation(poll) {
         body = body.child(
             div()
+                .mt_1()
                 .text_xs()
-                .text_color(warning())
                 .child(super::bidi_line::aligned_block(format!("💡 {explanation}"))),
         );
     }
-    // B4: voter list (`getPollVoters`, schema line 12941) — a single
-    // affordance opens the per-option voters dialog; only when the
-    // server says voters are available (`can_get_voters`).
-    if can_view_poll_voters(poll) {
-        body = body.child(
+    // B4: voter list (`getPollVoters`, schema line 12941): where the server
+    // has voters to show, the total opens them, as tdesktop's bottom button.
+    body = if can_view_poll_voters(poll) {
+        body.child(
             Button::new(format!("poll-voters-{}", message_id.0))
                 .label(tr_with(
                     keys::Q_MEDIA_VIEW_VOTES,
                     &[("total_voter_count", &poll.total_voter_count.to_string())],
                 ))
                 .ghost()
-                .text_color(accent())
+                .text_color(ink.accent)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.open_poll_voters_dialog(chat_id, message_id, cx);
                 })),
-        );
-    }
+        )
+    } else {
+        body.child(
+            div()
+                .mt_1()
+                .w_full()
+                .text_center()
+                .text_xs()
+                .text_color(ink.muted)
+                .child(total_label(poll)),
+        )
+    };
     body.into_any_element()
 }
 
@@ -169,61 +238,126 @@ pub(super) fn session_poll_body(
         Option<&quill::state::Session>,
     ),
     room: crate::ui::history::bubble_width::BubbleRoom,
+    ink: PollInk,
     cx: &mut Context<QuillApp>,
 ) -> AnyElement {
     let media =
         super::polls::option_thumb::poll_media_view(&content.poll, files, media_roots, session);
-    poll_body(message.chat_id, message.id, content, &media, room, cx)
+    poll_body(message.chat_id, message.id, content, &media, room, ink, cx)
 }
 
-/// One poll option: text + percentage, a bar split by `flex_grow`
-/// (no percentage widths in GPUI), the per-option voter count, and the
-/// chosen / quiz-correct marks. Tappable while the poll is open.
+/// A filled disc (a rounded square with multiple answers) holding `icon`.
+fn filled_mark(size: Pixels, multiple: bool, fill: Hsla, icon: IconName, ink: PollInk) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(size)
+        .map(|this| {
+            if multiple {
+                this.rounded(px(4.))
+            } else {
+                this.rounded_full()
+            }
+        })
+        .bg(fill)
+        .text_color(ink.on_accent)
+        .child(Icon::new(icon).with_size(px(12.)))
+}
+
+/// What sits before the text while there are no numbers to show.
+fn choice_mark(selected: bool, multiple: bool, ink: PollInk) -> Div {
+    if selected {
+        return filled_mark(RADIO_SIZE, multiple, ink.accent, IconName::Check, ink);
+    }
+    div()
+        .flex_none()
+        .size(RADIO_SIZE)
+        .map(|this| {
+            if multiple {
+                this.rounded(px(4.))
+            } else {
+                this.rounded_full()
+            }
+        })
+        .border(px(1.5))
+        .border_color(ink.muted)
+}
+
+/// The percentage over its mark, in the column before the text.
+fn result_lead(percent: i32, mark: PollMark, multiple: bool, ink: PollInk) -> Vec<AnyElement> {
+    let percent = div()
+        .text_xs()
+        .font_semibold()
+        .mt(px(2.))
+        .whitespace_nowrap()
+        .child(format!("{percent}%"));
+    let icon = match mark {
+        PollMark::None => None,
+        PollMark::Wrong => Some(IconName::Close),
+        PollMark::Chosen | PollMark::Correct => Some(IconName::Check),
+    };
+    let mark = icon.map(|icon| filled_mark(MARK_SIZE, multiple, ink.mark(mark), icon, ink));
+    std::iter::once(percent.into_any_element())
+        .chain(mark.map(IntoElement::into_any_element))
+        .collect()
+}
+
+/// The result bar: a tinted track with the filled part from the option's
+/// starting edge. The line is as tall as the mark, so the two line up.
+fn result_bar(fill: f32, color: Hsla, rtl: bool) -> Div {
+    div().flex().flex_none().items_center().h(MARK_SIZE).child(
+        div()
+            .flex()
+            .when(rtl, |this| this.flex_row_reverse())
+            .w_full()
+            .h(BAR_HEIGHT)
+            .rounded(BAR_HEIGHT / 2.)
+            .bg(color.opacity(0.15))
+            .child(
+                div()
+                    .h_full()
+                    .w(relative(fill))
+                    .min_w(BAR_HEIGHT)
+                    .rounded(BAR_HEIGHT / 2.)
+                    .bg(color),
+            ),
+    )
+}
+
+/// One poll option, laid out from the edge its text starts at. Tappable
+/// while the poll is open.
 pub(super) fn poll_option_row(
     chat_id: ChatId,
     message_id: MessageId,
     index: usize,
     option: &PollOption,
     poll: &quill::telegram::Poll,
-    results_hidden: bool,
     media: &PollMediaView,
+    ink: PollInk,
     cx: &mut Context<QuillApp>,
 ) -> AnyElement {
-    let fill = if results_hidden {
-        0.0
+    let state = poll_row(poll, index, option);
+    let rtl = option_is_rtl(&option.text, &poll.question);
+    let multiple = poll.allows_multiple_answers;
+    let correct = matches!(
+        state,
+        PollRow::Result {
+            mark: PollMark::Correct,
+            ..
+        }
+    );
+    let label: AnyElement = if option.entities.is_empty() {
+        super::bidi_line::aligned_block_to(option.text.clone(), rtl).into_any_element()
     } else {
-        poll_bar_fraction(option.vote_percentage)
-    };
-    let chosen = option.is_chosen;
-    let votable = poll.can_vote();
-    let quiz_correct = poll.is_closed
-        && matches!(&poll.poll_type, PollType::Quiz { correct_option_ids, .. }
-            if correct_option_ids.contains(&(index as i32)));
-    // The text: plain, or with its custom emoji drawn (the marks go around
-    // it, so the entity offsets stay right).
-    let label_text = if option.entities.is_empty() {
-        let option_label = if chosen {
-            format!("✓ {}", option.text)
-        } else {
-            option.text.clone()
-        };
-        let option_label = if quiz_correct {
-            tr_with(
-                keys::Q_MEDIA_CORRECT_ANSWER,
-                &[("option_label", &option_label.to_string())],
-            )
-        } else {
-            option_label
-        };
-        super::bidi_line::aligned_block(option_label).into_any_element()
-    } else {
+        // Custom emoji: drawn through the message text, whose entity
+        // offsets need the text as it came.
         let key = (message_id.0, index as u64);
         div()
             .flex()
             .flex_wrap()
-            .items_center()
-            .gap_1()
-            .when(chosen, |this| this.child("✓"))
+            .when(rtl, |this| this.justify_end())
             .child(super::message_text::rich_text_line(
                 &option.text,
                 &option.entities,
@@ -234,83 +368,64 @@ pub(super) fn poll_option_row(
                 &media.emoji,
                 cx,
             ))
-            .when(quiz_correct, |this| {
-                this.child(tr(keys::Q_MEDIA_CORRECT_ANSWER_2))
-            })
             .into_any_element()
     };
-    let stats = if results_hidden {
-        String::new()
-    } else if option.voter_count > 0 {
-        format!(
-            "{}% · {} {}",
-            option.vote_percentage,
-            option.voter_count,
-            if option.voter_count == 1 {
-                "vote"
-            } else {
-                "votes"
+    let thumb = media
+        .thumb(index)
+        .map(|thumb| option_thumb(chat_id, message_id, index, thumb, cx));
+    let text = div()
+        .flex()
+        .when(rtl, |this| this.flex_row_reverse())
+        .items_center()
+        .gap_2()
+        .text_sm()
+        .child(div().flex_1().min_w_0().child(label))
+        .children(thumb);
+    let lead = div()
+        .flex()
+        .flex_col()
+        .flex_none()
+        .w(LEAD_WIDTH)
+        .map(|this| match state {
+            PollRow::Choice { selected } => this
+                .when(rtl, |this| this.items_end())
+                .pt(px(1.))
+                .child(choice_mark(selected, multiple, ink)),
+            PollRow::Result { percent, mark, .. } => this
+                .justify_between()
+                .when(!rtl, |this| this.items_end())
+                .children(result_lead(percent, mark, multiple, ink)),
+        });
+    let content = div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .min_w_0()
+        .child(text)
+        .when_some(
+            match state {
+                PollRow::Result { fill, mark, .. } => Some((fill, mark)),
+                PollRow::Choice { .. } => None,
             },
-        )
-    } else {
-        format!("{}%", option.vote_percentage)
-    };
+            |this, (fill, mark)| this.child(result_bar(fill, ink.mark(mark), rtl)),
+        );
     let mut row = div()
         .id(("poll-option", message_id.0 as u64 * 64 + index as u64))
         .flex()
-        .flex_col()
-        .gap_0p5()
-        .px_3()
-        .py_1p5()
+        .when(rtl, |this| this.flex_row_reverse())
+        .gap(LEAD_GAP)
+        .mx(px(-6.))
+        .px(px(6.))
+        .py(px(5.))
         .rounded_md()
-        .border_1()
-        .border_color(if chosen { accent() } else { border() })
-        .bg(bg_canvas())
-        .child({
-            let label = div()
-                .text_sm()
-                .text_color(if quiz_correct { success() } else { text_menu() })
-                .flex_1()
-                .min_w_0()
-                .child(label_text);
-            let stats = div().text_sm().text_color(text_muted()).child(stats);
-            let thumb = media
-                .thumb(index)
-                .map(|thumb| option_thumb(chat_id, message_id, index, thumb, cx));
-            if media.any_thumb() {
-                // tdesktop's layout once an option has a picture: the
-                // percentage first, the picture at the end.
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(stats.flex_none().min_w(px(56.)))
-                    .child(label)
-                    .children(thumb)
-            } else {
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(label)
-                    .child(stats)
-            }
-        })
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .h(px(6.))
-                .rounded_md()
-                .overflow_hidden()
-                .bg(bg_deep())
-                .child(
-                    div()
-                        .flex_grow(fill)
-                        .bg(if chosen { accent_strong() } else { border() }),
-                )
-                .child(div().flex_grow(1.0 - fill)),
-        );
+        .child(lead)
+        .child(content);
+    if correct {
+        row = row.role(gpui_kit::Role::Label).aria_label(tr_with(
+            keys::Q_MEDIA_CORRECT_ANSWER,
+            &[("option_label", &option.text)],
+        ));
+    }
     // A right-press notes which option it is over; the message menu opened
     // by the bubble behind it then offers the option's own rows.
     let option_id = option.id.clone();
@@ -323,7 +438,7 @@ pub(super) fn poll_option_row(
             );
         }),
     );
-    if votable {
+    if poll.can_vote() {
         row = row
             .role(gpui_kit::Role::Button)
             .aria_label(tr_with(

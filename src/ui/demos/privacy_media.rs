@@ -122,6 +122,7 @@ impl QuillApp {
         let view = std::env::var("QUILL_DEMO_SHOWCASE").unwrap_or_default();
         let scene = match view.as_str() {
             "poll" => sc::Scene::Lunch,
+            "poll-gallery" => sc::Scene::PollGallery,
             "player" | "accent" => sc::Scene::Maya,
             "channel" => sc::Scene::Channel,
             _ => sc::Scene::Hikers,

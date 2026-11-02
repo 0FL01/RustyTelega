@@ -35,7 +35,6 @@
 "lng_close" = "Close";
 "lng_context_copy_link" = "Copy Link";
 "lng_context_pin_msg" = "Pin";
-"lng_context_poll_message_tab" = "Poll";
 "lng_create_bot_button" = "Create";
 "lng_create_bot_name_placeholder" = "Bot Name";
 "lng_create_bot_subtitle" = "{bot} would like to create and manage a chatbot on your behalf.";
@@ -76,6 +75,17 @@
 "lng_mediaview_minutes_ago#other" = "{count} minutes ago";
 "lng_mediaview_today" = "today at {time}";
 "lng_mediaview_yesterday" = "yesterday at {time}";
+"lng_polls_anonymous" = "Anonymous Poll";
+"lng_polls_public" = "Poll";
+"lng_polls_anonymous_quiz" = "Anonymous Quiz";
+"lng_polls_public_quiz" = "Quiz";
+"lng_polls_closed" = "Final results";
+"lng_polls_votes_count#one" = "{count} vote";
+"lng_polls_votes_count#other" = "{count} votes";
+"lng_polls_votes_none" = "No votes";
+"lng_polls_answers_count#one" = "{count} answer";
+"lng_polls_answers_count#other" = "{count} answers";
+"lng_polls_answers_none" = "No answers";
 "lng_polls_add_option_error" = "Could not add the option. Please try again.";
 "lng_polls_create" = "Create poll";
 "lng_polls_create_allow_adding_options" = "Allow Adding Options";
@@ -249,7 +259,6 @@
 "qll_media_confirm_delete" = "Confirm delete";
 "qll_media_confirm_stop_poll" = "confirm stop poll";
 "qll_media_correct_answer" = "{option_label} · correct answer";
-"qll_media_correct_answer_2" = "· correct answer";
 "qll_media_could_not_add_the_tasks" = "could not add the tasks";
 "qll_media_could_not_archive_the_sticker" = "could not archive the sticker set";
 "qll_media_could_not_change_the_bot" = "could not change the bot";
@@ -563,7 +572,6 @@
 "qll_media_public_shares_2" = "Public shares ({forwards_total})";
 "qll_media_public_stories" = "Public stories";
 "qll_media_quill" = "Quill";
-"qll_media_quiz" = "Quiz";
 "qll_media_quiz_explanation" = "Quiz explanation";
 "qll_media_quiz_explanation_optional_200_max" = "Quiz explanation (optional, 200 max)";
 "qll_media_react" = "React…";

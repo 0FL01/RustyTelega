@@ -106,7 +106,7 @@ pub(super) struct SelectableRichText {
 }
 
 /// Highlights and font overrides of a paragraph, as `StyledText` takes them.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(super) struct BidiSource {
     pub(super) highlights: Vec<(Range<usize>, HighlightStyle)>,
     pub(super) font_families: Vec<(Range<usize>, SharedString)>,
