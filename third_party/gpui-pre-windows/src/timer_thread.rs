@@ -176,3 +176,35 @@ impl Drop for SystemResolution {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The timer the thread sleeps on keeps 1 ms waits near 1 ms: twenty in
+    /// a row end far sooner than twenty 15.6 ms system ticks, and none ends
+    /// early.
+    #[test]
+    fn short_waits_are_not_rounded_up_to_the_system_tick() {
+        // SAFETY: no security attributes and no name; the result is checked.
+        let wake = Handle(unsafe { CreateEventW(None, false, false, PCWSTR::null()) }.unwrap());
+        let shared = Shared {
+            state: Mutex::new(TimerState::new()),
+            wake,
+        };
+        let (timer, high_resolution) = waitable_timer().unwrap();
+        let _resolution = (!high_resolution).then(SystemResolution::hold);
+
+        let started = Instant::now();
+        for _ in 0..20 {
+            wait_for(&shared, &timer, Duration::from_millis(1));
+        }
+        let spent = started.elapsed();
+
+        assert!(spent >= Duration::from_millis(20), "{spent:?}");
+        assert!(
+            spent < Duration::from_millis(150),
+            "{spent:?}, high resolution: {high_resolution}"
+        );
+    }
+}

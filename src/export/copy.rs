@@ -157,4 +157,40 @@ mod tests {
         assert_eq!(fs::read(&from).unwrap(), bytes, "the copy stands apart");
         let _ = fs::remove_dir_all(&dir);
     }
+
+    /// Opens `path` the way a viewer or an antivirus scanner may: read
+    /// sharing only, so a rename onto it or away from it fails until the
+    /// handle closes.
+    #[cfg(windows)]
+    fn hold(path: &Path) -> File {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 0x1;
+        fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(path)
+            .unwrap()
+    }
+
+    /// The user still has last week's export of this video open: the new
+    /// copy cannot take its name, the open file keeps its bytes and no
+    /// `.part` is left beside it.
+    #[cfg(windows)]
+    #[test]
+    fn windows_a_copy_onto_a_held_file_fails_and_keeps_that_file() {
+        let dir = crate::scratch::unique_dir("quill-export-copy-held");
+        let from = dir.join("video.mp4");
+        fs::write(&from, vec![3u8; CHUNK + 9]).unwrap();
+        let to = dir.join("copy.mp4");
+        fs::write(&to, b"last week").unwrap();
+        let held = hold(&to);
+
+        let copied = copy_stoppable(&from, &to, &|| false);
+
+        drop(held);
+        assert!(copied.is_err(), "{copied:?}");
+        assert_eq!(fs::read(&to).unwrap(), b"last week");
+        assert!(!part_path(&to).exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
