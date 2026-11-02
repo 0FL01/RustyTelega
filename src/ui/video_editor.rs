@@ -17,7 +17,6 @@
 
 use super::app::QuillApp;
 use super::composer_sends::TrayItem;
-use super::send_box_media_check::MediaCheck;
 use super::shell::{DialogKind, QuillShell};
 use super::video_editor_timeline::EditorMotion;
 use super::video_player::VideoPlayer;
@@ -570,11 +569,7 @@ impl QuillApp {
                     }
                     return;
                 }
-                // Quill wrote it, so Send needs no read of it.
-                self.composer_ui
-                    .send_box
-                    .media_checked
-                    .insert(output.clone(), MediaCheck::AsIs);
+                self.check_tray_videos(cx);
                 if edits.gif && info.has_audio && several {
                     tr(keys::Q_AV_THE_GIF_LEAVES_THE_ALBUM)
                 } else {

@@ -5,7 +5,7 @@
 use super::app::QuillApp;
 use super::composer_sends::{SendSlot, TrayItem};
 use super::photo_editor::{EditorPurpose, PhotoEditor};
-use super::send_box_media_check::MediaCheck;
+use super::send_box_media_check::check_photo;
 use crate::ui::status_note::StatusNote;
 use gpui_kit::*;
 use quill::lang::{keys, tr};
@@ -212,11 +212,9 @@ impl QuillApp {
                 found.unwrap_or_default()
             }
             (found, Some(saved)) => {
-                // Quill wrote it: a held Send goes without another read.
-                self.composer_ui
-                    .send_box
-                    .media_checked
-                    .insert(saved, MediaCheck::AsIs);
+                // A PNG: only its header is read, and a held Send goes now.
+                let check = check_photo(&saved);
+                self.composer_ui.send_box.media_checked.insert(saved, check);
                 found.unwrap_or_default()
             }
         }

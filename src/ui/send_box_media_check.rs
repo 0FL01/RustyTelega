@@ -141,7 +141,7 @@ fn check_video(path: &Path) -> MediaCheck {
 
 /// tdesktop `CheckForImage` and `ValidPhotoForAlbum`: a picture that decodes,
 /// is at most 64 MiB, is not animated, and is not too narrow.
-fn check_photo(path: &Path) -> MediaCheck {
+pub(super) fn check_photo(path: &Path) -> MediaCheck {
     let too_big = std::fs::metadata(path).map_or(true, |meta| meta.len() > READ_BYTES_LIMIT as u64);
     if too_big || is_animated_webp(path) {
         return MediaCheck::FileOnly;
