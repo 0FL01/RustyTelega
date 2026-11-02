@@ -113,7 +113,13 @@ impl QuillApp {
                 let head = panel_sticker_head(item.file_id);
                 self.sticker_image(item.file_id, item.format, head, STICKER_CELL - 8., cx)
             })
-            .flatten();
+            .flatten()
+            // TDLib may send no thumbnail: the sticker's own first frame.
+            .or_else(|| {
+                item.display_file_id().is_none().then(|| {
+                    self.sticker_first_frame(item.file_id, item.format, STICKER_CELL - 8., cx)
+                })?
+            });
         let still = self.panel_still(&item);
         let source = animated
             .map(ImageSource::Render)

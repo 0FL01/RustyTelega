@@ -172,6 +172,48 @@ fn choosing_a_category_lists_its_stickers_and_back_returns(cx: &mut TestAppConte
     });
 }
 
+/// TDLib may send an animated sticker with no thumbnail: the tile loads
+/// the sticker for its first frame. One with a thumbnail needs no clip until
+/// the pointer is over it.
+#[gpui_kit::test]
+fn an_animated_sticker_with_no_thumbnail_shows_its_first_frame(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    let (bare, stilled) = (61, 62);
+    app.update(vcx, |app, _| {
+        for file in [bare, stilled] {
+            app.playback.stickers.set_fixture(
+                file,
+                Arc::new(|edge| quill::sticker_playback::player::DecodedFrames {
+                    frames: vec![vec![1; (edge as usize).pow(2) * 4]],
+                    fps: 30.0,
+                }),
+            );
+        }
+        seed(app, false);
+        let animated = |file| StickerItem {
+            format: StickerFormat::Tgs,
+            ..sticker(file, false)
+        };
+        let session = app.demo_session.as_mut().expect("demo session");
+        session.stickers.stickers.found_stickers = vec![
+            animated(bare),
+            StickerItem {
+                thumb_file_id: Some(FileId(41)),
+                ..animated(stilled)
+            },
+        ];
+    });
+    open_stickers(&app, vcx);
+    app.update(vcx, |app, cx| app.choose_sticker_category(Some(0), cx));
+    frames(vcx);
+    app.read_with(vcx, |app, _| {
+        assert_eq!(found_cells(app), 2);
+        assert_eq!(app.playback.stickers.clips_of(bare), 1);
+        assert_eq!(app.playback.stickers.clips_of(stilled), 0);
+    });
+}
+
 #[gpui_kit::test]
 fn premium_stickers_are_hidden_where_premium_cannot_be_bought(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
