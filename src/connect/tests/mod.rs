@@ -22,6 +22,7 @@ mod calls;
 mod chat_appearance;
 mod chat_list;
 mod chat_state;
+mod chat_wallpaper;
 mod chat_window;
 mod closing;
 mod composer_suggestions_idle;

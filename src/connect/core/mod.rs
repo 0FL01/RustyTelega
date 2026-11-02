@@ -202,6 +202,10 @@ impl<S: JsonSender> ConnectDriver<S> {
                 // The results panel's images: nothing else asks for them,
                 // so without this they waited for an unrelated update.
                 | EnvelopePayload::Bots(BotsPayload::InlineQueryResults(_))
+                // The open chat's wallpaper: nothing else asks for its file.
+                | EnvelopePayload::Chats(ChatsPayload::UpdateChatBackground { .. })
+                | EnvelopePayload::Chats(ChatsPayload::UpdateChatTheme { .. })
+                | EnvelopePayload::Chats(ChatsPayload::UpdateEmojiChatThemes(_))
             );
         let emoji_neutral = batch::adds_no_custom_emoji(&owned.envelope.payload)
             && !self.stops_waiting_emoji_file(&owned.envelope.payload);

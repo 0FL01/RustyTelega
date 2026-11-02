@@ -610,6 +610,41 @@ fn installed_backgrounds_and_default_updates_are_cached() {
 }
 
 #[test]
+fn a_theme_named_wallpaper_shows_the_themes_picture_with_the_chats_dimming() {
+    let (mut session, sink) = session();
+    let seq = AtomicU64::new(0);
+    let photo = |id: i64, file: i64| {
+        format!(
+            r#"{{"@type":"background","id":"{id}","name":"p","document":{{"@type":"document","document":{{"@type":"file","id":{file},"size":9}}}},"type":{{"@type":"backgroundTypeWallpaper"}}}}"#
+        )
+    };
+    apply_json(
+        &mut session,
+        &seq,
+        &sink,
+        &format!(
+            r#"{{"@type":"updateEmojiChatThemes","chat_themes":[{{"@type":"emojiChatTheme","name":"T","light_settings":{{"@type":"themeSettings","accent_color":255,"background":{}}},"dark_settings":{{"@type":"themeSettings","accent_color":255,"background":{}}}}}]}}"#,
+            photo(1, 31),
+            photo(2, 32),
+        ),
+    );
+    apply_json(
+        &mut session,
+        &seq,
+        &sink,
+        r#"{"@type":"updateChatBackground","chat_id":5,"background":{"@type":"chatBackground","dark_theme_dimming":30,"background":{"@type":"background","id":"9","name":"","type":{"@type":"backgroundTypeChatTheme","theme_name":"T"}}}}"#,
+    );
+    let (shown, dimming) = session.chat_wallpaper(5, true).unwrap();
+    assert_eq!((shown.id, dimming), (2, 30));
+    assert_eq!(session.chat_wallpaper(5, false).unwrap().0.id, 1);
+    assert_eq!(
+        session.chat_look_file_ids(5, false),
+        [FileId(31), FileId(32)],
+    );
+    assert!(session.chat_look_file_ids(6, false).is_empty());
+}
+
+#[test]
 fn chat_wallpaper_prefers_the_chats_own_over_the_theme() {
     let (mut session, sink) = session();
     let seq = AtomicU64::new(0);
