@@ -1,0 +1,2 @@
+# Channel direct messages as a writer, and the channel bar layout
+parity:chrome-channel-direct-messages

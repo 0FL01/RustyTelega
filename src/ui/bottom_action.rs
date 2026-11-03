@@ -44,6 +44,7 @@ impl QuillApp {
                 broadcast: chat.is_channel(),
                 membership: chat.my_member_status,
                 join_by_request: self.chat_join_by_request(chat.id),
+                direct_messages: session.direct_messages_role(chat.id).is_some(),
             }),
             muted: chat.is_muted(),
             premium_required: session.send_gate(chat.id) == SendGate::PremiumRequired,

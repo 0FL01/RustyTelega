@@ -56,7 +56,10 @@ impl QuillApp {
         // Phase 6: the header title opens the info panel for private chats
         // (user profile) and supergroups/channels (group info). Other chat
         // kinds keep the plain title.
+        // A channel's direct messages show the channel's profile, as
+        // tdesktop draws the monoforum with its broadcast's name and status.
         let info_target = actions.and_then(|(chat_id, _, _, _)| {
+            let chat_id = self.direct_messages_channel().unwrap_or(chat_id);
             self.session().and_then(|s| s.chat_info_target(chat_id))
         });
         // A comment / reply thread titles the header "Discussion" with the
@@ -181,6 +184,9 @@ impl QuillApp {
             (!meta.is_empty()).then(|| meta.join(" · "))
         });
         let secret_line = self.secret_pending_subtitle(chat_id);
+        // A channel's direct messages read "Direct messages" under the
+        // channel's name, with its badges and a way back to it.
+        let direct_messages = self.direct_messages_channel().is_some();
         // The conversation's animation layer ticks the dots on its own.
         if typing && super::anim_layer::current().is_none() {
             self.request_animation_tick(super::activity_indicator::FPS, cx);
@@ -205,6 +211,11 @@ impl QuillApp {
             (Some(line), false)
         } else if let Some((_, line)) = topic_header.filter(|(_, line)| !line.is_empty()) {
             (Some(line), false)
+        } else if direct_messages {
+            (
+                Some(super::direct_messages_chat::direct_messages_line()),
+                false,
+            )
         } else if let Some(line) = secret_line {
             (Some(line), true)
         } else if let Some((line, online)) = presence {
@@ -235,7 +246,10 @@ impl QuillApp {
             actions
                 .and_then(|(chat_id, _, _, _)| {
                     let session = self.session()?;
-                    let chat = session.chats.get(&chat_id.0)?;
+                    let chat = self
+                        .direct_messages_channel()
+                        .and_then(|channel| session.chats.get(&channel.0))
+                        .or_else(|| session.chats.get(&chat_id.0))?;
                     Some(session.chat_header_badges(chat))
                 })
                 .unwrap_or_default()
@@ -291,7 +305,10 @@ impl QuillApp {
                         this.child(self.saved_back_button(cx))
                     })
                     .when(thread_header.is_none() && saved_header.is_none(), |this| {
-                        this.children(self.chat_back_button(cx))
+                        this.children(
+                            self.direct_messages_back_button(cx)
+                                .or_else(|| self.chat_back_button(cx)),
+                        )
                     })
                     .child(identity),
             )

@@ -4,6 +4,11 @@ use super::*;
 use crate::ui::status_note::StatusNote;
 use quill::lang::{keys, tr, tr_with};
 
+/// The channel bar's height: one composer row.
+const CHANNEL_BAR_HEIGHT: f32 = 52.;
+/// The width of each side of the channel bar around its action.
+const CHANNEL_BAR_SIDE: f32 = 96.;
+
 impl QuillApp {
     /// kit Phase 2 (redo): group confirm hosted in a kit `Dialog` via
     /// `window.open_dialog`. Esc / backdrop / ✕ clear state via `on_close`.
@@ -341,20 +346,39 @@ impl QuillApp {
             .items_center()
             .justify_center()
             .gap_3();
-        // tdesktop's direct-message button at the bar's left edge opens the
-        // channel's direct messages group.
-        let direct = session.chat_direct_messages_chat(open);
-        let direct_button = |cx: &mut Context<Self>| {
-            direct.map(|direct| {
-                Button::new("channel-direct-messages")
-                    .icon(gpui_kit::assets::IconName::MessageCircle)
-                    .ghost()
-                    .tooltip(tr(keys::MANAGE_MONOFORUM))
-                    .accessibility_label(tr(keys::MANAGE_MONOFORUM))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.select_listed_chat(direct, window, cx);
-                    }))
-            })
+        // tdesktop's channel bar: the action fills the bar between the
+        // direct messages button on its left edge and Discuss on its right
+        // (`HistoryWidget::setupDirectMessageButton`). The two sides are as
+        // wide, so the action stays centred.
+        let direct = session.chat_direct_messages_chat(open).map(|direct| {
+            Button::new("channel-direct-messages")
+                .icon(gpui_kit::assets::IconName::MessagesSquare)
+                .ghost()
+                .tooltip(tr(keys::PROFILE_DIRECT_MESSAGES))
+                .accessibility_label(tr(keys::PROFILE_DIRECT_MESSAGES))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.select_listed_chat(direct, window, cx);
+                }))
+        });
+        let bar = |action: AnyElement, right: Option<Button>| {
+            let side = || div().w(px(CHANNEL_BAR_SIDE)).h_full().flex().items_center();
+            div()
+                .h(px(CHANNEL_BAR_HEIGHT))
+                .border_t_1()
+                .border_color(cx.theme().border)
+                .flex()
+                .items_center()
+                .child(side().pl_2().children(direct))
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(action),
+                )
+                .child(side().justify_end().pr_2().children(right))
         };
         match status {
             None => Some(
@@ -369,63 +393,50 @@ impl QuillApp {
             ),
             // Not subscribed: one clear action.
             Some(ChannelMemberStatus::Left) => Some(
-                footer
-                    .children(direct_button(cx))
-                    .child(
-                        Button::new("channel-join")
-                            .label(tr(keys::PROFILE_JOIN_CHANNEL))
-                            .primary()
-                            .w_full()
-                            .max_w(px(360.))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.join_channel(open, cx);
-                            })),
-                    )
-                    .into_any_element(),
+                bar(
+                    Button::new("channel-join")
+                        .label(tr(keys::PROFILE_JOIN_CHANNEL))
+                        .primary()
+                        .w_full()
+                        .max_w(px(360.))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.join_channel(open, cx);
+                        }))
+                        .into_any_element(),
+                    None,
+                )
+                .into_any_element(),
             ),
             // Subscribers can't post: the bar mutes / unmutes the channel.
             // Leaving lives in the info panel (with confirmation).
             Some(ChannelMemberStatus::Member) => {
-                // "Discuss" opens the linked discussion group, next to the
-                // mute toggle.
-                let discussion = session.discussion_chat_id(open);
-                Some(
-                    footer
-                        .children(direct_button(cx))
-                        .child(
-                            Button::new("channel-mute-toggle")
-                                .label(
-                                    quill::chat_bottom_bar::BottomBar::MuteUnmute { muted }.label(),
-                                )
-                                .ghost()
-                                .w_full()
-                                .max_w(px(360.))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.apply_chat_mute(
-                                        open,
-                                        if muted {
-                                            0
-                                        } else {
-                                            quill::telegram::envelope::MUTE_FOREVER
-                                        },
-                                        cx,
-                                    );
-                                })),
-                        )
-                        .when_some(discussion, |this, discussion| {
-                            this.child(
-                                Button::new("channel-discuss")
-                                    .label(tr(keys::Q_PEOPLE_DISCUSS))
-                                    .ghost()
-                                    .tooltip(tr(keys::Q_PEOPLE_OPEN_THE_DISCUSSION_GROUP))
-                                    .accessibility_label(tr(keys::Q_PEOPLE_DISCUSS))
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.select_listed_chat(ChatId(discussion), window, cx);
-                                    })),
-                            )
-                        })
-                        .into_any_element(),
-                )
+                let discuss = session.discussion_chat_id(open).map(|discussion| {
+                    Button::new("channel-discuss")
+                        .label(tr(keys::Q_PEOPLE_DISCUSS))
+                        .ghost()
+                        .tooltip(tr(keys::Q_PEOPLE_OPEN_THE_DISCUSSION_GROUP))
+                        .accessibility_label(tr(keys::Q_PEOPLE_DISCUSS))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.select_listed_chat(ChatId(discussion), window, cx);
+                        }))
+                });
+                let mute = Button::new("channel-mute-toggle")
+                    .label(quill::chat_bottom_bar::BottomBar::MuteUnmute { muted }.label())
+                    .ghost()
+                    .size_full()
+                    .rounded_none()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.apply_chat_mute(
+                            open,
+                            if muted {
+                                0
+                            } else {
+                                quill::telegram::envelope::MUTE_FOREVER
+                            },
+                            cx,
+                        );
+                    }));
+                Some(bar(mute.into_any_element(), discuss).into_any_element())
             }
             Some(ChannelMemberStatus::Administrator) => {
                 let can_post = chat.channel_admin_can_post();

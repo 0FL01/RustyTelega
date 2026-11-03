@@ -96,6 +96,10 @@
 "lng_rights_chat_add_members" = "Add members";
 "lng_saved_messages" = "Saved Messages";
 "lng_saved_music_added" = "Audio added to your Profile.";
+"lng_send_charges_stars_channel" = "{channel} charges {amount} per message to its admin.";
+"lng_send_free_channel" = "Send a direct message to the administrator of {channel}.";
+"lng_send_charges_stars_text" = "{user} charges {amount} for each message.";
+"lng_send_charges_stars_go" = "Buy Stars";
 "lng_send_anonymous_ph" = "Send anonymously…";
 "lng_search_filter_all" = "All chats";
 "lng_search_filter_from_archive" = "From archive";

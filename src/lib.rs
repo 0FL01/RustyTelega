@@ -127,6 +127,7 @@ pub mod live_story;
 pub mod local_path;
 pub mod local_time;
 pub mod location_picker;
+pub mod locked_intro;
 pub mod locks;
 pub mod main_menu;
 pub mod marketplace;
