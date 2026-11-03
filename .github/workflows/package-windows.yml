@@ -284,10 +284,44 @@ jobs:
           bash scripts/check-ffmpeg-tools.sh "$(cygpath -u "$RUNNER_TEMP")/extract/quill-windows-x86_64" \
             --expect-encoder h264_mf --expect-encoder mpeg4 --expect-encoder aac \
             --expect-encoder mjpeg --expect-encoder png
+      # The setup.exe the website and winget offer: a per-user Inno Setup
+      # install of the same folder (packaging/windows/quill.iss). Installed,
+      # run and uninstalled silently here, the way winget drives it.
+      - name: installer
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y | Out-Null }
+          . scripts/windows-common.ps1
+          $pkg = (Resolve-Path dist/windows/quill-windows-x86_64).Path
+          $version = ((Invoke-QuillExe (Join-Path $pkg 'quill.exe') @('--version')) -replace '^Quill ', '').Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "unexpected version '$version'" }
+          & $iscc /Q "/DVersion=$version" "/DPackage=$pkg" "/DOutputDir=$((Resolve-Path dist/windows).Path)" packaging/windows/quill.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc exited with $LASTEXITCODE" }
+          $setup = 'dist/windows/quill-windows-x86_64-setup.exe'
+          (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant() + '  quill-windows-x86_64-setup.exe' |
+            Set-Content -NoNewline -Encoding ascii "$setup.sha256"
+          $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "setup exited with $($p.ExitCode)" }
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\Quill'
+          $v = Invoke-QuillExe (Join-Path $app 'quill.exe') @('--version')
+          if ($v -ne "Quill $version") { throw "installed --version: $v" }
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Quill_is1'
+          $entry = Get-ItemProperty $key
+          if ($entry.DisplayVersion -ne $version) { throw "uninstall entry version: $($entry.DisplayVersion)" }
+          if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Programs')) 'Quill.lnk'))) { throw 'no Start menu shortcut' }
+          $un = Start-Process -FilePath (Join-Path $app 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($un.ExitCode -ne 0) { throw "uninstall exited with $($un.ExitCode)" }
+          for ($i = 0; $i -lt 20 -and (Test-Path $app); $i++) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path $app) { throw "uninstall left $app" }
+          if (Test-Path $key) { throw 'uninstall left its Settings > Apps entry' }
+          Get-Item $setup | Format-Table Name, Length
       - uses: actions/upload-artifact@v7
         with:
           name: quill-windows-x86_64
           path: |
             dist/windows/quill-windows-x86_64.zip
             dist/windows/quill-windows-x86_64.zip.sha256
+            dist/windows/quill-windows-x86_64-setup.exe
+            dist/windows/quill-windows-x86_64-setup.exe.sha256
           if-no-files-found: error

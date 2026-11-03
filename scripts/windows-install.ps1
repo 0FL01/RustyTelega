@@ -183,6 +183,11 @@ Remove-Item '$uninstallKey' -Recurse -Force
 exit 0
 "@
         $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($uninstall))
+        # The setup.exe (packaging/windows/quill.iss) installs the same folder
+        # with its own entry; when it is there, it stays the only one.
+        $entryWanted = -not (Test-Path -LiteralPath "$uninstallKey`_is1")
+    }
+    if ($env:QUILL_NO_SHORTCUT -ne '1' -and $entryWanted) {
         New-Item -Path $uninstallKey -Force | Out-Null
         $entry = @{
             DisplayName     = 'Quill'

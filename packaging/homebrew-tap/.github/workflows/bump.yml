@@ -1,0 +1,41 @@
+name: bump
+# Follows Quill's releases: every few hours (and on demand) the cask is pointed
+# at the latest published release, checked with brew audit, and committed.
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: update the cask
+        id: bump
+        run: echo "version=$(python3 scripts/bump-quill.py)" >> "$GITHUB_OUTPUT"
+      - name: audit
+        if: steps.bump.outputs.version != ''
+        run: |
+          brew tap-new --no-git local/check >/dev/null
+          brew trust local/check
+          mkdir -p "$(brew --repository local/check)/Casks"
+          cp Casks/quill-app.rb "$(brew --repository local/check)/Casks/"
+          brew audit --cask --online local/check/quill-app
+          brew style "$(brew --repository local/check)/Casks/quill-app.rb"
+      - name: commit
+        if: steps.bump.outputs.version != ''
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "quill-app $VERSION"
+          git push

@@ -1,0 +1,40 @@
+{
+    "version": "2026.1103.4940",
+    "description": "Unofficial Telegram client",
+    "homepage": "https://shinycake.github.io/quill/",
+    "license": "MIT",
+    "notes": "Quill is not affiliated with, endorsed by, or sponsored by Telegram. Your accounts are kept in %APPDATA%, outside the Scoop folder.",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/shinycake/quill/releases/download/v2026.1103.4940/quill-windows-x86_64.zip",
+            "hash": "438a1a8e07ee4d00781f178a1942131a9f8a365e04d633810dc9f7b6c7065934",
+            "extract_dir": "quill-windows-x86_64"
+        }
+    },
+    "bin": [
+        [
+            "quill-cli.exe",
+            "quill"
+        ]
+    ],
+    "shortcuts": [
+        [
+            "quill.exe",
+            "Quill"
+        ]
+    ],
+    "pre_uninstall": "if (Get-Process -Name quill -ErrorAction SilentlyContinue | Where-Object { $_.Path -like \"$dir\\*\" }) { Start-Process \"$dir\\quill.exe\" '--quit' -Wait -WindowStyle Hidden }",
+    "checkver": {
+        "github": "https://github.com/shinycake/quill"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/shinycake/quill/releases/download/v$version/quill-windows-x86_64.zip",
+                "hash": {
+                    "url": "$baseurl/SHA256SUMS.txt"
+                }
+            }
+        }
+    }
+}

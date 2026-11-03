@@ -3,9 +3,11 @@
 // Release assets the pipeline publishes (see .github/workflows/release.yml).
 // Each platform's card and the hero button open its install instructions.
 const PLATFORMS = [
-  { id: "mac", label: "macOS", detail: "Apple Silicon · macOS 14+", match: /^quill-macos-aarch64\.zip$/, panel: "mac-install" },
-  { id: "win", label: "Windows", detail: "x64 · Windows 10+", match: /^quill-windows-x86_64\.zip$/, panel: "windows-install" },
-  { id: "linux", label: "Linux", detail: "x86_64 or arm64 · glibc", match: /^quill-linux-x86_64-bundle\.tar\.gz$/, panel: "linux-install" },
+  // The first name the release has is the one the card shows: the disk image
+  // and the installer arrived after the zips (2026-11).
+  { id: "mac", label: "macOS", detail: "Apple Silicon · macOS 14+", assets: ["quill-macos-aarch64.dmg", "quill-macos-aarch64.zip"], panel: "mac-install" },
+  { id: "win", label: "Windows", detail: "x64 · Windows 10+", assets: ["quill-windows-x86_64-setup.exe", "quill-windows-x86_64.zip"], panel: "windows-install" },
+  { id: "linux", label: "Linux", detail: "x86_64 or arm64 · glibc", assets: ["quill-linux-x86_64-bundle.tar.gz"], panel: "linux-install" },
 ];
 
 function el(tag, attrs = {}, ...children) {
@@ -63,7 +65,7 @@ async function renderRelease() {
   const grid = document.getElementById("platforms");
   let currentAsset = null;
   for (const p of PLATFORMS) {
-    const asset = release.assets.find((a) => p.match.test(a.name));
+    const asset = p.assets.map((name) => release.assets.find((a) => a.name === name)).find(Boolean);
     if (!asset) continue;
     if (p.id === current) currentAsset = { p, asset };
     const card = el(
@@ -77,6 +79,11 @@ async function renderRelease() {
     grid.append(card);
   }
   if (!grid.children.length) return;
+
+  // Install cards for files only newer releases have.
+  const names = new Set(release.assets.map((a) => a.name));
+  for (const card of document.querySelectorAll("[data-asset]")) card.hidden = !names.has(card.dataset.asset);
+  for (const card of document.querySelectorAll("[data-asset-missing]")) card.hidden = names.has(card.dataset.assetMissing);
 
   document.getElementById("no-release").hidden = true;
   grid.hidden = false;

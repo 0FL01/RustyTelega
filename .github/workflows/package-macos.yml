@@ -221,22 +221,9 @@ jobs:
             echo "::error::Quill.app is signed with Developer ID but the MACOS_NOTARY_* secrets are not set"
             exit 1
           fi
-          key="$RUNNER_TEMP/notary.p8"
-          printf '%s' "$NOTARY_KEY" | base64 --decode > "$key"
           ditto -c -k --keepParent dist/Quill.app "$RUNNER_TEMP/notarize.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
-            --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
-            --wait --timeout 1h --output-format json | tee "$RUNNER_TEMP/notary.json"
-          rm -f "$key"
-          id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/notary.json")"
-          status="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$RUNNER_TEMP/notary.json")"
-          if [ "$status" != Accepted ]; then
-            printf '%s' "$NOTARY_KEY" | base64 --decode > "$key"
-            xcrun notarytool log "$id" --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
-            rm -f "$key"
-            echo "::error::notarization $status"
-            exit 1
-          fi
+          bash scripts/macos-notarize.sh "$RUNNER_TEMP/notarize.zip"
+          echo "QUILL_NOTARIZE=1" >> "$GITHUB_ENV"
           xcrun stapler staple dist/Quill.app
           xcrun stapler validate dist/Quill.app
           spctl --assess --type execute --verbose=4 dist/Quill.app
@@ -260,6 +247,36 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent dist/Quill.app dist/macos/quill-macos-aarch64.zip
           (cd dist/macos && shasum -a 256 quill-macos-aarch64.zip > quill-macos-aarch64.zip.sha256)
           du -h dist/macos/quill-macos-aarch64.zip
+      # The drag-to-Applications disk image the website offers to Mac users
+      # (the zip stays: the in-app updater and the install script use it).
+      # Built from the stapled app, then signed, notarized and stapled itself,
+      # so Gatekeeper opens it offline. docs/decisions/distribution-channels.md
+      - name: disk image
+        env:
+          NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmgbuild"
+          "$RUNNER_TEMP/dmgbuild/bin/pip" install --quiet dmgbuild==1.6.7
+          dmg=dist/macos/quill-macos-aarch64.dmg
+          DMGBUILD="$RUNNER_TEMP/dmgbuild/bin/dmgbuild" bash scripts/macos-dmg.sh dist/Quill.app "$dmg"
+          if [ "${QUILL_NOTARIZE:-}" = 1 ]; then
+            bash scripts/macos-notarize.sh "$dmg"
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+            spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg"
+          fi
+          (cd dist/macos && shasum -a 256 quill-macos-aarch64.dmg > quill-macos-aarch64.dmg.sha256)
+          # The image holds the same app and an Applications link, laid out.
+          mnt="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+          test -L "$mnt/Applications"
+          test -f "$mnt/.background.tiff"
+          test -f "$mnt/.DS_Store"
+          codesign --verify --deep --strict "$mnt/Quill.app"
+          "$mnt/Quill.app/Contents/MacOS/quill" --version
+          hdiutil detach "$mnt" >/dev/null
       - name: smoke the extracted zip
         run: |
           mkdir -p "$RUNNER_TEMP/extract"
@@ -290,4 +307,6 @@ jobs:
           path: |
             dist/macos/quill-macos-aarch64.zip
             dist/macos/quill-macos-aarch64.zip.sha256
+            dist/macos/quill-macos-aarch64.dmg
+            dist/macos/quill-macos-aarch64.dmg.sha256
           if-no-files-found: error

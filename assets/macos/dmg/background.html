@@ -1,0 +1,84 @@
+<!doctype html>
+<!-- Source of the DMG window background (660x400 points). Render with
+     scripts/macos-dmg-background.sh; the PNGs it writes are committed. Colors
+     are the landing page's (site/styles.css) and the icon's blue. Finder draws
+     the icon labels black in light mode and white in dark mode, so the tile
+     under each label is a mid-tone blue that both read on. -->
+<html><head><meta charset="utf-8"><style>
+@font-face { font-family: "Quill Headline"; src: url("../../../site/fonts/headline.woff2") format("woff2"); font-weight: 750; }
+html, body { margin: 0; width: 660px; height: 400px; overflow: hidden; background: #0b0f17; }
+.title { position: absolute; left: 0; right: 0; top: 36px; text-align: center;
+  font: 750 22px/1.2 "Quill Headline", -apple-system, "SF Pro Display", sans-serif; letter-spacing: -0.015em; color: #e8edf6; }
+.title span { color: #5fc7fb; }
+.sub { position: absolute; left: 0; right: 0; top: 68px; text-align: center;
+  font: 500 13px/1.3 -apple-system, "SF Pro Text", sans-serif; color: #9aa6bb; }
+.foot { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center;
+  font: 500 11px/1.3 -apple-system, "SF Pro Text", sans-serif; color: #8792a6; }
+svg { position: absolute; inset: 0; }
+</style></head><body>
+<svg width="660" height="400" viewBox="0 0 660 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b0f17"/><stop offset="1" stop-color="#101a2e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#1f86cf" stop-opacity="0.95"/>
+      <stop offset="0.45" stop-color="#1673b6" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#0a6fb8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="top" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#5fc7fb" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#5fc7fb" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5fc7fb" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#5fc7fb" stop-opacity="0.95"/>
+    </linearGradient>
+  </defs>
+  <rect width="660" height="400" fill="url(#base)"/>
+  <ellipse cx="330" cy="40" rx="330" ry="150" fill="url(#top)"/>
+  <!-- The icon's swooshes. -->
+  <g fill="none" stroke="url(#wave)" stroke-width="1.2">
+    <path d="M -20 300 C 140 230, 260 380, 420 300 S 620 230, 690 270"/>
+    <path d="M -20 330 C 160 270, 270 410, 440 330 S 630 270, 690 300" stroke-opacity="0.7"/>
+    <path d="M -20 150 C 120 110, 300 190, 470 130 S 640 110, 690 140" stroke-opacity="0.5"/>
+  </g>
+  <!-- A ribbon in the icon's blue runs under both labels, like the icon's
+       swooshes. Finder draws icon labels black or white depending on the
+       macOS version and appearance; the ribbon is a mid-tone that both read
+       on, while the icons sit on the dark ground. -->
+  <defs>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a9fe0"/>
+      <stop offset="0.5" stop-color="#2386cc"/>
+      <stop offset="1" stop-color="#1b74b8"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.14" stop-color="#fff" stop-opacity="1"/>
+      <stop offset="0.86" stop-color="#fff" stop-opacity="1"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="fadeMask"><rect width="660" height="400" fill="url(#fade)"/></mask>
+  </defs>
+  <g mask="url(#fadeMask)">
+    <path d="M -10 262 C 60 252, 110 256, 170 257 S 270 250, 330 262 S 420 258, 490 257 S 600 252, 670 262
+             L 670 292 C 600 286, 560 289, 490 289 S 390 296, 330 292 S 240 288, 170 289 S 60 284, -10 292 Z"
+          fill="url(#ribbon)"/>
+    <path d="M -10 262 C 60 252, 110 256, 170 257 S 270 250, 330 262 S 420 258, 490 257 S 600 252, 670 262"
+          fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="1"/>
+    <path d="M -10 292 C 60 284, 170 289, 170 289" fill="none"/>
+  </g>
+  <!-- Quill to Applications. -->
+  <path d="M 268 196 C 304 176, 356 176, 392 196" fill="none" stroke="url(#arrow)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 380 184 L 394 197 L 376 203" fill="none" stroke="#5fc7fb" stroke-opacity="0.95" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+<div class="title">Drag <span>Quill</span> to Applications</div>
+<div class="sub">Then open it from Launchpad or Spotlight.</div>
+<div class="foot">An independent, unofficial Telegram client</div>
+</body></html>
