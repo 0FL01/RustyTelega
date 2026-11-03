@@ -199,8 +199,7 @@ impl QuillApp {
         cx: &mut Context<Self>,
     ) {
         use super::super::keybindings::{
-            apply_custom_bindings, canonical_event_chord, conflict_message, is_modifier_key,
-            keybinding_conflict,
+            apply_custom_bindings, canonical_event_chord, conflict_message, keybinding_conflict,
         };
         use quill::settings::CustomKeybinding;
 
@@ -210,7 +209,7 @@ impl QuillApp {
         let Some(id) = self.settings.keybinding_capture.clone() else {
             return;
         };
-        if is_modifier_key(&keystroke.key) {
+        if keystroke.is_modifier_key() {
             return;
         }
         if keystroke.key == "escape" && !keystroke.modifiers.modified() {

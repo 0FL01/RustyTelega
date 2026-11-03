@@ -3012,8 +3012,7 @@ impl Default for WindowOptions {
             is_movable: true,
             app_owns_titlebar_drag: false,
             inactive_frame_interval: Some(Duration::from_micros(33_333)),
-            // Quill: no cap by default, so video keeps its rate in low power mode.
-            low_power_frame_interval: None,
+            low_power_frame_interval: Some(Duration::from_micros(33_333)),
             thermal_frame_interval: Some(Duration::from_micros(16_667)),
             is_resizable: true,
             is_minimizable: true,

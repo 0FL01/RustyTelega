@@ -915,6 +915,7 @@ pub struct App {
     pub(crate) keyboard_layout_observers: SingleSubscriberSet<Handler>,
     missing_glyph_callback: Rc<MissingGlyphCallbackSlot>,
     pub(crate) thermal_state_observers: SingleSubscriberSet<Handler>,
+    pub(crate) power_mode_observers: SingleSubscriberSet<Handler>,
     pub(crate) display_observers: SingleSubscriberSet<DisplayHandler>,
     /// The connected displays, as of the platform's last display change
     /// notification.
@@ -1069,6 +1070,7 @@ impl App {
                 keyboard_layout_observers: SingleSubscriberSet::new(),
                 missing_glyph_callback: Rc::default(),
                 thermal_state_observers: SingleSubscriberSet::new(),
+                power_mode_observers: SingleSubscriberSet::new(),
                 display_observers: SingleSubscriberSet::new(),
                 displays: read_displays(platform.as_ref()),
                 system_sleep_observers: SingleSubscriberSet::new(),
@@ -1201,10 +1203,24 @@ impl App {
         platform.on_power_mode_change(Box::new({
             let app = Rc::downgrade(&app);
             move || {
-                if let Some(app) = app.upgrade() {
-                    let power_mode = app.borrow().platform.power_mode();
-                    app.borrow_mut().power_mode = power_mode;
-                }
+                let Some(strong) = app.upgrade() else {
+                    return;
+                };
+                // Quill: a platform can report this from a nested message
+                // pump, with the app borrowed, so the change waits its turn.
+                let executor = strong.borrow().foreground_executor.clone();
+                let app = app.clone();
+                executor
+                    .spawn(async move {
+                        if let Some(app) = app.upgrade() {
+                            let cx = &mut app.borrow_mut();
+                            cx.power_mode = cx.platform.power_mode();
+                            cx.power_mode_observers
+                                .clone()
+                                .retain(move |callback| (callback)(cx));
+                        }
+                    })
+                    .detach();
             }
         }));
 
@@ -1306,6 +1322,10 @@ impl App {
         counts.insert(
             "thermal_state_observers",
             self.thermal_state_observers.subscriber_count(),
+        );
+        counts.insert(
+            "power_mode_observers",
+            self.power_mode_observers.subscriber_count(),
         );
         counts.insert(
             "display_observers",
@@ -1835,6 +1855,18 @@ impl App {
         F: 'static + FnMut(&mut App),
     {
         self.thermal_state_observers.insert(Box::new(move |cx| {
+            callback(cx);
+            true
+        }))
+    }
+
+    /// Quill: invokes a handler when the operating system's power mode
+    /// changes.
+    pub fn on_power_mode_change<F>(&self, mut callback: F) -> Subscription
+    where
+        F: 'static + FnMut(&mut App),
+    {
+        self.power_mode_observers.insert(Box::new(move |cx| {
             callback(cx);
             true
         }))

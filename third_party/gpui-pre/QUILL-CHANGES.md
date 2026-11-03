@@ -573,6 +573,7 @@ rendering its view (sweep item X04):
   the follow state changed. The scroll handler still runs on every wheel
   event.
 
-The Quill project also changed it in 2026 so low power mode doesn't cap video
-(`docs/decisions/gpui-kit-0-9-0.md`): `src/platform.rs`'s `WindowOptions` default
-has `low_power_frame_interval: None`, where upstream has 30 fps.
+The Quill project also changed it in 2026 to follow the power mode
+(`docs/decisions/gpui-kit-0-9-0.md`): `src/app.rs` adds `App::on_power_mode_change`,
+and the platform's report is applied in a foreground task, since it can arrive
+with the app borrowed.

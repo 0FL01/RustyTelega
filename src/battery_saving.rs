@@ -7,7 +7,7 @@
 //! platform gives no answer the "Save Power on Low Battery" switch is not
 //! offered and nothing is forced, which is `state() == None` here.
 //!
-//! The probe may block (Linux runs `gdbus`), so callers run it on a
+//! On Linux the probe may block (it runs `gdbus`), so callers run it on a
 //! background thread and hand the answer to [`set_state`].
 #![deny(clippy::indexing_slicing)]
 
@@ -98,31 +98,11 @@ pub fn apply() {
     crate::power_saving::set_force_all(forcing());
 }
 
-/// Ask the platform. May block; run it off the UI thread.
+/// Ask the platform. May block; run it off the UI thread. macOS and Windows
+/// announce the saver through GPUI (`ui::battery_watch`).
+#[cfg(target_os = "linux")]
 pub fn probe() -> Option<bool> {
     probe_native()
-}
-
-#[cfg(all(target_os = "macos", feature = "ui"))]
-fn probe_native() -> Option<bool> {
-    use objc2_foundation::NSProcessInfo;
-    Some(NSProcessInfo::processInfo().isLowPowerModeEnabled())
-}
-
-#[cfg(windows)]
-fn probe_native() -> Option<bool> {
-    use windows_sys::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
-    let mut status = SYSTEM_POWER_STATUS {
-        ACLineStatus: 0,
-        BatteryFlag: 0,
-        BatteryLifePercent: 0,
-        SystemStatusFlag: 0,
-        BatteryLifeTime: 0,
-        BatteryFullLifeTime: 0,
-    };
-    // SAFETY: the pointer references a live local the call fills in.
-    let ok = unsafe { GetSystemPowerStatus(&mut status) } != 0;
-    ok.then_some(status.SystemStatusFlag == 1)
 }
 
 #[cfg(target_os = "linux")]
@@ -140,10 +120,10 @@ fn probe_native() -> Option<bool> {
     })
 }
 
-/// Start following the platform's announcements where it makes them, so
-/// [`probe`] needs no process (Linux, see `battery_signal`).
+/// Start following the platform's announcements, so [`probe`] needs no
+/// process (see `battery_signal`).
+#[cfg(all(target_os = "linux", feature = "ui"))]
 pub fn start_events() {
-    #[cfg(all(target_os = "linux", feature = "ui"))]
     crate::battery_signal::start();
 }
 
@@ -151,11 +131,6 @@ pub fn start_events() {
 #[cfg(all(target_os = "linux", feature = "ui"))]
 pub fn event_driven() -> bool {
     crate::battery_signal::latest().is_some()
-}
-
-#[cfg(not(all(target_os = "linux", feature = "ui")))]
-pub fn event_driven() -> bool {
-    false
 }
 
 /// The value the D-Bus listener read (`announced`), or else ask with
@@ -199,11 +174,6 @@ pub(crate) fn probe_linux(
         ])
         .and_then(|text| parse_active_profile(&text))
     })
-}
-
-#[cfg(not(any(all(target_os = "macos", feature = "ui"), windows, target_os = "linux")))]
-fn probe_native() -> Option<bool> {
-    None
 }
 
 /// `(<true>,)` from `gdbus call`.

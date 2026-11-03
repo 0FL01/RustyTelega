@@ -78,7 +78,7 @@ impl LanguageUi {
             .map(quill::lang::prefs::load_recent)
             .unwrap_or_default();
         if let Some(root) = root.as_deref() {
-            quill::lang::install(quill::lang::prefs::load_cached_snapshot(root));
+            super::language_ui::install_pack(quill::lang::prefs::load_cached_snapshot(root));
         }
         Self {
             open: None,
