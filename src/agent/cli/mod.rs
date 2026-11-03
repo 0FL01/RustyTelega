@@ -47,7 +47,7 @@ pub fn setup_lines() -> SetupLines {
 /// Windows the console helper next to `quill.exe`, which waits and passes
 /// the exit code on.
 fn executables(windows: bool) -> (String, String) {
-    let exe = super::link::executable();
+    let exe = super::link::shown_executable();
     let gui = exe
         .as_ref()
         .map(|path| path.to_string_lossy().into_owned())

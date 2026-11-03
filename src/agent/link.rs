@@ -64,6 +64,13 @@ pub fn executable() -> Option<PathBuf> {
     appimage.or(current)
 }
 
+/// The command to name in setup lines and configs that run outside this
+/// process: inside Flatpak, the launcher Flatpak exports (the sandbox's own
+/// path means nothing outside it), else [`executable`].
+pub fn shown_executable() -> Option<PathBuf> {
+    crate::desktop_app_id::flatpak_launcher().or_else(executable)
+}
+
 /// `$APPIMAGE`, but only when `exe` runs from inside `$APPDIR`, the mount of
 /// that AppImage. Other AppImages (Cursor is one) pass both variables on to
 /// the programs they start, where they name that app, not Quill.

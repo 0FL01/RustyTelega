@@ -110,7 +110,7 @@ fn open_window(owner: Entity<QuillApp>, cx: &mut App) -> Option<AnyWindowHandle>
         }),
         app_owns_titlebar_drag: true,
         window_decorations: window_decorations(),
-        app_id: Some("org.shinycake.quill".into()),
+        app_id: Some(quill::desktop_app_id::get().into()),
         focus: true,
         show: true,
         ..Default::default()

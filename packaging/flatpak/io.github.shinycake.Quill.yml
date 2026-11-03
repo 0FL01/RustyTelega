@@ -1,0 +1,87 @@
+id: io.github.shinycake.Quill
+# GNOME 51 still ships WebKitGTK 4.1 (webkit2gtk-4.1 + libsoup 3), which the
+# quill-webview helper for mini apps links against. CI checks it with ldd.
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: quill
+
+finish-args:
+  # Telegram's servers, link previews, calls.
+  - --share=network
+  # X11 shared memory, needed with fallback-x11.
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  # Sounds, voice notes, music, video soundtracks and the microphone in calls
+  # and voice messages (cpal and the call engine go through PulseAudio).
+  - --socket=pulseaudio
+  # Cameras: video calls and round video messages open /dev/video* directly
+  # (V4L2, through the call engine and ffmpeg). Also covers the GPU (Vulkan).
+  - --device=all
+  # The default folder for files saved from chats. Other places go through the
+  # file chooser portal.
+  - --filesystem=xdg-download
+  # Notifications with inline reply and action buttons, sent straight to the
+  # notification daemon (the portal has no inline reply).
+  - --talk-name=org.freedesktop.Notifications
+  # Tray icon with the unread count (StatusNotifierItem).
+  - --talk-name=org.kde.StatusNotifierWatcher
+  # Idle time, for the passcode's auto-lock and for "away" status: GNOME's
+  # idle monitor, and the ScreenSaver interface on KDE and others.
+  - --talk-name=org.gnome.Mutter.IdleMonitor
+  - --talk-name=org.freedesktop.ScreenSaver
+  # Media keys and the desktop's media controls for voice notes and music (MPRIS).
+  - --own-name=org.mpris.MediaPlayer2.quill
+  # "Send my current location" asks GeoClue, which shows its own permission prompt.
+  - --system-talk-name=org.freedesktop.GeoClue2
+  # Signing in with a passkey on a phone (FIDO hybrid) finds the phone over Bluetooth LE.
+  - --system-talk-name=org.bluez
+
+modules:
+  # The release build of Quill, repackaged: the same relocatable directory the
+  # Linux tarball ships (scripts/linux-package.sh). quill finds lib/, ffmpeg
+  # and quill-webview beside its real path, so /app/bin/quill is a symlink.
+  - name: quill
+    buildsystem: simple
+    build-commands:
+      - install -d "${FLATPAK_DEST}/lib/quill" "${FLATPAK_DEST}/bin"
+      - cp -a quill quill-webview ffmpeg ffprobe lib licenses LICENSE THIRD_PARTY.md THIRD_PARTY_LICENSES.md
+        "${FLATPAK_DEST}/lib/quill/"
+      - ln -s ../lib/quill/quill "${FLATPAK_DEST}/bin/quill"
+      - install -Dm644 share/applications/org.shinycake.quill.desktop "${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.desktop"
+      # StartupWMClass stays org.shinycake.quill: Quill sets its window app_id
+      # to $FLATPAK_ID, which the shell matches to this file by name, and
+      # builds from before that change still match through StartupWMClass.
+      - desktop-file-edit --set-icon="${FLATPAK_ID}" "${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.desktop"
+      # Flathub takes PNG icons up to 512x512.
+      - |
+        for size in 16 22 24 32 48 64 128 256 512; do
+          install -Dm644 "share/icons/hicolor/${size}x${size}/apps/quill.png" \
+            "${FLATPAK_DEST}/share/icons/hicolor/${size}x${size}/apps/${FLATPAK_ID}.png"
+        done
+      - install -Dm644 "${FLATPAK_ID}.metainfo.xml" "${FLATPAK_DEST}/share/metainfo/${FLATPAK_ID}.metainfo.xml"
+    sources:
+      - type: archive
+        only-arches: [x86_64]
+        url: https://github.com/shinycake/quill/releases/download/v2026.1103.4940/quill-linux-x86_64-bundle.tar.gz
+        sha256: 7d8a10663e73bfe8430dfe262e7803a324bbe1d0a8d08563883b2ae5dacf0cec
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/shinycake/quill/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          timestamp-query: .published_at
+          url-query: .assets[] | select(.name == "quill-linux-x86_64-bundle.tar.gz") | .browser_download_url
+          is-main-source: true
+      - type: archive
+        only-arches: [aarch64]
+        url: https://github.com/shinycake/quill/releases/download/v2026.1103.4940/quill-linux-aarch64-bundle.tar.gz
+        sha256: 86e938ed2916cc1fc02c275bbdd997df74fa06d794f0e73756671b639c1b6347
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/shinycake/quill/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          timestamp-query: .published_at
+          url-query: .assets[] | select(.name == "quill-linux-aarch64-bundle.tar.gz") | .browser_download_url
+      - type: file
+        path: io.github.shinycake.Quill.metainfo.xml

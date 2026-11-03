@@ -192,9 +192,10 @@ fn write_file(path: &Path, platform: Platform, exe: &Path) -> io::Result<()> {
     write_atomic(path, &render_file(platform, exe))
 }
 
-/// Whether this OS has a verified autostart implementation.
+/// Whether this OS has a verified autostart implementation. Inside Flatpak
+/// the XDG autostart folder is the sandbox's own, which no session reads.
 pub fn supported() -> bool {
-    cfg!(windows) || platform().is_some()
+    cfg!(windows) || (platform().is_some() && !crate::desktop_app_id::in_flatpak())
 }
 
 /// Whether autostart is currently enabled for this user.

@@ -12,11 +12,14 @@ pub const BUS_NAME: &str = "org.freedesktop.Notifications";
 pub const OBJECT_PATH: &str = "/org/freedesktop/Notifications";
 pub const INTERFACE: &str = "org.freedesktop.Notifications";
 
-/// The `app_name` argument of `Notify` and the `desktop-entry` hint (the
-/// packaged `assets/org.shinycake.quill.desktop`), so the daemon can show the app icon
-/// and group the notifications under the app.
+/// The `app_name` argument of `Notify`.
 pub const APP_NAME: &str = "Quill";
-pub const DESKTOP_ENTRY: &str = "org.shinycake.quill";
+
+/// The `desktop-entry` hint: the installed desktop file's id, so the daemon
+/// can show the app icon and group the notifications under the app.
+pub fn desktop_entry() -> &'static str {
+    crate::desktop_app_id::get()
+}
 
 /// The action key a daemon with the `inline-reply` capability turns into a
 /// text field; its text comes back in the `NotificationReplied` signal.
@@ -86,7 +89,7 @@ pub fn notify_actions(capabilities: Capabilities, locked: bool) -> Vec<String> {
 /// photo previews") is the spec's `image-path`, the notification's image.
 pub fn notify_hints(photo: Option<&std::path::Path>) -> Vec<(&'static str, String)> {
     let mut hints = vec![
-        ("desktop-entry", DESKTOP_ENTRY.to_string()),
+        ("desktop-entry", desktop_entry().to_string()),
         ("category", "im.received".to_string()),
     ];
     if let Some(photo) = photo {
@@ -184,7 +187,7 @@ mod tests {
     #[test]
     fn hints_name_the_desktop_entry_and_category() {
         let hints = notify_hints(None);
-        assert!(hints.contains(&("desktop-entry", "org.shinycake.quill".to_string())));
+        assert!(hints.contains(&("desktop-entry", crate::desktop_app_id::get().to_string())));
         assert!(hints.contains(&("category", "im.received".to_string())));
         assert!(!hints.iter().any(|(key, _)| *key == "image-path"));
         let hints = notify_hints(Some(std::path::Path::new("/td/photos/1.jpg")));

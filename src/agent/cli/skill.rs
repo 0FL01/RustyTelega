@@ -45,6 +45,12 @@ pub(super) fn run(global: &Global, args: &[String]) -> Result<Output, Failure> {
         let [(_, skill), _] = FILES;
         return Ok(Output::Text(skill.to_string()));
     }
+    if dir.is_none() && crate::desktop_app_id::in_flatpak() {
+        return Err(Failure::new(
+            Exit::LocalFile,
+            "Quill runs in a Flatpak sandbox and cannot write to your home folder. Run install-skill --print and save what it prints as ~/.claude/skills/quill/SKILL.md yourself.",
+        ));
+    }
     let dir = match dir {
         Some(dir) => dir,
         None => default_dir().ok_or_else(|| {

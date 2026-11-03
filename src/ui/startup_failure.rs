@@ -253,7 +253,7 @@ fn show_alert(title: &str, detail: &str, summary: &str) {
 /// A critical desktop notification that stays until dismissed.
 #[cfg(target_os = "linux")]
 fn notify(title: &str, detail: &str) -> zbus::Result<()> {
-    use quill::notify::dbus::{APP_NAME, BUS_NAME, DESKTOP_ENTRY, INTERFACE, OBJECT_PATH};
+    use quill::notify::dbus::{APP_NAME, BUS_NAME, INTERFACE, OBJECT_PATH, desktop_entry};
     use std::collections::HashMap;
     use zbus::zvariant::Value;
     const CRITICAL: u8 = 2;
@@ -261,7 +261,7 @@ fn notify(title: &str, detail: &str) -> zbus::Result<()> {
     let proxy = zbus::blocking::Proxy::new(&connection, BUS_NAME, OBJECT_PATH, INTERFACE)?;
     let hints: HashMap<&str, Value<'_>> = HashMap::from([
         ("urgency", Value::from(CRITICAL)),
-        ("desktop-entry", Value::from(DESKTOP_ENTRY)),
+        ("desktop-entry", Value::from(desktop_entry())),
     ]);
     // Daemons with body markup read `&`, `<` and `>` as markup.
     let body = detail

@@ -28,7 +28,7 @@ pub fn describe() -> Value {
         .iter()
         .map(|exit| json!({"code": exit.code(), "kind": exit.kind(), "meaning": exit.meaning()}))
         .collect();
-    let mcp = crate::agent::link::executable()
+    let mcp = crate::agent::link::shown_executable()
         .map(|exe| json!({"command": exe.to_string_lossy(), "args": ["mcp"]}));
     json!({
         "name": "quill",
