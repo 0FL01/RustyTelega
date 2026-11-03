@@ -32,9 +32,11 @@ pub fn desktop_file_name() -> String {
     format!("{}.desktop", get())
 }
 
-/// Whether Quill runs inside a Flatpak sandbox.
+/// Whether Quill runs inside a Flatpak sandbox. Read once: the sandbox does
+/// not change while Quill runs.
 pub fn in_flatpak() -> bool {
-    Path::new(FLATPAK_INFO).exists()
+    static SANDBOXED: OnceLock<bool> = OnceLock::new();
+    *SANDBOXED.get_or_init(|| Path::new(FLATPAK_INFO).exists())
 }
 
 /// The id to use given `FLATPAK_ID` and whether this is a Flatpak sandbox.
