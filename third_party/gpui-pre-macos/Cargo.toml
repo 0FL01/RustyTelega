@@ -240,6 +240,7 @@ default-features = false
 version = "0.3.2"
 features = [
     "std",
+    "CABase",
     "CALayer",
     "CAMetalDisplayLink",
     "CAMetalLayer",

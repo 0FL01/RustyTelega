@@ -161,9 +161,11 @@ refused, as Telegram Desktop refuses them through Qt while an export runs:
   included, reaches `terminate:` without asking.
 
 0.3.11 note (`docs/decisions/gpui-kit-0-9-0.md`): upstream paces windows with a
-`CAMetalDisplayLink` on macOS 14 and later. Quill does not wire it up. Every
-window stays on the `CVDisplayLink` path above, because the idle pacing, the
-frame waker and `present_timing` are built on it. `MetalFrames`, `FrameSource`
-and `metal_frame` were removed, and `start_display_link` lost its `window_state`
-parameter. `MacWindowState` now lives in an `Rc` as upstream's does, so the
+`CAMetalDisplayLink` on macOS 14 and later, and Quill moved to it without a
+fallback (`docs/decisions/gpui-kit-0-9-0.md`). The `CVDisplayLink` registry is
+gone; `display_link.rs` keeps a window's link and the frame waker's dispatch
+source, and the display's latest frame time for `present_timing`. Mentions of
+`CVDisplayLink` above describe why the rules exist. `link_pace` still decides when
+the link runs, in `run_step`, and upstream's `MetalFrames` pausing is not used.
+`MacWindowState` now lives in an `Rc` as upstream's does, so the
 delayed drawable release carries its weak handle in `dispatch2::MainThreadBound`.

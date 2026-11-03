@@ -30,15 +30,11 @@ commit three-way applies each crate's diff from `6be84cd7`.
 | gpui-pre-windows | Upstream's low power handling sits next to Quill's GPU error and vsync state. |
 | gpui-pre-wgpu | Quill's `Adapters` and device recovery replace upstream's `new_rejecting_software`. |
 
-### Two upstream changes Quill does not take
+### Upstream changes Quill handled differently
 
-**`CAMetalDisplayLink` on macOS 14 and later.** Upstream paces each window with a
-Metal display link that hands out the drawable and pauses when idle. Quill stays
-on `CVDisplayLink` for every macOS version. `link_pace`, the frame waker,
-`present_timing` for video and the drawable release all build on it, and the
-repaint stall fixed in #1199 shows how much that path depends on its details. A
-switch deserves its own change with frame pacing and idle CPU measured before
-and after, so it is listed below.
+**`CAMetalDisplayLink` on macOS 14 and later.** At first Quill stayed on
+`CVDisplayLink`. It now uses the Metal link, on its minimum macOS, with no
+fallback: see "Moving to `CAMetalDisplayLink`" below.
 
 **Live resize wrap cache.** Upstream's width-range cache in `text_wrapper.rs`
 works on the character-first wrapper that Quill's `row_wrap.rs` replaced. Quill
@@ -90,18 +86,43 @@ Looked at, no use in Quill:
   painted text does not in this snapshot.
 - Icon resolver, touch selection, `SpeechWaveform`, Editor and Diff gutters.
 
-Still open:
-
-- `CAMetalDisplayLink` replaces `CVDisplayLink` in its own change, with Quill's
-  pacing fixes moved over. Compare idle CPU, scroll pacing and video pacing with a
-  build from before it.
-
 These fixes reach Quill without any change: the shutdown deadlock in text layout
 cleanup, `MessageScroller`'s scrollbar reaching the end of padded content,
 submenus opening left only without room, Popover clearing focus,
 table and menu accessibility, Windows ignoring its synthetic
 mouse moves, Unicode line separators in DirectWrite, and text wrapping that now
 works out break points with `icu_segmenter`.
+
+## Moving to `CAMetalDisplayLink`
+
+The owner asked for Quill's fixes on the newer link, with no switch.
+`CVDisplayLink`, its registry and its thread are gone. The rules stay: the link
+runs only while `link_pace` says the display should pace frames, a lone draw comes
+through the frame waker's dispatch source and takes the layer's `nextDrawable`, and
+spare drawables go after 3 s idle. A stopped link is invalidated, not paused, so
+that a draw without one can use the layer.
+
+- Upstream paused the link when idle. Quill keeps `link_pace`, including the burst
+  rule, in `run_step`, which both the link and the waker go through.
+- `present_timing` reads `targetTimestamp`, the vsync a frame must be ready for,
+  which is what `CVDisplayLink`'s output time meant to `frame_clock` and the video
+  player. `targetPresentationTimestamp` was 41 ms ahead at 120 Hz in a
+  measurement here: on that time the clock's vsync math would be off by several
+  refreshes.
+- The refresh period comes from `NSScreen.minimumRefreshInterval`, read each time
+  the link starts, and a screen change restarts it.
+
+Measured on a 120 Hz Mac on 2026-11-02, debug builds with and without the change,
+in alternating runs. Stickers, window focused: 1388 to 1417 draws in 12 s on the
+old link, 1171 to 1412 on the new one; one new-link run was low and one old-link run
+fell to 459 when focus moved, so those are not a difference. Median draw time and
+dirty-to-present match. Mean CPU over two runs each: idle 0.11% on the new link against 0.09% to 0.78% on
+the old, unfocused idle the same, GIF the same, ten updates a second 8.7 to 9.0%
+against 7.7 to 9.6%. Typing costs more, 8.6 to 8.7% against 7.2%: a burst starts a
+new link, since a stopped link must be invalidated before a draw can take the layer's
+drawable. These are debug builds, so read them as relative.
+An unfocused window draws about 40 fps on both paths: that is the
+`inactive_frame_interval` cap, not the link.
 
 ## How verified
 
@@ -114,5 +135,5 @@ works out break points with `icu_segmenter`.
 - CI builds and tests Linux and Windows and runs the Metal tests. An independent
   review of the first push found Linux, Windows and the Metal tests did not
   compile; all three were fixed before merge.
-- `scripts/test-frame-idle.sh` for the pacing rules. Idle CPU, real video and real
-  HDR displays were not measured here.
+- `scripts/test-frame-idle.sh` for the pacing rules. Real video and real HDR
+  displays were not measured here.
