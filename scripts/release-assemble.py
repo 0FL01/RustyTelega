@@ -99,11 +99,10 @@ curl -fsSL https://raw.githubusercontent.com/shinycake/quill/main/scripts/macos-
 `quill-windows-x86_64-setup.exe`. It installs Quill for your user, with no
 administrator rights, adds a Start menu shortcut and lists Quill in
 Settings > Apps. The installer is not code-signed yet, so SmartScreen may warn
-the first time: choose **More info > Run anyway**. With Scoop:
+the first time: choose **More info > Run anyway**. With Chocolatey:
 
 ```powershell
-scoop bucket add shinycake https://github.com/shinycake/scoop-bucket
-scoop install shinycake/quill
+choco install quill
 ```
 
 Or paste this into PowerShell, which installs the same way without the

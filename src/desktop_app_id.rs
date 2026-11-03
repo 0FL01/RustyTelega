@@ -4,8 +4,7 @@
 //!
 //! A tarball, AppImage or distro package uses `org.shinycake.quill`, the name
 //! of the desktop file Quill ships. Inside Flatpak the exported desktop file
-//! and icon are named after the Flatpak app id (`io.github.shinycake.Quill`
-//! on Flathub), so the shell only groups the window with its launcher when
+//! and icon are named after the Flatpak app id (`io.github.shinycake.Quill`), so the shell only groups the window with its launcher when
 //! the window carries that id. Flatpak sets `FLATPAK_ID` for that.
 #![deny(clippy::indexing_slicing)]
 
@@ -98,7 +97,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn flathub_id_is_used_only_inside_flatpak() {
+    fn flatpak_id_is_used_only_inside_flatpak() {
         assert_eq!(
             choose(Some("io.github.shinycake.Quill"), true),
             "io.github.shinycake.Quill"

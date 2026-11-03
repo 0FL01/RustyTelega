@@ -22,7 +22,7 @@ flatpak run org.flatpak.Builder --user --install --force-clean \
 flatpak run io.github.shinycake.Quill
 ```
 
-Lint like Flathub does:
+Lint it:
 
 ```sh
 flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest io.github.shinycake.Quill.yml
@@ -33,21 +33,20 @@ CI (`.github/workflows/flatpak.yml`) does all of this for x86_64 and aarch64 on
 every pull request that touches these files, on demand, and on every published
 release. It also runs `quill --version` and `ldd` on every binary inside the
 sandbox. The build lint skips the screenshot errors listed in
-`lint-exceptions.json`, which only Flathub's own screenshot mirror satisfies;
+`lint-exceptions.json`, which only a hosted screenshot mirror satisfies;
 pull requests also skip the screenshot URL check, because the screenshots are
 linked from `main` and a new one exists there only after the merge.
 
 ## Quill's own repository
 
-Quill is not on Flathub. Each published release runs `flatpak.yml`, which
+Each published release runs `flatpak.yml`, which
 builds the manifest for both CPUs, attaches `quill-linux-<arch>.flatpak` to the
 release and asks the site to rebuild. The Pages job runs
 `scripts/site-flatpak-repo.sh`: it imports the latest release's bundles into a
 fresh OSTree repo signed with `FLATPAK_GPG_KEY`, and publishes
 
 - `https://shinycake.github.io/quill/flatpak/repo/`, the repo,
-- `quill.flatpakref`, which installs Quill and pulls the GNOME runtime from
-  Flathub,
+- `quill.flatpakref`, which installs Quill and the GNOME runtime it needs,
 - `quill.flatpakrepo`, which adds the repo only,
 - `quill.gpg`, the public key (also in `quill-repo.gpg` here).
 

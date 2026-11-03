@@ -1,7 +1,7 @@
 ; Quill's Windows installer (Inno Setup 6): a per-user install, no
 ; administrator rights, into the same folder the one-line installer uses
 ; (%LOCALAPPDATA%\Programs\Quill), with a Start menu shortcut and a Settings >
-; Apps entry. winget installs this file. docs/decisions/distribution-channels.md
+; Apps entry. The Chocolatey package installs this file. docs/decisions/distribution-channels.md
 ;
 ;   iscc /DVersion=2026.1103.4940 /DPackage=dist\windows\quill-windows-x86_64 ^
 ;        /DOutputDir=dist\windows packaging\windows\quill.iss
