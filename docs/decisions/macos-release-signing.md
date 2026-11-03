@@ -36,3 +36,7 @@ base64 -i /tmp/quill-signing.p12 | gh secret set MACOS_SIGNING_P12 --repo shinyc
 printf %s "$P12_PASSWORD" | gh secret set MACOS_SIGNING_P12_PASSWORD --repo shinycake/quill
 rm /tmp/quill-signing.p12
 ```
+
+## Superseded in part
+
+Since 2026-11-03 certificate-signed releases carry a team-based designated requirement and the hardened runtime, and the identity moves to Developer ID with notarization: `macos-developer-id.md`.
