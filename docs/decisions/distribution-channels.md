@@ -69,6 +69,7 @@ Windows gap.
 | Homebrew | `shinycake/homebrew-tap`, cask `quill-app` (the token `quill` is a homebrew/core formula) | the tap's scheduled `bump` workflow reads the latest release's `SHA256SUMS.txt`, audits and commits |
 | Scoop | `shinycake/scoop-bucket`, manifest `quill` | Scoop's Excavator action, from `checkver`/`autoupdate` in the manifest |
 | winget | `shinycake.Quill` in microsoft/winget-pkgs, the Inno installer | `release-published.yml` opens the PR with Komac (winget-releaser) when `WINGET_TOKEN` is set |
+| Chocolatey | community package `quill`, wrapping the setup.exe | `chocolatey.yml` tests each release's package on Windows and pushes it when `CHOCO_API_KEY` is set; moderators review each version |
 | Flathub | `io.github.shinycake.Quill` | flatpak-external-data-checker on Flathub (see `docs/decisions/flatpak.md`) |
 
 The tap and the bucket are separate repositories because Homebrew and Scoop
