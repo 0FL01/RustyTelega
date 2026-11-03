@@ -240,6 +240,7 @@ mod capture_block;
 mod caret_blink_tests;
 mod chat;
 mod chat_bars;
+mod chat_click_focus_tests;
 mod chat_header_menu_ui;
 mod chat_list;
 mod chat_list_keys;

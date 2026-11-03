@@ -135,6 +135,7 @@ fn on_jump(
         } else {
             this.select_listed_chat(chat_id, window, cx);
             this.select_topic_ui(topic_id, cx);
+            this.focus_clicked_chat(chat_id, window, cx);
         }
     })
 }

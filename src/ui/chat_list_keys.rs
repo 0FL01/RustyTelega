@@ -461,7 +461,7 @@ impl QuillApp {
         self.notify_sidebar(cx);
     }
 
-    /// `HistoryWidget::setInnerFocus`: a chat opened from the keyboard or a
+    /// `HistoryWidget::setInnerFocus`: a chat opened by key, click or
     /// notification hands the keys to its composer. A chat without one leaves
     /// them where they are.
     pub(super) fn focus_opened_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -469,6 +469,20 @@ impl QuillApp {
         if open && self.composer_available(self.pane_mode()) {
             self.composer
                 .update(cx, |input, cx| input.focus(window, cx));
+        }
+    }
+
+    /// A click on `chat` in the list or its search: when the chat opened in
+    /// this window, its composer takes the keys as from the keyboard
+    /// (tdesktop `MainWidget::showHistory` → `setInnerFocus`).
+    pub(super) fn focus_clicked_chat(
+        &mut self,
+        chat: ChatId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.open_chat_id() == Some(chat) {
+            self.focus_opened_chat(window, cx);
         }
     }
 

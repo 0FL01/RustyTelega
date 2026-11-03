@@ -548,6 +548,7 @@ pub(super) fn session_chat_row(
                 this.open_chat_in_new_window(id, window, cx);
             } else {
                 this.select_listed_chat(id, window, cx);
+                this.focus_clicked_chat(id, window, cx);
             }
         }))
         // Slice CL1: right-click opens the chat-row context menu at the
