@@ -380,7 +380,11 @@ fn message_forward_info_and_messages_are_typed() {
         )
         .unwrap();
     match messages.payload {
-        EnvelopePayload::Messages(MessagesPayload::Messages(parsed)) => {
+        EnvelopePayload::Messages(MessagesPayload::Messages {
+            messages: parsed,
+            total_count,
+        }) => {
+            assert_eq!(total_count, 2);
             assert_eq!(parsed.len(), 1);
             assert_eq!(parsed[0].id.0, 80);
             assert_eq!(parsed[0].chat_id.0, 12);

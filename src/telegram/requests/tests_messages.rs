@@ -74,7 +74,7 @@ fn send_text_topic_id_uses_message_topic_forum() {
     let json = send_text(
         RequestId(9),
         ChatId(16),
-        Some(2),
+        Some(crate::ids::TopicId::forum(2)),
         "hi",
         None,
         &SendOptions::default(),

@@ -1,4 +1,5 @@
 use super::{SendReply, message_topic_value, send_reply_value};
+use crate::ids::TopicId;
 use crate::ids::{ChatId, MessageId, RequestId};
 use serde_json::{Value, json};
 
@@ -72,7 +73,7 @@ pub struct ChecklistSend<'a> {
     pub others_can_add_tasks: bool,
     pub others_can_mark_tasks_as_done: bool,
     pub reply_to: Option<SendReply>,
-    pub topic_id: Option<i32>,
+    pub topic_id: Option<TopicId>,
 }
 
 /// `sendMessage` + `inputMessageChecklist`. Tasks are numbered 1..=n.

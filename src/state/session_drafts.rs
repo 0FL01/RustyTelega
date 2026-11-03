@@ -15,6 +15,9 @@ impl Session {
                 None => DraftTopic::Thread(thread.thread_id),
             };
         }
+        if let Some(topic) = self.open_direct_topic(chat_id) {
+            return DraftTopic::DirectMessages(topic);
+        }
         match self.open_topic {
             Some(topic) if self.open_chat == Some(chat_id) => DraftTopic::Forum(topic),
             _ => DraftTopic::Chat,
@@ -37,9 +40,15 @@ impl Session {
         if !chat.can_post() {
             return false;
         }
+        // Admins of a channel's direct messages write in one conversation
+        // at a time; TDLib wants its topic on every draft.
+        if self.is_direct_messages_admin(chat_id) {
+            return matches!(topic, DraftTopic::DirectMessages(_));
+        }
         let has_topics = self.chat_has_topics(chat_id);
         match topic {
             DraftTopic::Chat => !has_topics,
+            DraftTopic::DirectMessages(_) => false,
             DraftTopic::Forum(_) => has_topics,
             DraftTopic::Thread(thread_id) => !has_topics && thread_id != 0,
         }
@@ -64,6 +73,9 @@ impl Session {
                 .filter(|thread| thread.chat_id == chat_id && thread.thread_id == thread_id)?
                 .draft
                 .as_ref(),
+            DraftTopic::DirectMessages(topic_id) => {
+                self.threads.direct.get(chat_id.0, topic_id)?.draft.as_ref()
+            }
         }
     }
 
@@ -140,6 +152,17 @@ impl Session {
                     .filter(|thread| thread.chat_id == chat_id && thread.thread_id == thread_id)
                 {
                     thread.draft = draft;
+                }
+            }
+            DraftTopic::DirectMessages(topic_id) => {
+                if let Some(topic) = self
+                    .threads
+                    .direct
+                    .topics
+                    .get_mut(&chat_id.0)
+                    .and_then(|topics| topics.get_mut(&topic_id))
+                {
+                    topic.draft = draft;
                 }
             }
         }

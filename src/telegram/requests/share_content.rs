@@ -5,6 +5,7 @@
 
 use super::{SendReply, message_send_options, message_topic_value, send_reply_value};
 use crate::composer::SendOptions;
+use crate::ids::TopicId;
 use crate::ids::{ChatId, RequestId};
 use crate::location_picker::{GeoPoint, Venue};
 use serde_json::{Value, json};
@@ -56,7 +57,7 @@ pub struct ContactShare {
 fn send_content(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     reply_to: Option<&SendReply>,
     options: &SendOptions,
     content: Value,
@@ -79,7 +80,7 @@ fn send_content(
 pub fn send_dice(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     emoji: &str,
     reply_to: Option<&SendReply>,
     options: &SendOptions,
@@ -103,7 +104,7 @@ pub fn send_dice(
 pub fn send_contact_card(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     contact: &ContactShare,
     reply_to: Option<&SendReply>,
     options: &SendOptions,
@@ -134,7 +135,7 @@ pub fn send_contact_card(
 pub fn send_story_card(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     poster_chat_id: ChatId,
     story_id: i32,
     options: &SendOptions,
@@ -159,7 +160,7 @@ pub fn send_story_card(
 pub fn send_location(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     latitude: f64,
     longitude: f64,
     reply_to: Option<&SendReply>,
@@ -200,7 +201,7 @@ fn location_value(point: GeoPoint) -> Value {
 pub fn send_venue(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     venue: &Venue,
     reply_to: Option<&SendReply>,
     options: &SendOptions,

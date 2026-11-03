@@ -185,6 +185,7 @@ impl Session {
                 let chat_id = message.chat_id;
                 let topic_id = message.topic_id;
                 let thread_id = message.thread_id;
+                let direct_topic = message.extras.direct_messages_topic_id;
                 self.note_last_message_send_state(
                     chat_id,
                     old_message_id,
@@ -220,9 +221,12 @@ impl Session {
                 }
                 // The draft of the slot the message went to (topic, thread
                 // or chat) is cleared once the composer is seen idle.
-                self.messages
-                    .draft_clears
-                    .push((chat_id, Self::draft_topic_of_message(topic_id, thread_id)));
+                let slot = if direct_topic != 0 && self.is_direct_messages_admin(chat_id) {
+                    crate::composer::DraftTopic::DirectMessages(direct_topic)
+                } else {
+                    Self::draft_topic_of_message(topic_id, thread_id)
+                };
+                self.messages.draft_clears.push((chat_id, slot));
             }
             MessagesPayload::UpdateMessageSendFailed {
                 message,
@@ -433,7 +437,11 @@ impl Session {
                     .shared_media
                     .remove_messages(chat_id, &message_ids);
             }
-            MessagesPayload::Messages(messages) => {
+            MessagesPayload::Messages {
+                messages,
+                total_count,
+            } => {
+                self.note_direct_topic_count(pending, total_count);
                 self.apply_messages(messages, pending, extra, seq)
             }
             MessagesPayload::Message(message) => {

@@ -87,6 +87,13 @@ impl Session {
                 {
                     self.payments.paid_messages.revenue.insert(user_id, *stars);
                 }
+                if let Some(RequestPurpose::Threads(
+                    ThreadsPurpose::GetDirectMessagesChatTopicRevenue { topic_id },
+                )) = purpose
+                    && let Some(chat_id) = pending.and_then(|p| p.chat_id)
+                {
+                    self.set_direct_topic_revenue(chat_id, topic_id, *stars);
+                }
                 true
             }
             SettingsPayload::NetworkStatistics(usage) => {

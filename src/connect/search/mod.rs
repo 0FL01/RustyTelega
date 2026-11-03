@@ -8,14 +8,14 @@ use crate::state::{MediaPurpose, SearchPurpose};
 use crate::telegram::envelope::ChatKind;
 use crate::telegram::envelope::MessageSender;
 use crate::telegram::requests::{
-    SendReply, add_recently_found_chat, click_chat_sponsored_message, get_chat_history,
-    get_chat_message_by_date, get_chat_message_calendar, get_chat_sponsored_messages,
-    get_top_chats_users, remove_recently_found_chat, remove_top_chat_users,
-    report_chat_sponsored_message, search_chat_members, search_chat_messages,
-    search_chat_messages_from, search_chats, search_chats_on_server, search_messages_filter_json,
-    search_messages_filtered, search_public_chats, search_public_messages_by_tag,
-    search_public_posts, search_recently_found_chats, set_option_boolean,
-    toggle_has_sponsored_messages_enabled, view_messages, view_sponsored_chat,
+    SendReply, add_recently_found_chat, click_chat_sponsored_message, get_chat_message_by_date,
+    get_chat_message_calendar, get_chat_sponsored_messages, get_top_chats_users,
+    remove_recently_found_chat, remove_top_chat_users, report_chat_sponsored_message,
+    search_chat_members, search_chat_messages, search_chat_messages_from, search_chats,
+    search_chats_on_server, search_messages_filter_json, search_messages_filtered,
+    search_public_chats, search_public_messages_by_tag, search_public_posts,
+    search_recently_found_chats, set_option_boolean, toggle_has_sponsored_messages_enabled,
+    view_messages, view_sponsored_chat,
 };
 
 mod chat_search;

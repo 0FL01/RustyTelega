@@ -113,7 +113,7 @@ impl<S: JsonSender> ConnectDriver<S> {
             _ => false,
         };
         let view_after = match &owned.envelope.payload {
-            EnvelopePayload::Messages(MessagesPayload::Messages(_)) => true,
+            EnvelopePayload::Messages(MessagesPayload::Messages { .. }) => true,
             EnvelopePayload::Messages(MessagesPayload::UpdateNewMessage(_)) => shown_message,
             EnvelopePayload::Ok | EnvelopePayload::Error(_)
                 if view_purpose == Some(RequestPurpose::ViewMessages) =>
@@ -197,7 +197,7 @@ impl<S: JsonSender> ConnectDriver<S> {
             || batch::changes_chat_look(&owned.envelope.payload)
             || matches!(
                 owned.envelope.payload,
-                EnvelopePayload::Messages(MessagesPayload::Messages(_))
+                EnvelopePayload::Messages(MessagesPayload::Messages { .. })
                 | EnvelopePayload::Media(MediaPayload::UpdateFile(_))
                 | EnvelopePayload::Media(MediaPayload::File(_))
                 // The results panel's images: nothing else asks for them,

@@ -1,6 +1,6 @@
 use super::{SendReply, send_reply_value};
 use crate::composer::DraftTopic;
-use crate::ids::{ChatId, MessageId, RequestId};
+use crate::ids::{ChatId, MessageId, RequestId, TopicId};
 use serde_json::{Value, json};
 
 /// `addRecentlyFoundChat` (TDLib 1.8.67). Official clients send this on select.
@@ -400,7 +400,12 @@ pub fn draft_topic_value(topic: DraftTopic) -> Value {
     match topic {
         DraftTopic::Chat => Value::Null,
         DraftTopic::Forum(forum_topic_id) => {
-            super::messages::message_topic_value(Some(forum_topic_id))
+            super::messages::message_topic_value(Some(TopicId::forum(forum_topic_id)))
+        }
+        DraftTopic::DirectMessages(direct_messages_chat_topic_id) => {
+            super::messages::message_topic_value(Some(TopicId::DirectMessages {
+                direct_messages_chat_topic_id,
+            }))
         }
         DraftTopic::Thread(message_thread_id) => {
             super::groups::message_topic_thread_value(message_thread_id)

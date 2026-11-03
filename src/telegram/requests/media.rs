@@ -2,6 +2,7 @@ use super::{
     SelfDestructSend, SendReply, formatted_caption, message_topic_value, self_destruct_type_value,
     send_reply_value,
 };
+use crate::ids::TopicId;
 use crate::ids::{ChatId, FileId, MessageId, RequestId};
 use serde_json::{Value, json};
 
@@ -174,7 +175,7 @@ pub fn input_message_photo(
 pub fn send_photo(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     path: &str,
     caption: &str,
     caption_above: bool,
@@ -277,7 +278,7 @@ fn input_video_note_thumbnail(thumb: Option<&VideoNoteThumbnailSend>) -> Value {
 pub fn send_video_note(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     path: &str,
     note: &VideoNoteSend,
     reply_to: Option<SendReply>,
@@ -314,7 +315,7 @@ pub fn send_video_note(
 pub fn send_video(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     path: &str,
     video: &VideoSend,
     caption: &str,
@@ -340,7 +341,7 @@ pub fn send_video(
 pub fn send_message_album(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     reply_to: Option<SendReply>,
     input_message_contents: Vec<Value>,
 ) -> String {
@@ -459,7 +460,7 @@ pub fn edit_message_media(
 pub fn send_document(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     path: &str,
     thumbnail: Option<&VideoNoteThumbnailSend>,
     caption: &str,
@@ -491,7 +492,7 @@ pub struct VoiceNoteSend<'a> {
     pub caption: &'a str,
     pub reply_to: Option<SendReply>,
     /// Parity slice 4: forum topic the send is addressed to (`None` = no topic).
-    pub topic_id: Option<i32>,
+    pub topic_id: Option<TopicId>,
     /// "Play once": `messageSelfDestructTypeImmediately` (private chats
     /// only; the driver strips it elsewhere). `None` sends a normal note.
     pub self_destruct: Option<SelfDestructSend>,

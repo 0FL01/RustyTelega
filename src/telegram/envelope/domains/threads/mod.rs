@@ -44,4 +44,9 @@ pub enum ThreadsPayload {
     UpdateForumTopic(ForumTopicUpdate),
     /// Subsection tabs: `forumTopic` — the `getForumTopic` answer.
     ForumTopicAnswer(ForumTopic),
+    /// `updateDirectMessagesChatTopic` (schema line 11442): one
+    /// conversation in a channel's direct messages, as its admins see it.
+    UpdateDirectMessagesChatTopic(Box<DirectMessagesTopic>),
+    /// `directMessagesChatTopic` — the `getDirectMessagesChatTopic` answer.
+    DirectMessagesChatTopic(Box<DirectMessagesTopic>),
 }

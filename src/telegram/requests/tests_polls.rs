@@ -75,7 +75,7 @@ fn send_inline_query_result_message_shape_matches_1_8_67() {
     let json = send_inline_query_result_message(
         RequestId(9),
         ChatId(1),
-        Some(7),
+        Some(crate::ids::TopicId::forum(7)),
         None,
         12345,
         "res1",

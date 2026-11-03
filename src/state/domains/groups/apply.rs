@@ -870,6 +870,14 @@ impl Session {
                 {
                     self.accept_own_chat_member(chat_id, member.clone());
                 }
+                if let Some(RequestPurpose::Groups(GroupsPurpose::GetDirectMessagesMember {
+                    user_id,
+                })) = pending.map(|p| p.purpose)
+                    && let Some(chat_id) = pending.and_then(|p| p.chat_id)
+                {
+                    let banned = member.status == ChannelMemberStatus::Banned;
+                    self.set_direct_member_banned(chat_id, user_id, banned);
+                }
                 // Phase D3b: `getChatMember` for one administrator's rights
                 // (edit dialog). Only an administrator status carries a
                 // rights block worth caching.
@@ -895,6 +903,10 @@ impl Session {
                 // so the editor refetches instead of showing old rights.
                 if let MessageSender::User { user_id } = member.member_id {
                     self.groups.admin_rights.remove(&(chat_id.0, user_id));
+                    if self.direct_member_banned(chat_id, user_id).is_some() {
+                        let banned = member.status == ChannelMemberStatus::Banned;
+                        self.set_direct_member_banned(chat_id, user_id, banned);
+                    }
                 }
                 // Slice G1 fix-up: membership changes also stale the
                 // member-list caches (e.g. our own add, or someone else

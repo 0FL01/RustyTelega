@@ -122,6 +122,12 @@ pub enum GroupsPurpose {
     GetAdminRights {
         user_id: i64,
     },
+    /// `getChatMember` in a channel for a user who writes to its direct
+    /// messages: whether the user is banned (tdesktop `kickedValue`).
+    /// Response is `chatMember`.
+    GetDirectMessagesMember {
+        user_id: i64,
+    },
     /// Phase D3b / slice G1: `getSupergroupMembers` for the promote
     /// member picker and the member-management dialog. Response is
     /// `chatMembers`; correlated via `PendingRequest::chat_id`, cached

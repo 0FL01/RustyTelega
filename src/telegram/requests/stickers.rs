@@ -1,5 +1,6 @@
 use super::{SendReply, message_send_options, message_topic_value, send_reply_value};
 use crate::composer::SendOptions;
+use crate::ids::TopicId;
 use crate::ids::{ChatId, FileId, RequestId};
 use serde_json::{Value, json};
 
@@ -206,7 +207,7 @@ pub struct StickerSend<'a> {
     pub thumb: Option<(FileId, i32, i32)>,
     pub reply_to: Option<SendReply>,
     /// Parity slice 4: forum topic the send is addressed to (`None` = no topic).
-    pub topic_id: Option<i32>,
+    pub topic_id: Option<TopicId>,
 }
 
 /// `sendMessage` + `inputMessageSticker` / `inputSticker` / `inputFileId` (1.8.67).
@@ -261,7 +262,7 @@ pub struct AnimationSend {
     pub height: i32,
     pub reply_to: Option<SendReply>,
     /// Parity slice 4: forum topic the send is addressed to (`None` = no topic).
-    pub topic_id: Option<i32>,
+    pub topic_id: Option<TopicId>,
 }
 
 /// `getSavedAnimations` — saved GIFs, no query and no third-party key.

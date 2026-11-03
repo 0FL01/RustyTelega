@@ -320,7 +320,10 @@ pub(crate) fn parse_messages_payload(
                 .iter()
                 .filter_map(|m| parse_message(m).ok())
                 .collect();
-            Ok(EnvelopePayload::Messages(MessagesPayload::Messages(parsed)))
+            Ok(EnvelopePayload::Messages(MessagesPayload::Messages {
+                messages: parsed,
+                total_count: int53_or_zero(value.get("total_count")).sat_i32(),
+            }))
         }
         "message" => Ok(EnvelopePayload::Messages(MessagesPayload::Message(
             parse_message(value)?,

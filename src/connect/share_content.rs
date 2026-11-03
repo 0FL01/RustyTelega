@@ -24,7 +24,7 @@ impl<S: JsonSender> ConnectDriver<S> {
     fn send_built(
         &mut self,
         chat_id: ChatId,
-        build: impl FnOnce(RequestId, Option<i32>) -> String,
+        build: impl FnOnce(RequestId, Option<crate::ids::TopicId>) -> String,
     ) -> Result<RequestId, ConnectSendError> {
         let extra = self
             .session

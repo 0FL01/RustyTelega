@@ -21,6 +21,10 @@ pub enum DraftTopic {
     /// thread root (`Message::thread_draft_message`); there is no update
     /// for it, `getMessageThread` returns the current value.
     Thread(i64),
+    /// One conversation in a channel's direct messages, as its admins see
+    /// it (`messageTopicDirectMessages`): `directMessagesChatTopic.draft_message`
+    /// and `updateDirectMessagesChatTopic`. tdesktop's `monoforumPeerId`.
+    DirectMessages(i64),
 }
 
 impl DraftTopic {

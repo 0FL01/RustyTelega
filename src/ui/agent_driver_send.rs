@@ -43,7 +43,9 @@ impl QuillApp {
             return;
         }
         let reply = self.send_reply_for(chat_id, cx);
-        let topic_id = self.session().and_then(|session| session.open_topic);
+        let topic_id = self
+            .session()
+            .and_then(|session| session.send_topic(chat_id));
         // A plain send: the composer's link preview choices travel, nothing
         // else the box could carry does (a schedule, a silent send, an
         // effect, a paid message, suggested-post terms). The tool path

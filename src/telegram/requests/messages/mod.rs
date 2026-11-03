@@ -2,6 +2,7 @@ use crate::composer::{
     ComposerEntity, ComposerScheduling, FormatKind, LinkPreviewChoice, PreviewMediaSize,
     QuoteSelection, ReplyItem, SendOptions, parse_format_markup,
 };
+use crate::ids::TopicId;
 use crate::ids::{ChatId, MessageId, RequestId};
 use serde_json::{Value, json};
 
@@ -218,21 +219,16 @@ pub fn message_send_options(options: &SendOptions) -> Value {
 /// `sendMessage` for the pinned 1.8.67 schema: typed `topic_id`, not `message_thread_id`.
 /// Parity slice 4: posting into a forum topic passes
 /// `topic_id = messageTopicForum{forum_topic_id}` (schema 1.8.67, lines
-/// 12200 and 3004); `None` sends null (no topic).
-pub(crate) fn message_topic_value(topic_id: Option<i32>) -> Value {
-    match topic_id {
-        Some(forum_topic_id) => json!({
-            "@type": "messageTopicForum",
-            "forum_topic_id": forum_topic_id,
-        }),
-        None => Value::Null,
-    }
+/// 12200 and 3004); a channel's direct messages admin answers in
+/// `messageTopicDirectMessages`; `None` sends null (no topic).
+pub(crate) fn message_topic_value(topic_id: Option<TopicId>) -> Value {
+    topic_id.map_or(Value::Null, |topic| super::topic_id_json(&topic))
 }
 
 pub fn send_text(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     text: &str,
     reply_to: Option<SendReply>,
     options: &SendOptions,
@@ -291,7 +287,7 @@ pub fn send_text(
 pub fn send_rich_message(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     rich: &Value,
     reply_to: Option<SendReply>,
     options: &SendOptions,
@@ -731,7 +727,7 @@ pub fn forward_messages_to_topic(
         "@type": "forwardMessages",
         "@extra": extra.as_extra(),
         "chat_id": chat_id.0,
-        "topic_id": message_topic_value(topic_id),
+        "topic_id": message_topic_value(topic_id.map(TopicId::forum)),
         "from_chat_id": from_chat_id.0,
         "message_ids": message_ids.iter().map(|id| id.0).collect::<Vec<_>>(),
         "options": if plain { Value::Null } else { message_send_options(options) },

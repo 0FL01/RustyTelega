@@ -84,6 +84,20 @@ pub(crate) fn parse_threads_payload(
         "updateForumTopic" => parse_forum_topic_update(value)
             .map(|value| EnvelopePayload::Threads(ThreadsPayload::UpdateForumTopic(value)))
             .ok_or(ParseError::MissingField),
+        "updateDirectMessagesChatTopic" => value
+            .get("topic")
+            .and_then(parse_direct_messages_topic)
+            .map(|topic| {
+                EnvelopePayload::Threads(ThreadsPayload::UpdateDirectMessagesChatTopic(Box::new(
+                    topic,
+                )))
+            })
+            .ok_or(ParseError::MissingField),
+        "directMessagesChatTopic" => parse_direct_messages_topic(value)
+            .map(|topic| {
+                EnvelopePayload::Threads(ThreadsPayload::DirectMessagesChatTopic(Box::new(topic)))
+            })
+            .ok_or(ParseError::MissingField),
         "forumTopicInfo" => Ok(EnvelopePayload::Threads(ThreadsPayload::ForumTopic {
             chat_id: value.get("chat_id").and_then(Value::as_i64).unwrap_or(0),
         })),
