@@ -441,7 +441,7 @@
           <div class="inst-card recommended">
             <span class="badge">Recommended</span>
             <h4>Install with one Terminal command</h4>
-            <p class="inst-lede">Quill installs in Applications and opens straight away, without the “Apple could not verify” warning. Run the same command later to update.</p>
+            <p class="inst-lede">Quill installs in Applications and opens straight away. Run the same command later to update.</p>
             <ol class="inst-steps">
               <li>Open <strong>Terminal</strong>: press <kbd>⌘</kbd> <kbd>Space</kbd>, type <em>Terminal</em> and press <kbd>Return</kbd>.</li>
               <li>Paste this command and press <kbd>Return</kbd>:
@@ -460,54 +460,18 @@
               <li><strong>It checks the download.</strong> It compares the file's SHA-256 checksum with the one published with the release, and checks that the app's code signature is intact. If anything doesn't match, it stops and installs nothing.</li>
               <li><strong>It changes nothing else.</strong> It needs no administrator password, adds no background services and leaves your security settings alone. It puts Quill.app in Applications and nothing more.</li>
             </ul>
-            <p class="why-note">Why there's no warning: macOS checks apps that a browser downloads. Apple hasn't checked Quill yet, because that needs a paid Apple developer account, so the zip below asks you to confirm it once. Terminal doesn't mark its downloads for that check.</p>
+            <p class="why-note">Quill for Mac is signed with a Developer ID and notarized by Apple, so macOS opens it without a warning, from Terminal or from the zip below.</p>
           </div>
 
           <div class="inst-card">
             <h4>Or download it yourself</h4>
-            <p class="inst-lede">Get the app as a zip file. The first time you open it, macOS asks you to confirm it.</p>
+            <p class="inst-lede">Get the app as a zip file. Double-click it, drag Quill into your Applications folder and open it.</p>
             <a class="btn ghost" id="mac-zip" href="https://github.com/shinycake/quill/releases/latest/download/quill-macos-aarch64.zip">
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
               Download for macOS (zip)
             </a>
 
-            <h5>How to open it the first time</h5>
-            <ol class="open-steps">
-              <li>
-                <p><strong>Unzip it and move Quill to Applications.</strong> Double-click the zip, then drag Quill into your Applications folder and open it.</p>
-              </li>
-              <li>
-                <p><strong>macOS says Quill wasn't opened.</strong> Click <strong>Done</strong>. Don't click Move to Trash.</p>
-                <div class="mock mock-alert" role="img" aria-label="A macOS alert titled “Quill.app” Not Opened, saying Apple could not verify it is free of malware, with the buttons Done and Move to Trash. Done is highlighted.">
-                  <img src="img/icon-256.webp" alt="" width="52" height="52">
-                  <b>“Quill.app” Not Opened</b>
-                  <span>Apple could not verify “Quill.app” is free of malware that may harm your Mac or compromise your privacy.</span>
-                  <i class="mbtn primary ring">Done</i>
-                  <i class="mbtn">Move to Trash</i>
-                </div>
-              </li>
-              <li>
-                <p><strong>Open System Settings, then Privacy &amp; Security.</strong> Scroll down to Security and click <strong>Open Anyway</strong> next to the Quill message.</p>
-                <div class="mock mock-settings" role="img" aria-label="System Settings, Privacy and Security pane. Under Security, the line “Quill.app” was blocked to protect your Mac, with an Open Anyway button, which is highlighted.">
-                  <div class="side"><span></span><span></span><span class="sel">Privacy &amp; Security</span><span></span><span></span></div>
-                  <div class="pane">
-                    <b>Privacy &amp; Security</b>
-                    <em>Security</em>
-                    <div class="row"><span>“Quill.app” was blocked to protect your Mac.</span><i class="mbtn ring">Open Anyway</i></div>
-                  </div>
-                </div>
-              </li>
-              <li>
-                <p><strong>Confirm.</strong> macOS asks once more. Click <strong>Open Anyway</strong>, and enter your password or use Touch ID if asked. Quill opens, and from then on it opens like any other app.</p>
-                <div class="mock mock-alert" role="img" aria-label="A macOS alert asking whether to open Quill.app, with an Open Anyway button, which is highlighted.">
-                  <img src="img/icon-256.webp" alt="" width="52" height="52">
-                  <b>Open “Quill.app”?</b>
-                  <span>Apple could not verify “Quill.app” is free of malware. Open it only if you trust where it came from.</span>
-                  <i class="mbtn ring">Open Anyway</i>
-                </div>
-              </li>
-            </ol>
-            <p class="why-note">Comfortable with Terminal? Instead of steps 2 to 4 you can run <code>xattr -dr com.apple.quarantine /Applications/Quill.app</code> once.</p>
+            <p class="why-note">Installed Quill on a Mac before 3 November 2026? That copy was signed the old way and can't update to the notarized version by itself. Install it once with the Terminal command or the zip above. Your accounts and settings stay, and updates work as usual after that.</p>
           </div>
         </div>
 
@@ -628,7 +592,7 @@
         <div class="notes" id="whatsnew-body"></div>
         <a class="more" id="whatsnew-link" href="https://github.com/shinycake/quill/releases">All releases</a>
       </div>
-      <p class="reqs">macOS 14 or later on Apple Silicon · Windows 10 or later (x64) · Linux x86_64 or arm64 with glibc. The macOS and Windows builds aren't signed with a paid certificate yet, so a zip from the browser asks you to confirm the first launch. The one-line installers don't.</p>
+      <p class="reqs">macOS 14 or later on Apple Silicon · Windows 10 or later (x64) · Linux x86_64 or arm64 with glibc. The macOS build is notarized by Apple. The Windows build isn't signed with a paid certificate yet, so a zip from the browser asks you to confirm the first launch. The one-line installer doesn't.</p>
     </section>
 
     <section class="faq wrap" id="faq" aria-labelledby="faq-title">
@@ -654,8 +618,8 @@
         <p>Yes. Quill is free software under the <a href="https://github.com/shinycake/quill/blob/main/LICENSE">MIT license</a>. There's nothing to buy and no account other than your Telegram one.</p>
       </details>
       <details>
-        <summary>Why does macOS or Windows ask me to confirm the first launch?</summary>
-        <p>The macOS and Windows builds aren't signed with a paid Apple or Microsoft certificate yet, and both systems check apps that a browser downloads. The one-line installers for <a href="#mac-install">macOS</a> and <a href="#windows-install">Windows</a> download with Terminal or PowerShell, so there's nothing to confirm. If you downloaded a zip, confirm it once: on macOS with the steps under <a href="#mac-install">Or download it yourself</a>, and on Windows with More info → Run anyway. Linux doesn't ask. Each release lists SHA-256 checksums so you can verify the download.</p>
+        <summary>Why does Windows ask me to confirm the first launch?</summary>
+        <p>The Windows build isn't signed with a paid Microsoft certificate yet, and Windows checks programs that a browser downloads. The <a href="#windows-install">one-line installer</a> downloads with PowerShell, so there's nothing to confirm. If you downloaded the zip, confirm it once with More info → Run anyway. macOS doesn't ask, because the Mac build is signed with a Developer ID and notarized by Apple. Linux doesn't ask either. Each release lists SHA-256 checksums so you can verify the download.</p>
       </details>
       <details>
         <summary>How can I help?</summary>
