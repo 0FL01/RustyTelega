@@ -79,7 +79,10 @@ impl QuillApp {
                         "",
                         photo,
                         cx,
-                        move |this, window, cx| this.select_search_chat(chat_id, window, cx),
+                        move |this, window, cx| {
+                            this.select_search_chat(chat_id, window, cx);
+                            this.focus_clicked_chat(chat_id, window, cx);
+                        },
                     )
                     .a11y_tag(redact::chat_tag(chat_id.0)),
                 );
@@ -224,6 +227,7 @@ impl QuillApp {
             .pressable(cx.theme())
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.select_search_message(chat_id, message_id, window, cx);
+                this.focus_clicked_chat(chat_id, window, cx);
             }))
             .child(
                 div()

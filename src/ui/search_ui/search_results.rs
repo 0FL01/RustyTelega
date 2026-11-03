@@ -271,7 +271,10 @@ impl QuillApp {
                         &query,
                         photo,
                         cx,
-                        move |this, window, cx| this.select_search_chat(id, window, cx),
+                        move |this, window, cx| {
+                            this.select_search_chat(id, window, cx);
+                            this.focus_clicked_chat(id, window, cx);
+                        },
                     )
                     .a11y_tag(quill::agent::ui_driver::redact::chat_tag(id.0));
                     let row = self.chat_search_nav_row(row, SearchRow::Chat(id), cx);
@@ -333,7 +336,10 @@ impl QuillApp {
                         &query,
                         photo,
                         cx,
-                        move |this, window, cx| this.select_search_chat(id, window, cx),
+                        move |this, window, cx| {
+                            this.select_search_chat(id, window, cx);
+                            this.focus_clicked_chat(id, window, cx);
+                        },
                     )
                     .a11y_tag(quill::agent::ui_driver::redact::chat_tag(id.0));
                     block =
@@ -368,6 +374,7 @@ impl QuillApp {
                         cx,
                         move |this, window, cx| {
                             this.select_search_message(chat_id, message_id, window, cx);
+                            this.focus_clicked_chat(chat_id, window, cx);
                         },
                     )
                     .a11y_tag(quill::agent::ui_driver::redact::chat_tag(chat_id.0));
