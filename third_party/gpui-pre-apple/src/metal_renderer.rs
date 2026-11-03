@@ -768,18 +768,17 @@ impl MetalRenderer {
                     log::error!("skipped a frame drawn outside its display link's update");
                     return;
                 };
-                drawable
+                Some(drawable)
             }
-            DisplayLinkMode::Detached => {
-                let Some(drawable) = self.next_usable_drawable(&layer) else {
-                    log::error!(
-                        "failed to retrieve next drawable, drawable size: {:?}",
-                        layer.drawableSize()
-                    );
-                    return;
-                };
-                drawable
-            }
+            DisplayLinkMode::Detached => layer.nextDrawable(),
+        };
+        let Some(drawable) = drawable.and_then(|drawable| self.usable_drawable(&layer, drawable))
+        else {
+            log::error!(
+                "failed to retrieve next drawable, drawable size: {:?}",
+                layer.drawableSize()
+            );
+            return;
         };
         // A display link's drawable was sized when the link handed it out,
         // which can be before a resize the layer has since taken.
@@ -808,15 +807,15 @@ impl MetalRenderer {
         }
     }
 
-    /// QUILL: the next drawable, in a format the pipelines can draw. When the
-    /// float set can't be built, the layer leaves extended range for the
-    /// 8-bit set, which the frame in hand and every later one draws with. The
-    /// HDR picture comes out clamped to standard range.
-    fn next_usable_drawable(
+    /// QUILL: a drawable in a format the pipelines can draw. When the float
+    /// set can't be built, the layer leaves extended range for the 8-bit set,
+    /// which the frame in hand and every later one draws with, display link
+    /// or not. The HDR picture comes out clamped to standard range.
+    fn usable_drawable(
         &mut self,
         layer: &CAMetalLayer,
+        drawable: Retained<ProtocolObject<dyn CAMetalDrawable>>,
     ) -> Option<Retained<ProtocolObject<dyn CAMetalDrawable>>> {
-        let drawable = layer.nextDrawable()?;
         let Err(error) = self.match_drawable_format(drawable.texture().pixelFormat()) else {
             return Some(drawable);
         };
@@ -2560,6 +2559,25 @@ mod tests {
         let layer = renderer.layer().unwrap();
         assert_eq!(layer.pixelFormat(), MTLPixelFormat::BGRA8Unorm);
         assert!(!layer.wantsExtendedDynamicRangeContent());
+    }
+
+    #[test]
+    fn a_failed_edr_switch_under_the_display_link_leaves_edr_and_still_draws() {
+        let mut renderer = renderer_on_a_float_layer();
+        renderer.library = library_without_functions(&renderer.device);
+        let drawable = renderer.layer().unwrap().nextDrawable().unwrap();
+        renderer.set_display_link_attached(true);
+        renderer.set_frame_drawable(Some(drawable));
+
+        renderer.draw(&empty_scene());
+
+        let layer = renderer.layer().unwrap();
+        assert_eq!(layer.pixelFormat(), MTLPixelFormat::BGRA8Unorm);
+        assert!(!layer.wantsExtendedDynamicRangeContent());
+        assert!(matches!(
+            renderer.display_link_mode,
+            DisplayLinkMode::Attached { drawable: None }
+        ));
     }
 
     #[test]

@@ -859,7 +859,9 @@ impl MacWindowState {
             return;
         };
         let refresh: f64 = unsafe { msg_send![screen, minimumRefreshInterval] };
-        self.link_display = Some((display_id, Duration::try_from_secs_f64(refresh).ok()));
+        self.link_display = Some((display_id, Duration::try_from_secs_f64(refresh)
+                .ok()
+                .filter(|period| !period.is_zero())));
         let Some(main_thread) = crate::main_thread_marker() else {
             return;
         };
