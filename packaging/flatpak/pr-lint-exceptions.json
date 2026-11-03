@@ -1,6 +1,7 @@
 {
     "io.github.shinycake.Quill": [
         "appstream-missing-screenshots",
-        "appstream-screenshots-not-mirrored-in-ostree"
+        "appstream-screenshots-not-mirrored-in-ostree",
+        "appstream-external-screenshot-url"
     ]
 }
