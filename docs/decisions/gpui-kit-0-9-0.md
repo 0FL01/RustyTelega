@@ -70,7 +70,9 @@ Done after this upgrade:
   keeps `battery_signal`: GPUI reads only the profile daemon, so a sandboxed app
   would lose the portal.
 - Windows are capped at about 30 fps in low power mode, upstream's default. The
-  owner chose this knowing it holds video to the same rate.
+  owner chose this knowing it holds video, scrolling and PiP to the same rate.
+  Turning "Save Power on Low Battery" off lifts the cap
+  (`App::set_low_power_frame_cap`).
 - The kit's own strings follow the language pack where the kit has the language
   (ru, it, pt-BR, zh-CN, zh-HK, zh-TW). Quill never called `set_locale` before, so
   they were English for everyone.

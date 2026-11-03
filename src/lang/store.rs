@@ -34,6 +34,7 @@ pub(crate) enum Value {
 #[derive(Debug)]
 pub struct Snapshot {
     pack_id: String,
+    plural_code: String,
     is_rtl: bool,
     plural: PluralRules,
     values: Vec<Option<Value>>,
@@ -45,6 +46,7 @@ impl Snapshot {
     pub fn new(pack_id: &str, plural_code: &str, is_rtl: bool) -> Self {
         Self {
             pack_id: pack_id.to_string(),
+            plural_code: plural_code.to_string(),
             is_rtl,
             plural: PluralRules::for_code(plural_code),
             values: vec![None; KEY_COUNT],
@@ -53,6 +55,11 @@ impl Snapshot {
 
     pub fn pack_id(&self) -> &str {
         &self.pack_id
+    }
+
+    /// The pack's language as a CLDR code; a custom pack has its base's.
+    pub fn plural_code(&self) -> &str {
+        &self.plural_code
     }
 
     pub fn is_rtl(&self) -> bool {
@@ -74,6 +81,7 @@ impl Snapshot {
     pub fn patched<'a>(&self, strings: impl IntoIterator<Item = (&'a str, &'a PackValue)>) -> Self {
         let mut next = Self {
             pack_id: self.pack_id.clone(),
+            plural_code: self.plural_code.clone(),
             is_rtl: self.is_rtl,
             plural: self.plural.clone(),
             values: self.values.clone(),

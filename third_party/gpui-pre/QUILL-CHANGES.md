@@ -574,6 +574,6 @@ rendering its view (sweep item X04):
   event.
 
 The Quill project also changed it in 2026 to follow the power mode
-(`docs/decisions/gpui-kit-0-9-0.md`): `src/app.rs` adds `App::on_power_mode_change`,
-and the platform's report is applied in a foreground task, since it can arrive
-with the app borrowed.
+(`docs/decisions/gpui-kit-0-9-0.md`): `src/app.rs` adds `App::on_power_mode_change`
+and `App::set_low_power_frame_cap`, and applies the platform's report in a
+foreground task that waits for the app, since it can arrive with the app borrowed.

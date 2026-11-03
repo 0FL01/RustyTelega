@@ -99,20 +99,34 @@ fn current_id() -> String {
 /// menus) at the same language where the kit has it.
 pub(super) fn install_pack(snapshot: Option<quill::lang::Snapshot>) {
     quill::lang::install(snapshot);
-    gpui_kit::component::set_locale(kit_locale(&current_id()));
+    let current = quill::lang::current();
+    let (pack, language) = current
+        .as_deref()
+        .map_or(("en", "en"), |s| (s.pack_id(), s.plural_code()));
+    gpui_kit::component::set_locale(kit_locale(pack, language));
 }
 
-/// The kit's locale for a Telegram pack id; the kit falls back to English
-/// key by key, and has nothing for other languages.
-fn kit_locale(pack_id: &str) -> &'static str {
-    let id = pack_id.strip_suffix("-raw").unwrap_or(pack_id);
-    match id {
+/// The kit's locale for a pack and its language. Telegram has no official
+/// Chinese pack, so Chinese is told from community ids such as `zhcncc`,
+/// `classic-zh-cn` and `zh-hant-raw`. The kit falls back to English key by
+/// key, and has nothing for other languages.
+fn kit_locale(pack_id: &str, language: &str) -> &'static str {
+    let id = pack_id.to_ascii_lowercase();
+    let language = language.to_ascii_lowercase();
+    if id.contains("zh-hant-hk") {
+        return "zh-HK";
+    }
+    if id.contains("zh-hant") {
+        return "zh-TW";
+    }
+    if id.contains("zh") {
+        return "zh-CN";
+    }
+    match language.split(['-', '_']).next().unwrap_or_default() {
         "ru" => "ru",
         "it" => "it",
-        "pt-br" => "pt-BR",
-        "zh-hans" => "zh-CN",
-        "zh-hant" | "zh-hant-tw" => "zh-TW",
-        "zh-hant-hk" => "zh-HK",
+        "pt" => "pt-BR",
+        "zh" => "zh-CN",
         _ => "en",
     }
 }

@@ -143,6 +143,7 @@ impl QuillApp {
             quill::wake::BATTERY.poke();
         }
         quill::battery_saving::apply();
+        cx.set_low_power_frame_cap(!self.appearance.ignore_battery_saving);
         if self.demo_session.is_none() {
             super::battery_watch::watch(cx);
         }
