@@ -1,19 +1,11 @@
 <!doctype html>
-<!-- Source of the DMG window background (660x400 points). Render with
-     scripts/macos-dmg-background.sh; the PNGs it writes are committed. Colors
-     are the landing page's (site/styles.css) and the icon's blue. Finder draws
-     the icon labels black in light mode and white in dark mode, so the tile
-     under each label is a mid-tone blue that both read on. -->
+<!-- Source of the DMG window background (660x400 points). It has no text of
+     its own: Finder's two icon labels are the only words in the window.
+     Render it to the committed background.png and background@2x.png with the
+     command in docs/decisions/distribution-channels.md. Colors are the landing
+     page's (site/styles.css) and the icon's blue. -->
 <html><head><meta charset="utf-8"><style>
-@font-face { font-family: "Quill Headline"; src: url("../../../site/fonts/headline.woff2") format("woff2"); font-weight: 750; }
 html, body { margin: 0; width: 660px; height: 400px; overflow: hidden; background: #0b0f17; }
-.title { position: absolute; left: 0; right: 0; top: 36px; text-align: center;
-  font: 750 22px/1.2 "Quill Headline", -apple-system, "SF Pro Display", sans-serif; letter-spacing: -0.015em; color: #e8edf6; }
-.title span { color: #5fc7fb; }
-.sub { position: absolute; left: 0; right: 0; top: 68px; text-align: center;
-  font: 500 13px/1.3 -apple-system, "SF Pro Text", sans-serif; color: #9aa6bb; }
-.foot { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center;
-  font: 500 11px/1.3 -apple-system, "SF Pro Text", sans-serif; color: #8792a6; }
 svg { position: absolute; inset: 0; }
 </style></head><body>
 <svg width="660" height="400" viewBox="0 0 660 400" xmlns="http://www.w3.org/2000/svg">
@@ -78,7 +70,4 @@ svg { position: absolute; inset: 0; }
   <path d="M 268 196 C 304 176, 356 176, 392 196" fill="none" stroke="url(#arrow)" stroke-width="3" stroke-linecap="round"/>
   <path d="M 380 184 L 394 197 L 376 203" fill="none" stroke="#5fc7fb" stroke-opacity="0.95" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-<div class="title">Drag <span>Quill</span> to Applications</div>
-<div class="sub">Then open it from Launchpad or Spotlight.</div>
-<div class="foot">An independent, unofficial Telegram client</div>
 </body></html>
