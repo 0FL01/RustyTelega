@@ -26,4 +26,5 @@ icon_size = 128
 text_size = 13
 label_pos = "bottom"
 icon_locations = {app_name: (170, 190), "Applications": (490, 190)}
-hide_extensions = [app_name]
+# No hide_extensions: it sets a Finder info attribute on Quill.app, which
+# `codesign --verify --strict` rejects once the app is copied out.
