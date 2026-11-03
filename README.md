@@ -51,7 +51,7 @@ curl -fsSL https://raw.githubusercontent.com/shinycake/quill/main/scripts/linux-
 
 Each script downloads the latest release from [GitHub Releases](https://github.com/shinycake/quill/releases) and checks it against the release's SHA-256 checksums. If the file doesn't match, the script stops and installs nothing. None of them needs administrator rights. Run the same command again to update.
 
-Quill isn't signed with a paid Apple or Microsoft certificate yet. A zip downloaded in a browser therefore needs a one-time confirmation on first launch: on a Mac, Open Anyway under System Settings > Privacy & Security; on Windows, More info > Run anyway. Files the scripts download aren't marked for that check, so they open without a warning. The [website](https://shinycake.github.io/quill/#install) walks through both routes step by step.
+Quill for Mac is signed with a Developer ID and notarized by Apple, so it opens without a warning however you download it. A Mac copy installed before 3 November 2026 can't update to the notarized version by itself: install it once with the command above, and updates work as usual after that. The Windows build isn't signed with a paid certificate yet, so a zip downloaded in a browser asks once on first launch: click More info, then Run anyway. Files the script downloads aren't marked for that check, so they open without a warning. The [website](https://shinycake.github.io/quill/#install) walks through it step by step.
 
 ## Features
 
@@ -138,7 +138,7 @@ Without credentials, `cargo run --features ui` opens a synthetic demo chat. To s
 
 On Linux, building the UI also needs the GTK 3 and ALSA development packages (`libgtk-3-dev` and `libasound2-dev` on Debian and Ubuntu).
 
-Toolchain: Rust 1.99.1, pinned in `rust-toolchain.toml` (the minimum supported version is 1.92). UI: gpui-kit 0.8.1. TDLib: 1.8.69.
+Toolchain: Rust 1.99.1, pinned in `rust-toolchain.toml` (the minimum supported version is 1.92). UI: gpui-kit 0.9.0. TDLib: 1.8.69.
 
 ## Questions
 

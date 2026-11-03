@@ -293,7 +293,7 @@ kbd { font-family: var(--font); font-size: 13px; padding: 1px 7px; border-radius
 .open-steps p strong:first-child::before { content: counter(step) ". "; color: var(--accent); }
 .open-steps p strong { color: var(--text); }
 
-/* Drawn stand-ins for the macOS dialogs, in the page's own light or dark theme. */
+/* Drawn stand-ins for system dialogs, in the page's own light or dark theme. */
 .mock { --m-bg: #2a2a2e; --m-text: #f2f2f4; --m-sub: #b8b8bf; --m-btn: #48484e; --m-line: rgba(255,255,255,.1);
   border-radius: 14px; background: var(--m-bg); color: var(--m-text); border: 1px solid var(--m-line); box-shadow: 0 14px 40px -18px rgba(0,0,0,.6); font-size: 12px; line-height: 1.35; }
 @media (prefers-color-scheme: light) {
@@ -302,20 +302,6 @@ kbd { font-family: var(--font); font-size: 13px; padding: 1px 7px; border-radius
 .mock .mbtn { display: block; font-style: normal; text-align: center; padding: 5px 10px; border-radius: 7px; background: var(--m-btn); font-weight: 500; }
 .mock .mbtn.primary { background: #0064d1; color: #fff; }
 .mock .ring { outline: 2.5px solid var(--accent); outline-offset: 2px; }
-.mock-alert { display: grid; justify-items: center; gap: 6px; padding: 18px 16px 14px; text-align: center; max-width: 280px; }
-.mock-alert img { border-radius: 12px; }
-.mock-alert b { font-size: 13px; margin-top: 4px; }
-.mock-alert span { color: var(--m-sub); margin-bottom: 6px; }
-.mock-alert .mbtn { width: 100%; }
-.mock-settings { display: flex; overflow: hidden; min-height: 150px; }
-.mock-settings .side { flex: none; width: 34%; padding: 12px 8px; display: flex; flex-direction: column; gap: 7px; border-right: 1px solid var(--m-line); }
-.mock-settings .side span { height: 9px; border-radius: 4px; background: var(--m-btn); }
-.mock-settings .side .sel { height: auto; padding: 3px 6px; background: #0064d1; color: #fff; font-size: 11px; }
-.mock-settings .pane { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.mock-settings .pane b { font-size: 13px; }
-.mock-settings .pane em { font-style: normal; font-weight: 600; color: var(--m-sub); }
-.mock-settings .row { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 9px; background: var(--m-btn); }
-.mock-settings .row .mbtn { align-self: flex-end; background: var(--m-bg); }
 
 /* Drawn stand-in for the SmartScreen dialog, which is blue in either Windows theme. */
 .mock-smartscreen { --m-bg: #0063b1; --m-text: #fff; --m-sub: #e6f0fa; --m-btn: rgba(255,255,255,.18); --m-line: rgba(255,255,255,.2);
