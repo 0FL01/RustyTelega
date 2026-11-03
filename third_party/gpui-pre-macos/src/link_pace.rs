@@ -2,8 +2,7 @@
 // third_party/gpui-pre-macos/QUILL-CHANGES.md. Standard library only, so
 // scripts/test-frame-idle.sh runs its tests on any host.
 
-//! Each tick of a window's display link wakes a CoreVideo thread and the
-//! main thread, so it runs only while the display should pace frames: GPUI
+//! Each tick of a window's display link wakes the main thread, so it runs only while the display should pace frames: GPUI
 //! asked for the next frame, or draws come close together. A lone draw comes
 //! from the frame waker, draws at once and leaves the link stopped. A wake
 //! draws within about 2 ms, so such a frame gains nothing from the link.

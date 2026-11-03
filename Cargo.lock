@@ -3683,7 +3683,6 @@ dependencies = [
  "core-graphics 0.24.0",
  "ctor",
  "dispatch2",
- "foreign-types",
  "futures",
  "gpui-pre",
  "gpui-pre-apple",

@@ -175,6 +175,7 @@ jobs:
       - name: clippy (quill-webview)
         run: cargo clippy -p quill-webview --all-targets --locked -- -D warnings
       - name: carrier live tests (helper)
+        timeout-minutes: 30
         env:
           CARRIER_SOAK_SECS: "130"
         run: dbus-run-session -- xvfb-run -a cargo test -p quill-webview --locked --test carrier_live -- --ignored --test-threads=1 --nocapture
@@ -219,6 +220,7 @@ jobs:
         run: cargo clippy -p quill-webview --all-targets --locked -- -D warnings
       - name: carrier live tests (helper)
         if: steps.changed.outputs.run == 'true'
+        timeout-minutes: 30
         env:
           CARRIER_SOAK_SECS: "130"
           # The helper's path-free trace of what WebView2 refused or cancelled.

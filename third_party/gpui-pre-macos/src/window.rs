@@ -669,6 +669,10 @@ struct MacWindowState {
     cursor_style: CursorStyle,
     cursor_visible: Arc<AtomicBool>,
     frame_source: Option<WindowFrameSource>,
+    /// Quill: this window's state, for the display link's callback.
+    this: std::rc::Weak<Mutex<MacWindowState>>,
+    /// Quill: the display the link runs on and its refresh period.
+    link_display: Option<(CGDirectDisplayID, Option<Duration>)>,
     frame_idle: Arc<FrameIdle>,
     link_pace: LinkPace,
     drawable_release_armed: bool,
@@ -854,21 +858,41 @@ impl MacWindowState {
             // AppKit can temporarily report no screen while displays are being reconfigured.
             return;
         };
+        let refresh: f64 = unsafe { msg_send![screen, minimumRefreshInterval] };
+        self.link_display = Some((display_id, Duration::try_from_secs_f64(refresh)
+                .ok()
+                .filter(|period| !period.is_zero())));
+        let Some(main_thread) = crate::main_thread_marker() else {
+            return;
+        };
+        let Some(layer) = self.renderer.layer().map(|layer| layer.retain()) else {
+            return;
+        };
         let data = self.native_view.as_ptr() as *mut c_void;
+        let window_state = self.this.clone();
         let source = self
             .frame_source
             .get_or_insert_with(|| WindowFrameSource::new(data, step));
-        source.start(display_id).log_err();
-        self.frame_idle
-            .running
-            .store(source.is_running(), Ordering::Relaxed);
+        source
+            .start(&layer, main_thread, move |update| {
+                if let Some(window_state) = window_state.upgrade() {
+                    metal_frame(&window_state, update);
+                }
+            })
+            .log_err();
+        let running = source.is_running();
+        self.renderer.set_display_link_attached(running);
+        self.frame_idle.running.store(running, Ordering::Relaxed);
     }
 
     fn stop_display_link(&mut self) {
         self.frame_idle.running.store(false, Ordering::Relaxed);
         if let Some(frame_source) = self.frame_source.as_mut() {
+            // Detach the link rather than pause it, so that a draw without
+            // one can take the layer's `nextDrawable`.
             frame_source.stop();
         }
+        self.renderer.set_display_link_attached(false);
     }
 
     fn is_maximized(&self) -> bool {
@@ -1107,6 +1131,8 @@ impl MacWindow {
                 cursor_style: CursorStyle::Arrow,
                 cursor_visible,
                 frame_source: None,
+                this: std::rc::Weak::new(),
+                link_display: None,
                 frame_idle: frame_idle.clone(),
                 link_pace: LinkPace::new(Instant::now()),
                 drawable_release_armed: false,
@@ -1153,6 +1179,7 @@ impl MacWindow {
                 accesskit_adapter: None,
                 sheet_parent: None,
             }));
+            state.lock().this = Rc::downgrade(&state);
             let mut window = Self(state, marker, frame_idle);
 
             (*native_window)
@@ -3442,6 +3469,33 @@ extern "C" fn display_layer(this: &AnyObject, _: Sel, _: *mut AnyObject) {
 extern "C" fn step(view: *mut c_void) {
     let view = view as *mut AnyObject;
     let window_state = unsafe { get_window_state(&*view) };
+    // A wake queued just before the link started: its next update serves it.
+    if window_state.lock().frame_idle.running.load(Ordering::Relaxed) {
+        return;
+    }
+    run_step(&window_state, None);
+}
+
+/// Quill: a display link update, drawing into the drawable it hands out.
+fn metal_frame(
+    window_state: &Rc<Mutex<MacWindowState>>,
+    update: &objc2_quartz_core::CAMetalDisplayLinkUpdate,
+) {
+    let signal_at = PlatformFrameSignal::capture(scheduler::Instant::now);
+    {
+        let mut lock = window_state.lock();
+        if let Some((display_id, period)) = lock.link_display {
+            crate::display_link::note_present(display_id, update, period);
+        }
+        lock.renderer.set_frame_drawable(Some(update.drawable()));
+    }
+    run_step(window_state, signal_at);
+}
+
+fn run_step(
+    window_state: &Rc<Mutex<MacWindowState>>,
+    signal_at: Option<scheduler::Instant>,
+) {
     let mut lock = window_state.lock();
     let idle = lock.frame_idle.clone();
     // Quill: the display link runs only while frames are wanted (`link_pace`).
@@ -3451,23 +3505,18 @@ extern "C" fn step(view: *mut c_void) {
     let running = idle.running.load(Ordering::Relaxed);
 
     if let Some(mut callback) = lock.request_frame_callback.take() {
-        let signal = lock
-            .frame_source
-            .as_ref()
-            .and_then(|frame_source| frame_source.take_signal());
-        let (signal_at, signal_source) = signal.map_or(
-            (None, FrameRequestSource::NativeCallback),
-            |(at, source)| (Some(at), source),
-        );
         drop(lock);
         callback(RequestFrameOptions {
             signal_at,
-            signal_source,
+            signal_source: FrameRequestSource::NativeCallback,
             ..Default::default()
         });
         lock = window_state.lock();
         lock.request_frame_callback = Some(callback);
     }
+    // A frame with nothing to draw leaves its drawable unused; releasing it
+    // lets the link hand it out again.
+    lock.renderer.set_frame_drawable(None);
 
     let step = Step {
         drew: idle.drew.load(Ordering::Relaxed),
@@ -3480,7 +3529,7 @@ extern "C" fn step(view: *mut c_void) {
         LinkChange::Stop => lock.stop_display_link(),
     }
     if (step.drew || change == LinkChange::Stop) && !idle.running.load(Ordering::Relaxed) {
-        schedule_drawable_release(&window_state, &mut lock);
+        schedule_drawable_release(window_state, &mut lock);
     }
 }
 

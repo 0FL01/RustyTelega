@@ -388,8 +388,19 @@ impl Helper {
         }
     }
 
+    /// A cold system web view has no time limit worth guessing, so this waits
+    /// until the helper reports or exits; the CI step bounds a real hang.
     fn ready(&mut self) {
-        assert_eq!(self.next(Duration::from_secs(20)), CarrierEvent::Ready);
+        loop {
+            match self.events.recv() {
+                Ok(CarrierEvent::Alive) => self.alive += 1,
+                Ok(event) => {
+                    assert_eq!(event, CarrierEvent::Ready);
+                    return;
+                }
+                Err(_) => panic!("the helper exited before it was ready"),
+            }
+        }
     }
 
     fn echoes(&mut self) {
