@@ -1,7 +1,7 @@
 # Linux arm64 packages
 
 ## What tdesktop does
-Telegram Desktop ships Linux builds for x86_64 only (tarball, Snap, Flatpak); arm64 users rely on distribution or Flathub builds.
+Telegram Desktop ships Linux builds for x86_64 only (tarball, Snap, Flatpak); arm64 users rely on distribution or Flatpak builds.
 
 ## What changed
 - `package-linux.yml` builds the package twice, natively: `ubuntu-22.04` for x86_64 and `ubuntu-22.04-arm` for aarch64. Both use Ubuntu 22.04, so both packages need glibc 2.35 at most. Every check (ELF dependencies, dlopen, video probe, tarball smoke, updater asset name) runs on each CPU.

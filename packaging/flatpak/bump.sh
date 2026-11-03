@@ -4,8 +4,7 @@
 #
 #   bash packaging/flatpak/bump.sh v2026.1103.4940
 #
-# flatpak-external-data-checker does the same on Flathub; CI runs this on
-# `release: published` to build the new release before Flathub picks it up.
+# CI runs this on `release: published` to build the new release.
 set -euo pipefail
 
 TAG="${1:?usage: bump.sh vYEAR.MONTHDAY.COMMITS}"

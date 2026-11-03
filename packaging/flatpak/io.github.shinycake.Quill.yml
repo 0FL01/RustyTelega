@@ -54,7 +54,7 @@ modules:
       # to $FLATPAK_ID, which the shell matches to this file by name, and
       # builds from before that change still match through StartupWMClass.
       - desktop-file-edit --set-icon="${FLATPAK_ID}" "${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.desktop"
-      # Flathub takes PNG icons up to 512x512.
+      # Flatpak exports PNG icons up to 512x512.
       - |
         for size in 16 22 24 32 48 64 128 256 512; do
           install -Dm644 "share/icons/hicolor/${size}x${size}/apps/quill.png" \
@@ -66,22 +66,9 @@ modules:
         only-arches: [x86_64]
         url: https://github.com/shinycake/quill/releases/download/v2026.1103.4954/quill-linux-x86_64-bundle.tar.gz
         sha256: 23b9b97b918cb0f0c465383268285c236477f2553a493a9b594c370efdd45f33
-        x-checker-data:
-          type: json
-          url: https://api.github.com/repos/shinycake/quill/releases/latest
-          version-query: .tag_name | sub("^v"; "")
-          timestamp-query: .published_at
-          url-query: .assets[] | select(.name == "quill-linux-x86_64-bundle.tar.gz") | .browser_download_url
-          is-main-source: true
       - type: archive
         only-arches: [aarch64]
         url: https://github.com/shinycake/quill/releases/download/v2026.1103.4954/quill-linux-aarch64-bundle.tar.gz
         sha256: a9dd355135b6e51b5189bccdf2456ae8ea511f5ee22a701523aee224fe686c08
-        x-checker-data:
-          type: json
-          url: https://api.github.com/repos/shinycake/quill/releases/latest
-          version-query: .tag_name | sub("^v"; "")
-          timestamp-query: .published_at
-          url-query: .assets[] | select(.name == "quill-linux-aarch64-bundle.tar.gz") | .browser_download_url
       - type: file
         path: io.github.shinycake.Quill.metainfo.xml

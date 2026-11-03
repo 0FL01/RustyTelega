@@ -1,13 +1,13 @@
-# Flathub package
+# Flatpak package
 
 ## What tdesktop does
-Telegram Desktop is on Flathub as `org.telegram.desktop`, built from source on
+Telegram Desktop ships a Flatpak, `org.telegram.desktop`, built from source on
 the GNOME runtime with `--device=all`, `--system-talk-name=org.bluez`, and
 talk names for notifications, Mutter's idle monitor and the tray watcher.
 
 ## Shape
-- **App id `io.github.shinycake.Quill`.** Flathub wants a domain the developer
-  controls; the GitHub account `shinycake` proves this one. Outside Flatpak the
+- **App id `io.github.shinycake.Quill`.** A reverse-DNS id on a domain the
+  developer controls; the GitHub account `shinycake` proves this one. Outside Flatpak the
   desktop id stays `org.shinycake.quill`, so existing tarball installs keep
   their launcher, `tg:` registration and pinned docks.
 - **Repackaged release tarball, not a source build.** The manifest unpacks
@@ -16,17 +16,16 @@ talk names for notifications, Mutter's idle monitor and the tray watcher.
   build would have to vendor about 1,080 crates and the git-pinned GPUI family
   for an offline build, plus TDLib, tgcalls and FFmpeg as modules, and would
   have to embed the Telegram API credentials, which live in a CI secret and
-  must not be in a public manifest. Flathub reviewers may still ask for a
-  source build; this is the explanation to give, and a source build would be
-  a separate project.
+  must not be in a public manifest. A source build would be a separate
+  project.
 - **Runtime `org.gnome.Platform` 51.** It still ships WebKitGTK 4.1 and
   libsoup 3 for `quill-webview`, and the release binaries need glibc 2.35, far
   below the runtime's. CI runs `ldd` on every binary in the sandbox.
 - **`/app/bin/quill` is a symlink.** Quill finds `lib/`, `ffmpeg` and
   `quill-webview` from its resolved path (`$ORIGIN` and `current_exe`), which is
   `/app/lib/quill/quill`.
-- **Updates** come from flatpak-external-data-checker reading the GitHub
-  latest-release API (`x-checker-data`). The in-app updater already reports
+- **Updates** come from Quill's own repo on the site, rebuilt from each
+  release's bundles (`scripts/site-flatpak-repo.sh`). The in-app updater already reports
   "managed by your package manager" under `/app`.
 
 ## Permissions
@@ -73,4 +72,4 @@ untested).
   defaults; the proxy portal is not used.
 - Spell-check dictionaries: only those in the runtime and `/app/share/hunspell`.
 - Nothing has run on a real Linux desktop from the Flatpak; CI checks the build,
-  Flathub's linter, `--version` and library loading.
+  flatpak-builder-lint, `--version` and library loading.

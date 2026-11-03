@@ -68,7 +68,7 @@ Windows gap.
 |---|---|---|
 | Homebrew | `shinycake/homebrew-tap`, cask `quill-app` (the token `quill` is a homebrew/core formula) | the tap's scheduled `bump` workflow reads the latest release's `SHA256SUMS.txt`, audits and commits |
 | Chocolatey | community package `quill`, wrapping the setup.exe | `chocolatey.yml` tests each release's package on Windows and pushes it when `CHOCO_API_KEY` is set; moderators review each version |
-| Flatpak | Quill's own repo at `https://shinycake.github.io/quill/flatpak/`, app `io.github.shinycake.Quill` | `flatpak.yml` attaches each release's bundles; the site rebuilds the signed repo from them (`scripts/site-flatpak-repo.sh`). Not on Flathub: its submission rules exclude agent-made submissions, and the owner chose not to |
+| Flatpak | Quill's own repo at `https://shinycake.github.io/quill/flatpak/`, app `io.github.shinycake.Quill` | `flatpak.yml` attaches each release's bundles; the site rebuilds the signed repo from them (`scripts/site-flatpak-repo.sh`) |
 
 Chocolatey is the only Windows package manager, by the owner's decision on
 3 November 2026: Quill is not offered on winget or Scoop. A Scoop bucket and a

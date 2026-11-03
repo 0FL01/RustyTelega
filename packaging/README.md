@@ -25,8 +25,7 @@ hand. After that every channel follows new releases by itself.
    workflow runs every three hours; run it by hand after a release to skip
    the wait.
 
-2. **Flatpak.** Quill is not on Flathub (the owner's decision); it has its own
-   repo on the site. Add the signing key, kept outside the repo, as the
+2. **Flatpak.** Quill has its own Flatpak repo on the site. Add the signing key, kept outside the repo, as the
    `FLATPAK_GPG_KEY` secret: `gh secret set FLATPAK_GPG_KEY -R shinycake/quill
    < ~/.config/quill-release/flatpak-signing.asc`. See `flatpak/README.md`.
 

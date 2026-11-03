@@ -1,5 +1,5 @@
-# Builds the Flatpak manifest (packaging/flatpak) in Flathub's build
-# container, lints it the way Flathub does, and checks the installed app
+# Builds the Flatpak manifest (packaging/flatpak) in the Flatpak build
+# container, lints it with flatpak-builder-lint, and checks the installed app
 # starts and finds every library. Pull requests build the release the
 # manifest names; a published release builds that new release, attaches
 # the bundles to it (quill-linux-<arch>.flatpak) and rebuilds the site,
@@ -12,7 +12,7 @@ on:
     paths:
       - packaging/flatpak/**
       - assets/linux/**
-      - docs/screenshots/flathub/**
+      - docs/screenshots/flatpak/**
       - .github/workflows/flatpak.yml
   workflow_dispatch:
     inputs:
@@ -62,7 +62,7 @@ jobs:
       # Screenshots are linked from main, so a pull request that adds or
       # changes one cannot reach it yet: pull requests skip the URL check.
       # The build lint always skips the screenshot errors that only
-      # Flathub's own mirror (dl.flathub.org/media) can satisfy.
+      # a hosted screenshot mirror can satisfy.
       - name: Validate the metainfo
         run: |
           net=()
