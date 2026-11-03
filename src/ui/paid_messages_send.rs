@@ -172,7 +172,11 @@ impl QuillApp {
         let session = self.session()?;
         let chat_id = session.open_chat?;
         let title = session.chats.get(&chat_id.0)?.title.clone();
-        if let SendGate::Charges { stars } = session.send_gate(chat_id) {
+        // A channel's direct messages say the price in the empty chat's card
+        // and the field's placeholder, as tdesktop does.
+        if let SendGate::Charges { stars } = session.send_gate(chat_id)
+            && session.direct_messages_role(chat_id).is_none()
+        {
             let line = SendGate::Charges { stars }.sentence(&title)?;
             return Some(
                 div()

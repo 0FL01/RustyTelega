@@ -752,6 +752,8 @@ impl QuillApp {
                         self.secret_empty_explainer(cx).into_any_element()
                     } else if let Some(intro) = self.bot_about_intro(chat.as_ref(), cx) {
                         intro
+                    } else if let Some(intro) = self.locked_intro(chat.as_ref(), cx) {
+                        intro
                     } else if let Some(intro) = self.greeting_intro(chat.as_ref(), cx) {
                         intro
                     } else {

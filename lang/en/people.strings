@@ -83,7 +83,6 @@
 "lng_manage_history_visibility_hidden_about" = "New members won't see earlier messages.";
 "lng_manage_history_visibility_shown_about" = "New members will see messages that were sent before they joined.";
 "lng_manage_history_visibility_title" = "Chat history for new members";
-"lng_manage_monoforum" = "Direct Messages";
 "lng_manage_peer_exceptions" = "Exceptions";
 "lng_manage_peer_no_forwards_about" = "Members won't be able to copy, save or forward content from this group.";
 "lng_manage_peer_no_forwards_about_channel" = "Subscribers won't be able to copy, save or forward content from this channel.";

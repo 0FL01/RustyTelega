@@ -49,6 +49,9 @@ pub struct ChannelFacts {
     /// `None` until membership is known.
     pub membership: Option<ChannelMemberStatus>,
     pub join_by_request: bool,
+    /// A channel's direct messages group: anyone may write without
+    /// joining (`supergroup.is_direct_messages_group`).
+    pub direct_messages: bool,
 }
 
 /// `None` keeps the composer (or the existing note) as is.
@@ -61,7 +64,7 @@ pub fn bottom_bar(facts: &BarFacts) -> Option<BottomBar> {
     if facts.premium_required {
         return Some(BottomBar::PremiumRequired);
     }
-    if let Some(channel) = facts.channel {
+    if let Some(channel) = facts.channel.filter(|channel| !channel.direct_messages) {
         match channel.membership {
             Some(ChannelMemberStatus::Left) => {
                 return Some(if channel.broadcast {
@@ -110,6 +113,7 @@ mod tests {
                 broadcast,
                 membership,
                 join_by_request: by_request,
+                direct_messages: false,
             }),
             ..BarFacts::default()
         }
@@ -186,6 +190,15 @@ mod tests {
             Some(BottomBar::ApplyToJoin)
         );
         assert_eq!(BottomBar::ApplyToJoin.label(), "Apply to join group");
+    }
+
+    #[test]
+    fn direct_messages_keep_the_composer_without_joining() {
+        let mut facts = channel(false, Some(Status::Left), false);
+        if let Some(channel) = facts.channel.as_mut() {
+            channel.direct_messages = true;
+        }
+        assert_eq!(bottom_bar(&facts), None);
     }
 
     #[test]
