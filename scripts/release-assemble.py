@@ -38,9 +38,15 @@ DISCLAIMER = (
 # Release packages, keyed by the platform id the manifest exposes.
 PACKAGES = [
     {
+        "id": "macos-aarch64-dmg",
+        "asset": "quill-macos-aarch64.dmg",
+        "label": "macOS 14 or later, Apple Silicon (disk image)",
+        "kind": "dmg",
+    },
+    {
         "id": "macos-aarch64",
         "asset": "quill-macos-aarch64.zip",
-        "label": "macOS 14 or later, Apple Silicon",
+        "label": "macOS 14 or later, Apple Silicon (zip)",
         "kind": "app-zip",
     },
     {
@@ -56,9 +62,15 @@ PACKAGES = [
         "kind": "tarball",
     },
     {
+        "id": "windows-x86_64-setup",
+        "asset": "quill-windows-x86_64-setup.exe",
+        "label": "Windows 10 or later, x86_64 (installer)",
+        "kind": "setup",
+    },
+    {
         "id": "windows-x86_64",
         "asset": "quill-windows-x86_64.zip",
-        "label": "Windows 10 or later, x86_64",
+        "label": "Windows 10 or later, x86_64 (zip)",
         "kind": "zip",
     },
 ]
@@ -69,22 +81,40 @@ UPDATE_BINARIES = {"linux-x86_64": "quill-linux-x86_64", "linux-aarch64": "quill
 INSTALL = """\
 ## Installing
 
-**macOS (Apple Silicon, macOS 14+).** Paste this into Terminal to install or
-update Quill in Applications:
+**macOS (Apple Silicon, macOS 14+).** Download `quill-macos-aarch64.dmg`, open
+it and drag Quill to Applications. Quill is signed with a Developer ID and
+notarized by Apple, so it opens without a warning. With Homebrew:
+
+```sh
+brew install --cask shinycake/tap/quill-app
+```
+
+Or paste this into Terminal to install or update Quill in Applications:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/shinycake/quill/main/scripts/macos-install.sh | bash
 ```
 
-It downloads `quill-macos-aarch64.zip`, checks its SHA-256 and signature, and
-installs `Quill.app`. Quill opens straight away, with no security warning.
+**Windows (x86_64, Windows 10+).** Download and run
+`quill-windows-x86_64-setup.exe`. It installs Quill for your user, with no
+administrator rights, adds a Start menu shortcut and lists Quill in
+Settings > Apps. The installer is not code-signed yet, so SmartScreen may warn
+the first time: choose **More info > Run anyway**. With Scoop:
 
-If you download the zip in a browser instead, macOS blocks the first launch,
-because Quill is not notarized (it has no paid Apple Developer ID; it is only
-ad-hoc signed). Move `Quill.app` to Applications and run
-`xattr -dr com.apple.quarantine /Applications/Quill.app` in Terminal, or open
-Quill once, then go to System Settings > Privacy & Security, click
-**Open Anyway** next to the Quill message, and confirm.
+```powershell
+scoop bucket add shinycake https://github.com/shinycake/scoop-bucket
+scoop install shinycake/quill
+```
+
+Or paste this into PowerShell, which installs the same way without the
+SmartScreen prompt:
+
+```powershell
+irm https://raw.githubusercontent.com/shinycake/quill/main/scripts/windows-install.ps1 | iex
+```
+
+`quill-windows-x86_64.zip` is the same app unpacked: unzip it anywhere and run
+`quill.exe`. No Visual C++ Redistributable is needed.
 
 **Linux (x86_64 or arm64, glibc).** Paste this into a terminal to install or
 update Quill for your user, with no root needed:
@@ -100,22 +130,6 @@ To do it by hand, unpack the tarball with `tar -xzf`, then run
 `quill-linux-<arch>/quill` in place or `quill-linux-<arch>/install.sh` (pass a
 prefix to install elsewhere). Quill can update this package in place from
 Settings.
-
-**Windows (x86_64, Windows 10+).** Paste this into PowerShell to install or
-update Quill for your user, with no administrator rights needed:
-
-```powershell
-irm https://raw.githubusercontent.com/shinycake/quill/main/scripts/windows-install.ps1 | iex
-```
-
-It downloads `quill-windows-x86_64.zip`, checks its SHA-256, installs it in
-`%LOCALAPPDATA%\Programs\Quill` with a Start menu shortcut, and adds Quill to
-Settings > Apps so you can remove it there. Quill starts without a SmartScreen
-warning (Smart App Control, when turned on, is a separate check and may still
-block it). If you download the zip in a browser instead, unzip it anywhere and
-run `quill.exe`. The zip is not code-signed, so SmartScreen warns the first
-time: choose **More info > Run anyway**. No Visual C++ Redistributable is
-needed.
 """
 
 

@@ -1,0 +1,25 @@
+name: audit
+on:
+  push:
+    paths: ['Casks/**']
+  pull_request:
+    paths: ['Casks/**']
+
+jobs:
+  audit:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: audit and install
+        run: |
+          brew tap-new --no-git local/check >/dev/null
+          brew trust local/check
+          mkdir -p "$(brew --repository local/check)/Casks"
+          cp Casks/*.rb "$(brew --repository local/check)/Casks/"
+          brew audit --cask --online --strict local/check/quill-app
+          brew style "$(brew --repository local/check)/Casks/quill-app.rb"
+          brew install --cask local/check/quill-app
+          test -d /Applications/Quill.app
+          quill --version
+          spctl --assess --type execute --verbose=4 /Applications/Quill.app
+          brew uninstall --cask --zap local/check/quill-app

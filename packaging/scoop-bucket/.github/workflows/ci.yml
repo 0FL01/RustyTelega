@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  install:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: install, run and uninstall with Scoop
+        shell: pwsh
+        run: |
+          irm get.scoop.sh -outfile "$env:RUNNER_TEMP\install-scoop.ps1"
+          & "$env:RUNNER_TEMP\install-scoop.ps1" -RunAsAdmin
+          $env:PATH = "$env:USERPROFILE\scoop\shims;$env:PATH"
+          scoop install .\bucket\quill.json
+          if ($LASTEXITCODE -ne 0) { throw "scoop install failed" }
+          $v = (quill --version) -join ''
+          if ($v -notmatch '^Quill \d') { throw "unexpected: $v" }
+          if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Scoop Apps\Quill.lnk")) { throw 'no shortcut' }
+          scoop uninstall quill
