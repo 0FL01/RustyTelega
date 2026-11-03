@@ -1,17 +1,20 @@
 //! Watches the system battery saver (tdesktop `base::BatterySaving`) and
 //! forces every power-saving flag on while it is on.
 //!
-//! tdesktop is notified by the platform. On Linux so is this watcher, when
-//! the portal or power-profiles-daemon answers (`quill::battery_signal`);
-//! elsewhere, or without either, a task asks every half minute while the
-//! switch is on, and not at all while it is off (the first probe still runs
-//! so the switch is offered when the platform has a saver).
-//! While an agent drives the window it also asks every half minute, because
-//! the takeover glow's sweep stops in the system's low-power mode even with
-//! the switch off (`agent_takeover_glow::sweep_allowed`).
-//! The question can block (Linux runs `gdbus`), so it runs on the background
-//! executor. Only a change touches the UI: the flags and GPUI's reduced
-//! motion are updated and the windows redraw.
+//! tdesktop is notified by the platform, and so is this watcher: macOS and
+//! Windows through GPUI's power mode. GPUI's Linux backend reads only the
+//! profile daemon, which a sandboxed app cannot reach, so Linux follows the
+//! portal or the daemon itself (`quill::battery_signal`). Without either, a
+//! task asks every half minute while the switch is on, and not at all while
+//! it is off (the first probe still runs so the switch is offered when the
+//! platform has a saver). While an agent drives the window it also asks
+//! every half minute, because the takeover glow's sweep stops in the
+//! system's low-power mode even with the switch off
+//! (`agent_takeover_glow::sweep_allowed`). The question can block (it runs
+//! `gdbus`), so it runs on the background executor.
+//!
+//! Only a change touches the UI: the flags and GPUI's reduced motion are
+//! updated and the windows redraw.
 //!
 //! Thermal pressure (macOS `NSProcessInfo.thermalState`; Linux and Windows
 //! always report Nominal) feeds the same force path. It is event-driven
@@ -19,14 +22,17 @@
 #![deny(clippy::indexing_slicing)]
 
 use gpui_kit::*;
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
 /// Between probes while "Save Power on Low Battery" is on. Each probe may
 /// spawn a process (Linux), and a battery saver is switched by hand, so half
 /// a minute is prompt enough.
+#[cfg(target_os = "linux")]
 const POLL: Duration = Duration::from_secs(30);
 /// Between checks while the switch is off: nothing depends on the answer,
 /// so the task only waits to be poked when the switch comes back on.
+#[cfg(target_os = "linux")]
 const PARKED: Duration = Duration::from_secs(600);
 
 /// Start the watcher; later calls do nothing.
@@ -38,6 +44,25 @@ pub(crate) fn watch(cx: &mut App) {
         return;
     }
     watch_thermal(cx);
+    watch_saver(cx);
+}
+
+/// Follow the saver through GPUI: read it once, then on each change.
+#[cfg(not(target_os = "linux"))]
+fn watch_saver(cx: &mut App) {
+    apply_power_mode(cx);
+    cx.on_power_mode_change(apply_power_mode).detach();
+}
+
+#[cfg(not(target_os = "linux"))]
+fn apply_power_mode(cx: &mut App) {
+    // Unknown is the normal state on macOS: it does not tell Automatic from
+    // High Power, only whether Low Power Mode is on.
+    apply_answer(Some(cx.power_mode() == PowerMode::LowPower), cx);
+}
+
+#[cfg(target_os = "linux")]
+fn watch_saver(cx: &mut App) {
     quill::battery_saving::start_events();
     cx.spawn(async move |cx| {
         loop {
@@ -46,8 +71,7 @@ pub(crate) fn watch(cx: &mut App) {
                 .background_executor()
                 .spawn(async { quill::battery_saving::probe() })
                 .await;
-            let changed = cx.update(|cx| apply_answer(answer, cx));
-            let _ = changed;
+            cx.update(|cx| apply_answer(answer, cx));
             // The agent takeover's sweep follows the system's low-power
             // mode whatever the switch says, so it is asked while an agent
             // drives (a new session pokes the wake as well).
@@ -94,8 +118,8 @@ fn apply_thermal(cx: &mut App) {
     }
 }
 
-/// Take a probe answer in. Returns whether anything visible changed.
-fn apply_answer(answer: Option<bool>, cx: &mut App) -> bool {
+/// Take the platform's answer in.
+fn apply_answer(answer: Option<bool>, cx: &mut App) {
     let before = (
         quill::battery_saving::state(),
         quill::battery_saving::forcing(),
@@ -106,10 +130,8 @@ fn apply_answer(answer: Option<bool>, cx: &mut App) -> bool {
         quill::battery_saving::state(),
         quill::battery_saving::forcing(),
     );
-    if before == after {
-        return false;
+    if before != after {
+        cx.set_reduce_motion(quill::power_saving::reduce_motion_now());
+        cx.refresh_windows();
     }
-    cx.set_reduce_motion(quill::power_saving::reduce_motion_now());
-    cx.refresh_windows();
-    true
 }

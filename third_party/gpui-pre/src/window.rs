@@ -1998,7 +1998,7 @@ impl Window {
                     mem::take(&mut deferred_force_render) || request_frame_options.force_render;
 
                 let power_state = handle
-                    .update(&mut cx, |_, _, cx| (cx.thermal_state(), cx.power_mode()))
+                    .update(&mut cx, |_, _, cx| (cx.thermal_state(), cx.frame_power_mode()))
                     .with_context(|| {
                         format!(
                             "reading power state for frame request for window {:?}",

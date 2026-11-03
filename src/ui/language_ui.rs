@@ -95,6 +95,42 @@ fn current_id() -> String {
     quill::lang::current_pack_id()
 }
 
+/// Install a pack, and point the kit's own strings (calendar days, input
+/// menus) at the same language where the kit has it.
+pub(super) fn install_pack(snapshot: Option<quill::lang::Snapshot>) {
+    quill::lang::install(snapshot);
+    let current = quill::lang::current();
+    let (pack, language) = current
+        .as_deref()
+        .map_or(("en", "en"), |s| (s.pack_id(), s.plural_code()));
+    gpui_kit::component::set_locale(kit_locale(pack, language));
+}
+
+/// The kit's locale for a pack and its language. Telegram has no official
+/// Chinese pack, so Chinese is told from community ids such as `zhcncc`,
+/// `classic-zh-cn` and `zh-hant-raw`. The kit falls back to English key by
+/// key, and has nothing for other languages.
+fn kit_locale(pack_id: &str, language: &str) -> &'static str {
+    let id = pack_id.to_ascii_lowercase();
+    let language = language.to_ascii_lowercase();
+    if id.contains("zh-hant-hk") {
+        return "zh-HK";
+    }
+    if id.contains("zh-hant") {
+        return "zh-TW";
+    }
+    if id.contains("zh") {
+        return "zh-CN";
+    }
+    match language.split(['-', '_']).next().unwrap_or_default() {
+        "ru" => "ru",
+        "it" => "it",
+        "pt" => "pt-BR",
+        "zh" => "zh-CN",
+        _ => "en",
+    }
+}
+
 impl QuillApp {
     /// Settings → Language.
     pub(super) fn open_language_box(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -213,7 +249,7 @@ impl QuillApp {
         {
             let next = snapshot.patched(patch.iter().map(|(k, v)| (k.as_str(), v)));
             self.save_language_cache(&next, cx);
-            quill::lang::install(Some(next));
+            install_pack(Some(next));
             cx.refresh_windows();
         }
         // A switch the person started wins over a reload of the old pack:
@@ -246,7 +282,7 @@ impl QuillApp {
             self.language.recent = prefs::with_recent(&self.language.recent, &choice);
         }
         self.sync_language_tag(&choice.pack_id);
-        quill::lang::install(snapshot);
+        install_pack(snapshot);
         if let Some(root) = self.language_root() {
             let recent = self.language.recent.clone();
             let choice = if choice.is_builtin() {

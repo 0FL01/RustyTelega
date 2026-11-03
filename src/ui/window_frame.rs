@@ -123,8 +123,9 @@ pub(crate) fn window_decorations() -> Option<WindowDecorations> {
 /// How often GPUI draws a Quill window that asks for frames while another
 /// window has focus (`WindowOptions::inactive_frame_interval`, for the main
 /// and chat windows). GPUI's default, 33,333 µs, is almost exactly two
-/// 60 Hz vsyncs: a frame two vsyncs after the last one often measures a hair
-/// under it, so it was skipped and slipped a whole vsync, to about 50 ms (a
+/// 60 Hz vsyncs. With the pacer before gpui-pre 0.3.11, a frame two vsyncs
+/// after the last one often measured a hair under it, so it was skipped and
+/// slipped a whole vsync, to about 50 ms (a
 /// clip alone in a chat window with the main window focused: 17 frames/s
 /// instead of 23; with everything animating, 23 instead of 29). Just under
 /// two 60 Hz vsyncs, that frame is let through. At 120 Hz, GPUI's pacer keeps

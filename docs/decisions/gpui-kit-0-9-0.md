@@ -61,45 +61,40 @@ fields on a default value. Nothing else in Quill needed a change.
 
 ## For follow-up work
 
-Use these before writing Quill-side code for the same thing.
+Done after this upgrade:
 
-Worth doing soon:
+- The caret stops blinking, visibly, 10 s after the last focus, edit or move
+  (`set_theme_mode`). Every blink woke a frame.
+- macOS and Windows take the saver from `App::power_mode`, with no probe. GPUI had
+  no public change event, so Quill's copy adds `App::on_power_mode_change`. Linux
+  keeps `battery_signal`: GPUI reads only the profile daemon, so a sandboxed app
+  would lose the portal.
+- Windows are capped at about 30 fps in low power mode, upstream's default. The
+  owner chose this knowing it holds video, scrolling and PiP to the same rate.
+  Turning "Save Power on Low Battery" off lifts the cap
+  (`App::set_low_power_frame_cap`).
+- The kit's own strings follow the language pack where the kit has the language
+  (ru, it, pt-BR, zh-CN, zh-HK, zh-TW). Quill never called `set_locale` before, so
+  they were English for everyone.
+- `Keystroke::is_modifier_key` replaces Quill's copy.
 
-- `Theme::cursor_blink` with `CursorBlink::blinking(interval).with_idle_timeout(…)`
-  stops the caret after a while with no typing. Every blink wakes a frame, so
-  this cuts idle wakeups in a focused composer.
-- `App::power_mode` and `on_power_mode_change` report the OS low power mode on
-  macOS, Windows and Linux. `ZoomPlatform` forwards them. They could replace
-  `src/battery_signal.rs` and the battery watcher.
-- `low_power_frame_interval` caps a window's frame rate in low power mode.
-  Upstream defaults it to 30 fps. Quill's copy defaults to `None`, so nothing
-  changes for video or animation until someone decides on a cap with the video
-  player in mind.
-- `SendForegroundExecutor` (`ForegroundExecutor::to_send`) runs a `Send` future
-  on the main thread from any thread. It can replace hand-made wake paths from
-  worker threads to the UI.
-- `CAMetalDisplayLink` pacing on macOS 14 and later (see above). Measure idle
-  CPU, scroll pacing and video pacing on the old and new paths.
-- Test support can observe painted text and alternative text, which makes
-  assertions in the demo tests possible without pixel captures.
-- Kit `ru` translations: check them against the language packs for strings the
-  kit draws itself.
+Looked at, no use in Quill:
 
-Worth knowing:
+- `SendForegroundExecutor`: `quill::wake` signals already wake waiting tasks from
+  any thread without polling.
+- `InputEditsEvent`: the composer's checks read the new text, and spellcheck shifts
+  by its own comparison. A subscription would add state and remove none.
+- `set_client_corner_radii`: Quill's Linux window frame is square
+  (`window_border::BORDER_RADIUS` is 0).
+- Test support for painted text: `painted_quads` and `painted_underlines` exist,
+  painted text does not in this snapshot.
+- Icon resolver, touch selection, `SpeechWaveform`, Editor and Diff gutters.
 
-- `InputEditsEvent` comes with each `InputEvent::Change` and carries the edits.
-  The composer's word bar and draft sync could use it where they compare whole
-  texts today.
-- `Window::set_client_corner_radii` tells Wayland the corner radii of client-side
-  decorations. Quill could use it for its Linux window frame. The zoom wrapper
-  already forwards it, scaled.
-- `set_icon_resolver` and `resolve_icon_path` pick the path of every icon the kit
-  draws, for runtime icon themes.
-- `set_native_touch_selection` and `set_selected_text_range`, for IME and touch
-  hardware.
-- `Keystroke::is_modifier_key`, for the shortcut recorder.
-- `SpeechWaveform`'s liquid look, if Quill turns on the `speech` feature.
-- Editor and Diff gutter decorations have no use in Quill today.
+Still open:
+
+- `CAMetalDisplayLink` replaces `CVDisplayLink` in its own change, with Quill's
+  pacing fixes moved over. Compare idle CPU, scroll pacing and video pacing with a
+  build from before it.
 
 These fixes reach Quill without any change: the shutdown deadlock in text layout
 cleanup, `MessageScroller`'s scrollbar reaching the end of padded content,

@@ -52,3 +52,21 @@ fn recent_unofficial_packs_come_first_and_search_folds_diacritics() {
     let (top, rest) = language_rows(&list, &recent, "en", "klingon");
     assert!(top.is_empty() && rest.is_empty());
 }
+
+#[test]
+fn kit_strings_follow_the_pack_where_the_kit_has_the_language() {
+    for (pack, language, locale) in [
+        ("en", "en", "en"),
+        ("ru", "ru", "ru"),
+        ("ru-raw", "ru", "ru"),
+        ("my-custom-pack", "ru", "ru"),
+        ("pt-br", "pt-br", "pt-BR"),
+        ("classic-zh-cn", "zh", "zh-CN"),
+        ("zhcncc", "zh", "zh-CN"),
+        ("zh-hant-raw", "zh", "zh-TW"),
+        ("zh-hant-hk", "zh", "zh-HK"),
+        ("he", "he", "en"),
+    ] {
+        assert_eq!(super::kit_locale(pack, language), locale, "{pack}");
+    }
+}

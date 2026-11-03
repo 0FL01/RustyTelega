@@ -915,6 +915,7 @@ pub struct App {
     pub(crate) keyboard_layout_observers: SingleSubscriberSet<Handler>,
     missing_glyph_callback: Rc<MissingGlyphCallbackSlot>,
     pub(crate) thermal_state_observers: SingleSubscriberSet<Handler>,
+    pub(crate) power_mode_observers: SingleSubscriberSet<Handler>,
     pub(crate) display_observers: SingleSubscriberSet<DisplayHandler>,
     /// The connected displays, as of the platform's last display change
     /// notification.
@@ -983,6 +984,7 @@ pub struct App {
     /// Origin of the shared clock that phase-locks synced repeating animations.
     pub(crate) synced_animation_epoch: Instant,
     power_mode: PowerMode,
+    low_power_frame_cap: bool,
     /// Whether the app was created by [`Application::new_inaccessible`]. No
     /// accesskit APIs will be called when this flag is set.
     pub(crate) accessibility_force_disabled: bool,
@@ -1069,6 +1071,7 @@ impl App {
                 keyboard_layout_observers: SingleSubscriberSet::new(),
                 missing_glyph_callback: Rc::default(),
                 thermal_state_observers: SingleSubscriberSet::new(),
+                power_mode_observers: SingleSubscriberSet::new(),
                 display_observers: SingleSubscriberSet::new(),
                 displays: read_displays(platform.as_ref()),
                 system_sleep_observers: SingleSubscriberSet::new(),
@@ -1096,6 +1099,7 @@ impl App {
                 reduce_motion: false,
                 synced_animation_epoch,
                 power_mode,
+                low_power_frame_cap: true,
                 accessibility_force_disabled: false,
 
                 #[cfg(any(test, feature = "test-support", debug_assertions))]
@@ -1200,11 +1204,34 @@ impl App {
 
         platform.on_power_mode_change(Box::new({
             let app = Rc::downgrade(&app);
+            let foreground = platform.foreground_executor();
+            let background = platform.background_executor();
             move || {
-                if let Some(app) = app.upgrade() {
-                    let power_mode = app.borrow().platform.power_mode();
-                    app.borrow_mut().power_mode = power_mode;
-                }
+                // Quill: a platform can report this from a nested message
+                // pump, with the app borrowed, so the callback leaves the
+                // app alone and the task waits until it is free.
+                let app = app.clone();
+                let background = background.clone();
+                foreground
+                    .spawn(async move {
+                        loop {
+                            let Some(app) = app.upgrade() else {
+                                return;
+                            };
+                            if app.app.try_borrow_mut().is_ok() {
+                                app.borrow_mut().update(|cx| {
+                                    cx.power_mode = cx.platform.power_mode();
+                                    cx.power_mode_observers
+                                        .clone()
+                                        .retain(move |callback| (callback)(cx));
+                                });
+                                return;
+                            }
+                            drop(app);
+                            background.timer(Duration::from_millis(10)).await;
+                        }
+                    })
+                    .detach();
             }
         }));
 
@@ -1306,6 +1333,10 @@ impl App {
         counts.insert(
             "thermal_state_observers",
             self.thermal_state_observers.subscriber_count(),
+        );
+        counts.insert(
+            "power_mode_observers",
+            self.power_mode_observers.subscriber_count(),
         );
         counts.insert(
             "display_observers",
@@ -1840,6 +1871,18 @@ impl App {
         }))
     }
 
+    /// Quill: invokes a handler when the operating system's power mode
+    /// changes.
+    pub fn on_power_mode_change<F>(&self, mut callback: F) -> Subscription
+    where
+        F: 'static + FnMut(&mut App),
+    {
+        self.power_mode_observers.insert(Box::new(move |cx| {
+            callback(cx);
+            true
+        }))
+    }
+
     /// Invokes a handler when the system is about to sleep.
     ///
     /// The platform gives the process only a short time before suspending, so
@@ -1995,6 +2038,21 @@ impl App {
     /// when the platform cannot determine it.
     pub fn power_mode(&self) -> PowerMode {
         self.power_mode
+    }
+
+    /// Quill: whether low power mode caps frame rates
+    /// (`WindowOptions::low_power_frame_interval`).
+    pub fn set_low_power_frame_cap(&mut self, capped: bool) {
+        self.low_power_frame_cap = capped;
+    }
+
+    /// The power mode frame pacing follows.
+    pub(crate) fn frame_power_mode(&self) -> PowerMode {
+        if self.power_mode == PowerMode::LowPower && !self.low_power_frame_cap {
+            PowerMode::Balanced
+        } else {
+            self.power_mode
+        }
     }
 
     /// Writes data to the platform clipboard.

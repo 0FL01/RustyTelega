@@ -588,32 +588,13 @@ pub fn resolve_keybindings(customs: &[CustomKeybinding]) -> Vec<ResolvedKeybindi
     resolved
 }
 
-/// Modifier keys are the start of a chord, not a finished shortcut.
-pub fn is_modifier_key(key: &str) -> bool {
-    matches!(
-        key,
-        "control"
-            | "ctrl"
-            | "alt"
-            | "option"
-            | "shift"
-            | "platform"
-            | "cmd"
-            | "super"
-            | "win"
-            | "meta"
-            | "function"
-            | "fn"
-    )
-}
-
 /// Parseable chord for a captured key event (`"ctrl-k"`, `"cmd-shift-g"`).
 ///
 /// `Keystroke`'s `Display` is the on-screen form (`ctrl-K`, or symbols on
 /// macOS) and does not round-trip through `Keystroke::parse`. Returns
 /// `None` for bare modifiers so holding Ctrl does not end capture.
 pub fn canonical_event_chord(keystroke: &Keystroke) -> Option<String> {
-    if keystroke.key.is_empty() || is_modifier_key(&keystroke.key) {
+    if keystroke.key.is_empty() || keystroke.is_modifier_key() {
         return None;
     }
     let normalized = Keystroke {

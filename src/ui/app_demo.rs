@@ -487,7 +487,7 @@ impl QuillApp {
             let armed = ptt_app
                 .update(cx, |this, _| this.group_call.ptt_capture)
                 .unwrap_or(false);
-            if !armed || super::keybindings::is_modifier_key(&event.keystroke.key) {
+            if !armed || event.keystroke.is_modifier_key() {
                 return;
             }
             cx.stop_propagation();

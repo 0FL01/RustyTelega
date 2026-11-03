@@ -78,7 +78,7 @@ pub(crate) fn open_pip_window(open: PipOpen, cx: &mut App) -> Option<PipWindow> 
                 window_decorations: Some(WindowDecorations::Client),
                 // GPUI caps an unfocused window at 30 frames a second;
                 // this one is unfocused by design and plays at the
-                // clip's own rate.
+                // clip's own rate, low power mode's cap aside.
                 inactive_frame_interval: None,
                 ..Default::default()
             },
