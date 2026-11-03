@@ -123,6 +123,13 @@ update Quill for your user, with no root needed:
 curl -fsSL https://raw.githubusercontent.com/shinycake/quill/main/scripts/linux-web-install.sh | bash
 ```
 
+Or install it from Quill's own Flatpak repository, which updates with your
+other Flatpak apps:
+
+```sh
+flatpak install --user https://shinycake.github.io/quill/flatpak/quill.flatpakref
+```
+
 It picks the package for your CPU (`quill-linux-x86_64-bundle.tar.gz` or
 `quill-linux-aarch64-bundle.tar.gz`), checks its SHA-256, installs it under
 `~/.local` with a desktop entry, and names any system library that is missing.

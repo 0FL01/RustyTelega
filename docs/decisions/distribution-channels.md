@@ -70,7 +70,7 @@ Windows gap.
 | Scoop | `shinycake/scoop-bucket`, manifest `quill` | Scoop's Excavator action, from `checkver`/`autoupdate` in the manifest |
 | winget | `shinycake.Quill` in microsoft/winget-pkgs, the Inno installer | `release-published.yml` opens the PR with Komac (winget-releaser) when `WINGET_TOKEN` is set |
 | Chocolatey | community package `quill`, wrapping the setup.exe | `chocolatey.yml` tests each release's package on Windows and pushes it when `CHOCO_API_KEY` is set; moderators review each version |
-| Flathub | `io.github.shinycake.Quill` | flatpak-external-data-checker on Flathub (see `docs/decisions/flatpak.md`) |
+| Flatpak | Quill's own repo at `https://shinycake.github.io/quill/flatpak/`, app `io.github.shinycake.Quill` | `flatpak.yml` attaches each release's bundles; the site rebuilds the signed repo from them (`scripts/site-flatpak-repo.sh`). Not on Flathub: its submission rules exclude agent-made submissions, and the owner chose not to |
 
 The tap and the bucket are separate repositories because Homebrew and Scoop
 clone the whole repository they are given, and this one is large. Their

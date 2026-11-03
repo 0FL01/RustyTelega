@@ -2,7 +2,8 @@ name: pages
 
 # Builds the product page in site/ and deploys it to GitHub Pages. The
 # version line and download sizes come from the latest published release,
-# so the page is rebuilt whenever a release is published.
+# so the page is rebuilt whenever a release is published. site/flatpak is
+# Quill's Flatpak repo, rebuilt from the latest release's bundles.
 on:
   push:
     branches: [main]
@@ -31,6 +32,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/site-release-data.py site/data/release.json
+      - name: Flatpak repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FLATPAK_GPG_KEY: ${{ secrets.FLATPAK_GPG_KEY }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq flatpak ostree gnupg >/dev/null
+          bash scripts/site-flatpak-repo.sh site/flatpak
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
