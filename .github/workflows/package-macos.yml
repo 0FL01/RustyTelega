@@ -5,10 +5,11 @@ name: package-macos
 # the caller runs first in the same run, with the FFmpeg it links (cached),
 # and OpenSSL, built here for the deployment target, is bundled by
 # scripts/macos-package-smoke.sh.
-# Not notarized: there is no Developer ID (docs/decisions/codex-release-pipeline.md).
-# Signed with the owner's Apple Development identity when the caller passes
-# MACOS_SIGNING_P12, ad-hoc otherwise. The certificate keeps the keychain
+# Signed with the identity in MACOS_SIGNING_P12 (Apple Development or Developer
+# ID Application), ad-hoc otherwise. The certificate keeps the keychain
 # approval for the database key across updates (docs/decisions/macos-release-signing.md).
+# Release builds signed with Developer ID are notarized and stapled when the
+# MACOS_NOTARY_* App Store Connect API key is set (docs/decisions/macos-developer-id.md).
 on:
   workflow_call:
     inputs:
@@ -26,9 +27,16 @@ on:
       TELEGRAM_API_HASH:
         required: false
       MACOS_SIGNING_P12:
-        description: 'Base64 PKCS#12 holding the Apple Development identity'
+        description: 'Base64 PKCS#12 holding the Apple Development or Developer ID Application identity'
         required: false
       MACOS_SIGNING_P12_PASSWORD:
+        required: false
+      MACOS_NOTARY_KEY:
+        description: 'Base64 App Store Connect API key (.p8) for notarytool'
+        required: false
+      MACOS_NOTARY_KEY_ID:
+        required: false
+      MACOS_NOTARY_ISSUER_ID:
         required: false
 
 permissions:
@@ -156,10 +164,13 @@ jobs:
           printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
           security import "$RUNNER_TEMP/signing.p12" -k "$kc" -P "$P12_PASSWORD" -T /usr/bin/codesign
           rm -f "$RUNNER_TEMP/signing.p12"
-          # The intermediate that issues Apple Development certificates, so
-          # the identity validates and codesign embeds the whole chain.
-          curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer -o "$RUNNER_TEMP/wwdr.cer"
-          security import "$RUNNER_TEMP/wwdr.cer" -k "$kc" || true
+          # The intermediates that issue Apple Development and Developer ID
+          # certificates, so the identity validates and codesign embeds the
+          # whole chain.
+          for ca in AppleWWDRCAG3 DeveloperIDG2CA; do
+            curl -fsSL "https://www.apple.com/certificateauthority/$ca.cer" -o "$RUNNER_TEMP/$ca.cer"
+            security import "$RUNNER_TEMP/$ca.cer" -k "$kc" || true
+          done
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpass" "$kc" >/dev/null
           # shellcheck disable=SC2046 # keychain paths on the runner have no spaces
           security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
@@ -192,6 +203,43 @@ jobs:
             codesign -dv dist/Quill.app 2>&1 | grep -E '^TeamIdentifier=[A-Z0-9]{10}$' \
               || { echo "::error::Quill.app is not signed by the identity's team" >&2; exit 1; }
           fi
+      # Apple's notary service scans the signed bundle; the ticket is stapled
+      # so Gatekeeper opens it offline. Only Developer ID release builds.
+      - name: notarize
+        env:
+          NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          RELEASE_BUILD: ${{ inputs.embed_credentials }}
+        run: |
+          [ "$RELEASE_BUILD" = true ] || exit 0
+          if ! codesign -dvv dist/Quill.app 2>&1 | grep -q '^Authority=Developer ID Application: '; then
+            echo "::warning::Quill.app is not signed with a Developer ID Application identity: not notarized"
+            exit 0
+          fi
+          if [ -z "$NOTARY_KEY" ] || [ -z "$NOTARY_KEY_ID" ] || [ -z "$NOTARY_ISSUER_ID" ]; then
+            echo "::error::Quill.app is signed with Developer ID but the MACOS_NOTARY_* secrets are not set"
+            exit 1
+          fi
+          key="$RUNNER_TEMP/notary.p8"
+          printf '%s' "$NOTARY_KEY" | base64 --decode > "$key"
+          ditto -c -k --keepParent dist/Quill.app "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
+            --wait --timeout 1h --output-format json | tee "$RUNNER_TEMP/notary.json"
+          rm -f "$key"
+          id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/notary.json")"
+          status="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$RUNNER_TEMP/notary.json")"
+          if [ "$status" != Accepted ]; then
+            printf '%s' "$NOTARY_KEY" | base64 --decode > "$key"
+            xcrun notarytool log "$id" --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
+            rm -f "$key"
+            echo "::error::notarization $status"
+            exit 1
+          fi
+          xcrun stapler staple dist/Quill.app
+          xcrun stapler validate dist/Quill.app
+          spctl --assess --type execute --verbose=4 dist/Quill.app
       - name: run from the bundle
         env:
           WANT_EMBED: ${{ inputs.embed_credentials && secrets.TELEGRAM_API_ID != '' && secrets.TELEGRAM_API_HASH != '' }}

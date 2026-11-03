@@ -151,15 +151,40 @@ vendor_deps
 
 # install_name_tool invalidates signatures. Re-sign inside-out: nested dylibs
 # and helpers first, then the app. Ad-hoc by default; set QUILL_CODESIGN_IDENTITY
-# (e.g. an "Apple Development: ..." identity) for a stable signature. A
-# certificate signature is timestamped so it stays valid after the
-# certificate expires.
+# (an "Apple Development" or "Developer ID Application" identity) for a stable
+# signature. A certificate signature is timestamped so it stays valid after the
+# certificate expires, and uses the hardened runtime, which notarization needs.
+#
+# The app's designated requirement names the team, not the certificate, so a
+# copy signed with either identity type accepts updates signed with the other
+# (docs/decisions/macos-developer-id.md). Installed copies check every update
+# against it (src/update_install/macos/codesign.rs).
 SIGN_ID="${QUILL_CODESIGN_IDENTITY:--}"
 SIGN_FLAGS=(--force --sign "$SIGN_ID")
-[[ "$SIGN_ID" == - ]] || SIGN_FLAGS+=(--timestamp)
-for item in "$DIST"/Contents/Frameworks/*.dylib "$DIST/Contents/MacOS/quill-qr-scanner" "$DIST/Contents/MacOS/quill-webview" "$DIST"; do
-  [[ -e "$item" ]] && codesign "${SIGN_FLAGS[@]}" "$item"
+EXE_FLAGS=()
+APP_FLAGS=()
+if [[ "$SIGN_ID" != - ]]; then
+  SIGN_FLAGS+=(--timestamp --options runtime)
+  EXE_FLAGS+=(--entitlements "$ROOT/assets/macos/Quill.entitlements")
+  # The identity is a SHA-1 (CI) or a certificate name (local builds).
+  if [[ "$SIGN_ID" =~ ^[0-9A-Fa-f]{40}$ ]]; then
+    CERT="$(security find-certificate -a -Z -p | awk -v id="$(tr a-f A-F <<<"$SIGN_ID")" '
+      /^SHA-1 hash:/ { keep = ($3 == id); next } keep { print }')"
+  else
+    CERT="$(security find-certificate -c "$SIGN_ID" -p)"
+  fi
+  TEAM="$(openssl x509 -noout -subject -nameopt multiline <<<"$CERT" | sed -n 's/^ *organizationalUnitName *= *//p' | head -1)"
+  [[ "$TEAM" =~ ^[A-Z0-9]{10}$ ]] || { echo "error: no team ID in the certificate of $SIGN_ID" >&2; exit 1; }
+  # 6.1.13 marks a Developer ID Application leaf, 6.1.12 an Apple (Mac) Development one.
+  APP_FLAGS+=("-r=designated => identifier \"org.shinycake.quill\" and anchor apple generic and certificate leaf[subject.OU] = \"$TEAM\" and (certificate leaf[field.1.2.840.113635.100.6.1.13] or certificate leaf[field.1.2.840.113635.100.6.1.12])")
+fi
+for item in "$DIST"/Contents/Frameworks/*.dylib; do
+  codesign "${SIGN_FLAGS[@]}" "$item"
 done
+for item in "$DIST/Contents/MacOS/quill-qr-scanner" "$DIST/Contents/MacOS/quill-webview"; do
+  [[ -e "$item" ]] && codesign "${SIGN_FLAGS[@]}" ${EXE_FLAGS[@]+"${EXE_FLAGS[@]}"} "$item"
+done
+codesign "${SIGN_FLAGS[@]}" ${EXE_FLAGS[@]+"${EXE_FLAGS[@]}"} ${APP_FLAGS[@]+"${APP_FLAGS[@]}"} "$DIST"
 
 echo "Assembled $DIST"
 bash "$ROOT/scripts/check-bundle-macho.sh" "$DIST"
