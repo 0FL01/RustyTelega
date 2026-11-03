@@ -88,7 +88,7 @@
     <release version="2026.1103.4954" date="2026-11-03">
       <url type="details">https://github.com/shinycake/quill/releases/tag/v2026.1103.4954</url>
       <description>
-        <p>New ways to install: a macOS disk image, a Windows installer, Homebrew, Scoop and Chocolatey. Inside Flatpak, Quill now uses its Flatpak app id and hides settings that cannot work in the sandbox.</p>
+        <p>New ways to install: a macOS disk image, a Windows installer, Homebrew and Chocolatey. Inside Flatpak, Quill now uses its Flatpak app id and hides settings that cannot work in the sandbox.</p>
       </description>
     </release>
     <release version="2026.1103.4940" date="2026-11-03">

@@ -284,9 +284,9 @@ jobs:
           bash scripts/check-ffmpeg-tools.sh "$(cygpath -u "$RUNNER_TEMP")/extract/quill-windows-x86_64" \
             --expect-encoder h264_mf --expect-encoder mpeg4 --expect-encoder aac \
             --expect-encoder mjpeg --expect-encoder png
-      # The setup.exe the website and winget offer: a per-user Inno Setup
+      # The setup.exe the website and Chocolatey offer: a per-user Inno Setup
       # install of the same folder (packaging/windows/quill.iss). Installed,
-      # run and uninstalled silently here, the way winget drives it.
+      # run and uninstalled silently here, the way Chocolatey drives it.
       - name: installer
         shell: pwsh
         run: |

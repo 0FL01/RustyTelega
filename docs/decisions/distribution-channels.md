@@ -2,7 +2,7 @@
 
 Until November 2026 Quill shipped zips, Linux tarballs and three one-line
 installer scripts. People expect to find an app where they already look for
-apps: a drag-to-Applications disk image on the Mac, a setup.exe and winget on
+apps: a drag-to-Applications disk image on the Mac, a setup.exe and Chocolatey on
 Windows, Homebrew, and the software center on Linux. This adds those without
 replacing anything: the zips stay (the in-app updater and the scripts use
 them), and every channel installs the same signed build.
@@ -55,7 +55,7 @@ and the PowerShell installer no longer writes its own entry when the setup's
 is present. The uninstaller quits Quill first and removes the `tg:` handler
 and the start-at-login entry only when they point at this install. Account
 data in `%APPDATA%` is kept. `package-windows.yml` builds it, then installs,
-runs and uninstalls it silently, the way winget drives it.
+runs and uninstalls it silently, the way Chocolatey drives it.
 
 The installer is not code-signed. SmartScreen asks once for a browser
 download, as it does for the zip. Signing needs a paid certificate or Azure
@@ -67,16 +67,17 @@ Windows gap.
 | Channel | Where | Updates |
 |---|---|---|
 | Homebrew | `shinycake/homebrew-tap`, cask `quill-app` (the token `quill` is a homebrew/core formula) | the tap's scheduled `bump` workflow reads the latest release's `SHA256SUMS.txt`, audits and commits |
-| Scoop | `shinycake/scoop-bucket`, manifest `quill` | Scoop's Excavator action, from `checkver`/`autoupdate` in the manifest |
-| winget | `shinycake.Quill` in microsoft/winget-pkgs, the Inno installer | `release-published.yml` opens the PR with Komac (winget-releaser) when `WINGET_TOKEN` is set |
 | Chocolatey | community package `quill`, wrapping the setup.exe | `chocolatey.yml` tests each release's package on Windows and pushes it when `CHOCO_API_KEY` is set; moderators review each version |
 | Flatpak | Quill's own repo at `https://shinycake.github.io/quill/flatpak/`, app `io.github.shinycake.Quill` | `flatpak.yml` attaches each release's bundles; the site rebuilds the signed repo from them (`scripts/site-flatpak-repo.sh`). Not on Flathub: its submission rules exclude agent-made submissions, and the owner chose not to |
 
-The tap and the bucket are separate repositories because Homebrew and Scoop
-clone the whole repository they are given, and this one is large. Their
-contents live here under `packaging/homebrew-tap/` and
-`packaging/scoop-bucket/` and are pushed from there once
-(`packaging/README.md`); after that each repository updates itself on a
+Chocolatey is the only Windows package manager, by the owner's decision on
+3 November 2026: Quill is not offered on winget or Scoop. A Scoop bucket and a
+winget submission existed for a day and were withdrawn.
+
+The tap is a separate repository because Homebrew clones the whole
+repository it is given, and this one is large. Its contents live here under
+`packaging/homebrew-tap/` and are pushed from there once
+(`packaging/README.md`); after that the tap updates itself on a
 schedule with its own `GITHUB_TOKEN`, so no token for another repository is
 stored anywhere. Homebrew's main cask repository needs 75 stars for a
 self-submitted app, so the tap is the channel until Quill qualifies.
