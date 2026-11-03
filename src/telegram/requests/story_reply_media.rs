@@ -135,7 +135,7 @@ mod tests {
                     source_chat: None,
                     item: Default::default(),
                 }),
-                topic_id: Some(3),
+                topic_id: Some(crate::ids::TopicId::forum(3)),
             },
         );
         let v = parse(&json);

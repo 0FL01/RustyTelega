@@ -29,6 +29,7 @@ mod composer_suggestions_idle;
 mod connect_flow;
 mod deep_link_routing;
 mod deep_links;
+mod direct_messages;
 mod drafts_everywhere;
 mod drafts_polls;
 mod earn;

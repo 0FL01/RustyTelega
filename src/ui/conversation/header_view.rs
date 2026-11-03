@@ -152,7 +152,7 @@ impl QuillApp {
                     .is_some_and(|s| s.users_state.open_info_panel == Some(target));
                 this.child(chat_info_toggle(target, open, cx))
             })
-            .child(self.chat_navigation_menu(cx))
+            .children(self.header_menu(cx))
             .into_any_element()
     }
 }

@@ -68,7 +68,7 @@ fn forum_thread_sends_stay_in_the_topic_and_reply_to_the_root() {
     let send = send_text(
         RequestId(5),
         ChatId(16),
-        Some(7),
+        Some(crate::ids::TopicId::forum(7)),
         "hi",
         None,
         &SendOptions::default(),

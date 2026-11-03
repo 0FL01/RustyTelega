@@ -10,6 +10,7 @@ impl Session {
         _seq: u64,
     ) {
         self.settle_own_reaction(extra, false);
+        self.settle_direct_messages_ok(pending);
         if let Some(pending) = pending
             && let RequestPurpose::Bots(BotsPurpose::StopPendingMessage { topic_id, draft_id }) =
                 pending.purpose

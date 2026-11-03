@@ -28,6 +28,7 @@ pub(crate) struct FolderUi {
     pub(super) topic_tabs_scroll: gpui_kit::ScrollHandle,
     /// What the selected topic tab was last scrolled into view for.
     pub(super) topic_tabs_revealed: std::cell::Cell<Option<super::folder_tabs_fit::RevealKey>>,
+    pub(super) topic_tabs_column_scroll: gpui_kit::ScrollHandle,
 }
 
 impl FolderUi {
@@ -46,6 +47,7 @@ impl FolderUi {
             tabs_revealed: std::cell::Cell::new(None),
             topic_tabs_scroll: gpui_kit::ScrollHandle::new(),
             topic_tabs_revealed: std::cell::Cell::new(None),
+            topic_tabs_column_scroll: gpui_kit::ScrollHandle::new(),
         }
     }
 }

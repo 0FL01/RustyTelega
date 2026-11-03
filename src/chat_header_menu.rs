@@ -79,6 +79,9 @@ pub struct HeaderFacts<'a> {
     pub new_window: bool,
     /// Agent access is on.
     pub agent_access: bool,
+    /// A channel's direct messages: tdesktop's `isMonoforum` drops Boost,
+    /// statistics and auto-delete.
+    pub is_direct_messages: bool,
 }
 
 /// tdesktop `canCreatePolls`: users only for oneself and bots, secret chats
@@ -109,7 +112,9 @@ pub fn header_entries(facts: &HeaderFacts<'_>) -> Vec<HeaderEntry> {
     if facts.has_view_toggle {
         out.push(HeaderEntry::ViewAsTopics);
     }
-    if let ChatKind::Supergroup { is_channel, .. } = facts.kind {
+    if let ChatKind::Supergroup { is_channel, .. } = facts.kind
+        && !facts.is_direct_messages
+    {
         out.push(HeaderEntry::Boost(if *is_channel {
             "Boost channel"
         } else {
@@ -139,14 +144,15 @@ pub fn header_entries(facts: &HeaderFacts<'_>) -> Vec<HeaderEntry> {
     if facts.live {
         out.push(HeaderEntry::SharedMedia);
     }
-    if matches!(facts.kind, ChatKind::Supergroup { .. }) && facts.can_get_statistics {
+    let stats = matches!(facts.kind, ChatKind::Supergroup { .. }) && !facts.is_direct_messages;
+    if stats && facts.can_get_statistics {
         out.push(HeaderEntry::Statistics);
     }
     // tdesktop `addViewStatistics`: "Monetization" after the statistics.
-    if matches!(facts.kind, ChatKind::Supergroup { .. }) && facts.can_view_revenue {
+    if stats && facts.can_view_revenue {
         out.push(HeaderEntry::Monetization);
     }
-    if facts.auto_delete_ready {
+    if facts.auto_delete_ready && !facts.is_direct_messages {
         out.push(HeaderEntry::AutoDelete);
     }
     if facts.gifts_ok {
@@ -198,6 +204,7 @@ mod tests {
             can_send_money: false,
             new_window: false,
             agent_access: false,
+            is_direct_messages: false,
         }
     }
 
@@ -210,6 +217,21 @@ mod tests {
             supergroup_id: 9,
             is_channel,
         }
+    }
+
+    #[test]
+    fn direct_messages_have_no_boost_statistics_or_auto_delete() {
+        let group = supergroup(false);
+        let mut f = facts(&group);
+        f.can_get_statistics = true;
+        f.can_view_revenue = true;
+        f.auto_delete_ready = true;
+        f.is_direct_messages = true;
+        let entries = header_entries(&f);
+        assert!(!entries.iter().any(|e| matches!(
+            e,
+            E::Boost(_) | E::Statistics | E::Monetization | E::AutoDelete
+        )));
     }
 
     #[test]

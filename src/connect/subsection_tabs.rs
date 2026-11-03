@@ -51,6 +51,11 @@ impl<S: JsonSender> ConnectDriver<S> {
                 is_forum: true,
                 ..
             }) => Some(*supergroup_id),
+            EnvelopePayload::Groups(GroupsPayload::UpdateSupergroup {
+                supergroup_id,
+                direct_messages: Some(crate::suggested_posts::DirectMessagesRole::Admin),
+                ..
+            }) => Some(*supergroup_id),
             _ => None,
         }
     }
@@ -80,6 +85,7 @@ impl<S: JsonSender> ConnectDriver<S> {
     /// already on its way). Not ready yet: it is asked later. A TDLib error
     /// is final (tdesktop does not retry either).
     fn preload_topics(&mut self, chat_id: ChatId) {
+        self.maybe_preload_direct_topics(chat_id);
         // Only chats in a chat list (`history->inChatList()`): forums, and
         // bots with topics, whose topics also fill their row.
         let listed = self.session.chats.get(&chat_id.0).is_some_and(|chat| {

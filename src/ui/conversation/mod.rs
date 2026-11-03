@@ -58,7 +58,11 @@ impl QuillApp {
         // kinds keep the plain title.
         // A channel's direct messages show the channel's profile, as
         // tdesktop draws the monoforum with its broadcast's name and status.
+        let admin_header = self.direct_admin_header();
         let info_target = actions.and_then(|(chat_id, _, _, _)| {
+            if let Some(target) = admin_header.as_ref().and_then(|h| h.target) {
+                return Some(target);
+            }
             let chat_id = self.direct_messages_channel().unwrap_or(chat_id);
             self.session().and_then(|s| s.chat_info_target(chat_id))
         });
@@ -129,6 +133,8 @@ impl QuillApp {
             tr(keys::SAVED_MESSAGES).to_string()
         } else if let Some((name, _)) = &topic_header {
             name.clone()
+        } else if let Some(name) = admin_header.as_ref().and_then(|h| h.title.clone()) {
+            name
         } else {
             title.to_string()
         };
@@ -156,7 +162,7 @@ impl QuillApp {
         // presence or member count, then the muted / timer notes.
         let session = self.session();
         let private_user = match info_target {
-            Some(InfoPanelTarget::User(user_id)) => Some(user_id),
+            Some(InfoPanelTarget::User(user_id)) if admin_header.is_none() => Some(user_id),
             _ => None,
         };
         let presence = private_user.filter(|_| !saved).and_then(|user_id| {
@@ -211,6 +217,8 @@ impl QuillApp {
             (Some(line), false)
         } else if let Some((_, line)) = topic_header.filter(|(_, line)| !line.is_empty()) {
             (Some(line), false)
+        } else if let Some(header) = &admin_header {
+            (Some(header.status.clone()), false)
         } else if direct_messages {
             (
                 Some(super::direct_messages_chat::direct_messages_line()),
@@ -240,20 +248,22 @@ impl QuillApp {
         // Verified check, Premium status or star, SCAM / FAKE chip after the
         // title. Threads, Saved Messages and topic views title the header
         // with something else, so they carry none.
-        let badges = if thread_header.is_some() || saved || saved_header.is_some() {
-            Vec::new()
-        } else {
-            actions
-                .and_then(|(chat_id, _, _, _)| {
-                    let session = self.session()?;
-                    let chat = self
-                        .direct_messages_channel()
-                        .and_then(|channel| session.chats.get(&channel.0))
-                        .or_else(|| session.chats.get(&chat_id.0))?;
-                    Some(session.chat_header_badges(chat))
-                })
-                .unwrap_or_default()
-        };
+        let in_direct_topic = admin_header.as_ref().is_some_and(|h| h.title.is_some());
+        let badges =
+            if thread_header.is_some() || saved || saved_header.is_some() || in_direct_topic {
+                Vec::new()
+            } else {
+                actions
+                    .and_then(|(chat_id, _, _, _)| {
+                        let session = self.session()?;
+                        let chat = self
+                            .direct_messages_channel()
+                            .and_then(|channel| session.chats.get(&channel.0))
+                            .or_else(|| session.chats.get(&chat_id.0))?;
+                        Some(session.chat_header_badges(chat))
+                    })
+                    .unwrap_or_default()
+            };
         let chat_id_for_status = actions.map_or(0, |(chat_id, _, _, _)| chat_id.0);
         let verify_icon = if thread_header.is_some() || saved || saved_header.is_some() {
             None

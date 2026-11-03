@@ -6,6 +6,7 @@
 use super::composer_sends::SendSlot;
 use gpui_kit::component::slider::SliderState;
 use gpui_kit::*;
+use quill::ids::ChatId;
 use quill::paid_messages::PaidConfirm;
 
 /// The confirmation before a composer send, and the chat it was asked in:
@@ -28,6 +29,9 @@ pub(crate) struct RemoveFeeBox {
     pub(super) name: String,
     /// "Refund already paid N Stars" is ticked.
     pub(super) refund: bool,
+    /// One conversation of a channel's direct messages, for its admins;
+    /// `None` = the account's own private chats.
+    pub(super) direct: Option<(ChatId, i64)>,
 }
 
 /// The channel's Direct Messages box.

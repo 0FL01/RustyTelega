@@ -3,6 +3,7 @@
 //! timestamp (`inputVideo`), and paid media (`inputMessagePaidMedia`).
 
 use super::*;
+use crate::ids::TopicId;
 use crate::ids::{ChatId, RequestId};
 use serde_json::{Value, json};
 
@@ -44,7 +45,7 @@ pub fn input_message_animation_local(
 pub fn send_local_animation(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     path: &str,
     animation: &LocalAnimation,
     caption: &str,
@@ -163,7 +164,7 @@ pub fn input_message_paid_media(
 pub fn send_paid_media(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     reply_to: Option<SendReply>,
     content: Value,
 ) -> String {
@@ -173,7 +174,7 @@ pub fn send_paid_media(
 fn send_content(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     reply_to: Option<SendReply>,
     content: Value,
 ) -> String {
@@ -281,7 +282,13 @@ mod tests {
         assert_eq!(items[1]["type"]["start_timestamp"], 3);
         assert_eq!(items[1]["type"]["duration"], 12);
         assert_eq!(items[1]["width"], 1280);
-        let json = send_paid_media(RequestId(2), ChatId(-100), Some(7), None, content);
+        let json = send_paid_media(
+            RequestId(2),
+            ChatId(-100),
+            Some(TopicId::forum(7)),
+            None,
+            content,
+        );
         let v: Value = serde_json::from_str(&json).unwrap();
         assert_eq!(v["@type"], "sendMessage");
         assert_eq!(v["chat_id"], -100);

@@ -34,6 +34,8 @@ pub struct ThreadsState {
     /// Slice G2: channel-comments viewer — the latest
     /// `getMessageThreadHistory` result (channel post → comment thread).
     pub thread: Option<ThreadView>,
+    /// A channel's direct messages, per user, for its admins.
+    pub direct: DirectMessagesTopics,
 }
 
 impl ThreadsState {
@@ -49,6 +51,7 @@ impl ThreadsState {
             forum_row_asked: HashSet::new(),
             forum_topics_failed: HashSet::new(),
             thread: None,
+            direct: DirectMessagesTopics::default(),
         }
     }
 }

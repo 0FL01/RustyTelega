@@ -34,3 +34,57 @@
   the full-width Mute button, and one click pressed both.
 - Demo `ready-direct-messages` (`QUILL_DEMO_DIRECT=channel|free`) and a UI test cover the flow.
   Buy Stars opens the Stars page; nothing is bought or sent by itself.
+
+# The admin side (`parity:chrome-channel-direct-messages-admin`)
+
+## tdesktop
+- Admins see one sublist per person writing (`Data::SavedSublist` under the monoforum). The
+  subsection tabs list them after "All", each with the person's userpic, short name and unread
+  badge (a dot when the chat was marked unread by hand). Scrolling to the end loads more.
+- Opening the direct messages chat opens the sublist that was open last
+  (`saveActiveSubsectionThread`); "All" saves none.
+- Header (`TopBarWidget::paintTopBar`): in All, the channel's name and "N chats" or "No chats"
+  (`lng_filters_chats_count`, the server's full count). In a sublist, the person's name and "N
+  messages" (`lng_forum_messages`), or loading.
+- In All, while the channel still has direct messages, the composer gives way to "Choose a
+  message to reply." (`lng_monoforum_choose_to_reply`). Replying to a message lifts it, and the
+  reply goes to that message's sublist.
+- A sublist's "..." menu (`Filler::fillMonoforumPeerActions`) exists only while messages cost
+  Stars: Ban or Unban the person in the channel, Remove Fee or Charge Fee, a separator, and a
+  disabled line saying what the person pays now (`lng_context_fee_now` / `lng_context_fee_free`).
+  Remove Fee opens the same box as a private chat (refund checkbox when the person paid);
+  Charge Fee runs at once.
+- A tab's context menu (`fillContextMenuActions` for a sublist): Mark as read or unread, Ban or
+  Unban in the channel (only with the right to restrict members), Delete chat
+  (`DeleteSublistBox`: userpic, "Delete chat", `lng_sure_delete_history`, Delete). Ban asks
+  first (`lng_profile_sure_kick_channel`, Remove); Unban runs at once.
+- Clear History, auto-delete, Boost and Statistics are not offered for a monoforum
+  (`addClearHistory`, `addTTLSubmenu`, `addBoostChat`, `addViewStatistics`).
+
+## What changed in Quill
+- TDLib 1.8.69 calls: `loadDirectMessagesChatTopics`, `getDirectMessagesChatTopic`,
+  `getDirectMessagesChatTopicHistory`, `deleteDirectMessagesChatTopicHistory`, `setDirectMessagesChatTopicIsMarkedAsUnread`,
+  `toggleDirectMessagesChatTopicCanSendUnpaidMessages`, `getDirectMessagesChatTopicRevenue`, and
+  `setChatMemberStatus` on the channel for bans. `updateDirectMessagesChatTopic` lands in
+  `threads.direct` (`src/state/domains/threads/direct_messages.rs`).
+- One source of truth: `threads.direct.open` maps the chat to the open sublist and stays after
+  the chat is left. The chat's main history shows that sublist: every page request goes through
+  `main_history_request`, live messages of other sublists are dropped, and the unread anchor and
+  "has newer" come from the sublist. Sends, drafts and `viewMessages` carry the sublist.
+- The tabs reuse the forum subsection tabs (`Tab::Direct`), so Top, Bottom and Left all work.
+- The jump-down counter shows the open sublist's unread messages, or all of them in All.
+- The writer's direct messages button on the channel bar follows
+  `supergroupFullInfo.direct_messages_chat_id`, so it goes away live when the channel turns
+  direct messages off.
+- Demo: `QUILL_DEMO_DIRECT=admin` (Maya's chat open) and `admin-all` (the reply lock). UI tests
+  cover the lock and its release, opening a tab, the menus' entries and the channel button.
+
+## Differences and follow-ups
+- "N chats" counts the loaded conversations; tdesktop shows the server's full count, which
+  TDLib does not expose.
+- "N messages" is `total_count` of the first page of the open sublist.
+- The Ban/Unban label asks `getChatMember` when the menu opens and reads "Ban" until the answer;
+  tdesktop already knows the state.
+- Not built: the chat-list row in forum style with jump chips per sublist, the thread bars over
+  each sublist's messages in All, Open in New Window for one sublist, and forwarding into a
+  person's sublist.

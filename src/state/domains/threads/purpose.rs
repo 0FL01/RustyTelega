@@ -98,6 +98,36 @@ pub enum ThreadsPurpose {
     GetMessageThreadHistoryNewer {
         message_id: i64,
     },
+    /// `loadDirectMessagesChatTopics` (schema 1.8.69, line 12616): `ok`;
+    /// the conversations arrive as `updateDirectMessagesChatTopic`, a 404
+    /// means all of them were loaded.
+    LoadDirectMessagesChatTopics,
+    /// `getDirectMessagesChatTopic` (line 12621): `directMessagesChatTopic`.
+    GetDirectMessagesChatTopic {
+        topic_id: i64,
+    },
+    /// `deleteDirectMessagesChatTopicHistory` (line 12641): `ok`.
+    DeleteDirectMessagesChatTopicHistory {
+        topic_id: i64,
+    },
+    /// `setDirectMessagesChatTopicIsMarkedAsUnread` (line 12654): `ok`.
+    SetDirectMessagesChatTopicMarkedAsUnread {
+        topic_id: i64,
+    },
+    /// "Mark as read": `viewMessages` on the conversation's last message
+    /// (`messageSourceDirectMessagesChatTopicHistory`). Answers `ok`.
+    ReadDirectMessagesChatTopic {
+        topic_id: i64,
+    },
+    /// `toggleDirectMessagesChatTopicCanSendUnpaidMessages` (line 12676):
+    /// `ok`; `updateDirectMessagesChatTopic` carries the new value.
+    ToggleDirectMessagesChatTopicCanSendUnpaidMessages {
+        topic_id: i64,
+    },
+    /// `getDirectMessagesChatTopicRevenue` (line 12669): `starCount`.
+    GetDirectMessagesChatTopicRevenue {
+        topic_id: i64,
+    },
 }
 
 flat_purposes!(Threads(ThreadsPurpose) {
@@ -112,4 +142,5 @@ flat_purposes!(Threads(ThreadsPurpose) {
     SetPinnedForumTopics,
     LoadSavedMessagesTopics,
     SetSavedMessagesTagLabel,
+    LoadDirectMessagesChatTopics,
 });

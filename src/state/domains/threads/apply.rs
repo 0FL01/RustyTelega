@@ -79,6 +79,19 @@ impl Session {
                     self.replace_forum_topic(chat_id, topic);
                 }
             }
+            ThreadsPayload::UpdateDirectMessagesChatTopic(topic) => {
+                self.apply_direct_topic(*topic);
+            }
+            ThreadsPayload::DirectMessagesChatTopic(topic) => {
+                if pending.is_some_and(|p| {
+                    matches!(
+                        p.purpose,
+                        RequestPurpose::Threads(ThreadsPurpose::GetDirectMessagesChatTopic { .. })
+                    )
+                }) {
+                    self.apply_direct_topic(*topic);
+                }
+            }
             ThreadsPayload::MessageThreadInfo(info) => {
                 self.apply_message_thread_info(*info, pending);
             }

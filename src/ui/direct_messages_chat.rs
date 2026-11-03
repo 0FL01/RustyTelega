@@ -187,5 +187,5 @@ fn intro_sentence(pieces: Vec<IntroPiece>) -> Div {
 
 /// The header's status line in a channel's direct messages.
 pub(super) fn direct_messages_line() -> String {
-    tr(keys::PROFILE_DIRECT_MESSAGES).to_string()
+    tr(keys::CHAT_STATUS_DIRECT).to_string()
 }

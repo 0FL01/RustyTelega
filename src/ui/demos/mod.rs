@@ -13,6 +13,7 @@ pub(in crate::ui) mod composer;
 mod derived_state;
 mod dice;
 mod direct_messages;
+mod direct_messages_admin;
 mod emoji_tap;
 mod group_call_bar;
 mod group_permissions;

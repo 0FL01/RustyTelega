@@ -216,10 +216,11 @@ impl Session {
     /// reported yet, and the unread anchor the view opens at. Shared by
     /// the main window (`open_chat`) and a chat opened in its own window.
     pub fn prepare_history_view(&mut self, chat_id: ChatId) {
-        let unread_anchor = self
-            .chats
-            .get(&chat_id.0)
-            .and_then(ChatSummary::unread_anchor);
+        let unread_anchor = self.direct_topic_unread_anchor(chat_id).unwrap_or_else(|| {
+            self.chats
+                .get(&chat_id.0)
+                .and_then(ChatSummary::unread_anchor)
+        });
         self.reclaim_chat_history(chat_id);
         let view_generation = self.view_generation;
         let history = self.history_entry(chat_id);

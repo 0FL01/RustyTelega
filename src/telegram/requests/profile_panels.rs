@@ -3,6 +3,7 @@
 //! photos). Schema references are TDLib 1.8.67 `schema/td_api.tl`.
 use super::{message_send_options, message_topic_value, send_reply_value};
 use crate::composer::SendOptions;
+use crate::ids::TopicId;
 use crate::ids::{ChatId, RequestId};
 use serde_json::{Value, json};
 
@@ -175,7 +176,7 @@ pub fn set_profile_photo_previous(extra: RequestId, chat_photo_id: i64) -> Strin
 pub fn send_contact(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     phone_number: &str,
     first_name: &str,
     last_name: &str,

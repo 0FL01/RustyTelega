@@ -350,6 +350,7 @@ impl QuillApp {
             links: super::links_state::LinkUi::new(),
             giveaway: super::giveaway_state::GiveawayUi::new(),
             paid_messages: super::paid_messages_state::PaidMessagesUi::new(),
+            direct_messages: super::direct_messages_state::DirectMessagesUi::new(),
             suggested_posts: super::suggested_posts_state::SuggestedPostsUi::new(),
             gift_market: super::gift_market_state::GiftMarketUi::new(),
             paid_reaction: super::paid_reaction_state::PaidReactionUi::new(),

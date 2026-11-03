@@ -645,13 +645,12 @@ impl<S: JsonSender> ConnectDriver<S> {
             return Err(ConnectSendError::InvalidRequest);
         };
         let extra = self.session.request_history_around(chat_id, message_id);
-        match self.sender.send_json(&get_chat_history(
+        match self.sender.send_json(&self.main_history_request(
             extra,
             chat_id,
             message_id,
             HISTORY_AROUND_OFFSET,
             HISTORY_AROUND_LIMIT,
-            false,
         )) {
             Ok(()) => Ok(Some(extra)),
             Err(err) => {

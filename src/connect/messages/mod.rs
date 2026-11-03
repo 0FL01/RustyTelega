@@ -14,11 +14,11 @@ use crate::telegram::requests::{
     VoiceNoteSend, compose_rich_message_with_ai, compose_text_with_ai, create_rich_message_with_ai,
     delete_messages, edit_media_content, edit_message_caption, edit_message_media,
     edit_message_scheduling_state, edit_message_text, fix_rich_message_with_ai, fix_text_with_ai,
-    forward_messages_to_topic, get_chat_history, get_chat_scheduled_messages,
-    get_full_rich_message, input_message_document, input_message_photo, input_message_video,
-    open_message_content, recognize_speech, resend_messages, send_animation, send_document,
-    send_local_animation, send_message_album, send_photo, send_rich_message, send_sticker,
-    send_text, send_video, send_video_note, send_voice_note,
+    forward_messages_to_topic, get_chat_scheduled_messages, get_full_rich_message,
+    input_message_document, input_message_photo, input_message_video, open_message_content,
+    recognize_speech, resend_messages, send_animation, send_document, send_local_animation,
+    send_message_album, send_photo, send_rich_message, send_sticker, send_text, send_video,
+    send_video_note, send_voice_note,
 };
 use crate::voice::VoiceDraft;
 
@@ -99,13 +99,12 @@ impl<S: JsonSender> ConnectDriver<S> {
             && let Some(anchor) = history.unread_anchor
         {
             let extra = self.session.request_history_around(chat_id, anchor);
-            if let Err(err) = self.sender.send_json(&get_chat_history(
+            if let Err(err) = self.sender.send_json(&self.main_history_request(
                 extra,
                 chat_id,
                 anchor,
                 HISTORY_AROUND_OFFSET,
                 HISTORY_AROUND_LIMIT,
-                false,
             )) {
                 self.session.requests.take(extra);
                 return Err(err);
@@ -124,13 +123,12 @@ impl<S: JsonSender> ConnectDriver<S> {
         let extra = self
             .session
             .request_for_message(RequestPurpose::GetHistory, chat_id, from);
-        if let Err(err) = self.sender.send_json(&get_chat_history(
+        if let Err(err) = self.sender.send_json(&self.main_history_request(
             extra,
             chat_id,
             from,
             0,
             HISTORY_PAGE_SIZE,
-            false,
         )) {
             self.session.requests.take(extra);
             return Err(err);
@@ -179,13 +177,12 @@ impl<S: JsonSender> ConnectDriver<S> {
                 .request_for_message(RequestPurpose::GetHistoryNewer, chat_id, from);
         // A negative offset returns `-offset` messages newer than `from`
         // plus `from` itself (schema `getChatHistory`).
-        if let Err(err) = self.sender.send_json(&get_chat_history(
+        if let Err(err) = self.sender.send_json(&self.main_history_request(
             extra,
             chat_id,
             from,
             -(HISTORY_PAGE_SIZE - 1),
             HISTORY_PAGE_SIZE,
-            false,
         )) {
             self.session.requests.take(extra);
             return Err(err);
@@ -229,12 +226,8 @@ impl<S: JsonSender> ConnectDriver<S> {
     /// `topic_id = messageTopicForum{forum_topic_id}` (schema 1.8.67, lines
     /// 12200 and 3004). Story replies keep a null topic — they address the
     /// poster chat, never a topic.
-    pub(crate) fn send_topic(&self, chat_id: ChatId) -> Option<i32> {
-        if self.session.open_chat == Some(chat_id) {
-            self.session.open_topic
-        } else {
-            None
-        }
+    pub(crate) fn send_topic(&self, chat_id: ChatId) -> Option<crate::ids::TopicId> {
+        self.session.send_topic(chat_id)
     }
 
     /// Parity slice 4: rejects sends into a closed forum topic. The

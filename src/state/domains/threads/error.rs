@@ -35,6 +35,28 @@ impl Session {
                         Some(call_request_error_line(err, "Could not load saved chats"));
                 }
             }
+            Some(RequestPurpose::LoadDirectMessagesChatTopics) => {
+                if let Some(chat_id) = pending.and_then(|p| p.chat_id) {
+                    if err.code == 404 {
+                        self.threads.direct.exhausted.insert(chat_id.0);
+                        self.view_generation.bump();
+                    } else {
+                        self.chats_state.chat_action_error =
+                            Some(call_request_error_line(err, "Could not load chats"));
+                    }
+                }
+            }
+            Some(RequestPurpose::Threads(
+                ThreadsPurpose::DeleteDirectMessagesChatTopicHistory { .. }
+                | ThreadsPurpose::SetDirectMessagesChatTopicMarkedAsUnread { .. }
+                | ThreadsPurpose::ReadDirectMessagesChatTopic { .. }
+                | ThreadsPurpose::ToggleDirectMessagesChatTopicCanSendUnpaidMessages { .. },
+            )) => {
+                self.chats_state.chat_action_error = Some(call_request_error_line(
+                    err,
+                    "Could not complete that action",
+                ));
+            }
             // The rows show "No chats" and do not ask again.
             Some(RequestPurpose::GetForumTopics) => {
                 if let Some(chat_id) = pending.and_then(|p| p.chat_id) {

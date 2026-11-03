@@ -717,7 +717,7 @@ impl<S: JsonSender> ConnectDriver<S> {
             .send_json(&crate::telegram::requests::stop_pending_message(
                 extra,
                 chat_id,
-                (topic_id > 0).then_some(topic_id),
+                (topic_id > 0).then(|| crate::ids::TopicId::forum(topic_id)),
                 draft_id,
             ))
         {

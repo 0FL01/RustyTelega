@@ -90,12 +90,27 @@ impl MessageKey {
 }
 
 /// Typed topic identity. Numeric thread IDs are not interchangeable.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TopicId {
     None,
     Forum { forum_topic_id: i64 },
     DirectMessages { direct_messages_chat_topic_id: i64 },
     SavedMessages { saved_messages_topic_id: i64 },
+}
+
+impl TopicId {
+    pub fn forum(forum_topic_id: i32) -> Self {
+        Self::Forum {
+            forum_topic_id: i64::from(forum_topic_id),
+        }
+    }
+
+    pub fn forum_topic_id(self) -> Option<i32> {
+        match self {
+            Self::Forum { forum_topic_id } => i32::try_from(forum_topic_id).ok(),
+            _ => None,
+        }
+    }
 }
 
 /// Conversation identity including optional topic.

@@ -229,13 +229,24 @@ impl QuillApp {
 
     /// Opens the Remove Fee box and asks what the user paid so far.
     pub(super) fn open_remove_fee(&mut self, user_id: i64, cx: &mut Context<Self>) {
+        if let Some(live) = self.live.as_mut() {
+            let _ = live.driver.fetch_paid_message_revenue(user_id);
+        }
+        self.open_remove_fee_for(user_id, None, cx);
+    }
+
+    /// The Remove Fee box for a private chat, or for one conversation of
+    /// a channel's direct messages (`direct`).
+    pub(super) fn open_remove_fee_for(
+        &mut self,
+        user_id: i64,
+        direct: Option<(ChatId, i64)>,
+        cx: &mut Context<Self>,
+    ) {
         let name = self.session().and_then(|s| s.user(user_id)).map_or_else(
             || tr(keys::Q_MONEY_THIS_USER_2).to_string(),
             |u| u.display_name(),
         );
-        if let Some(live) = self.live.as_mut() {
-            let _ = live.driver.fetch_paid_message_revenue(user_id);
-        }
         if let Some(session) = self.paid_session_mut() {
             session.payments.paid_messages.error = None;
         }
@@ -243,6 +254,7 @@ impl QuillApp {
             user_id,
             name,
             refund: false,
+            direct,
         });
         cx.notify();
     }
@@ -256,17 +268,17 @@ impl QuillApp {
         let Some(boxed) = self.paid_messages.remove_fee.take() else {
             return;
         };
-        let paid = self
-            .session()
-            .and_then(|s| {
-                s.payments
-                    .paid_messages
-                    .revenue
-                    .get(&boxed.user_id)
-                    .copied()
-            })
-            .unwrap_or(0);
+        let paid = self.remove_fee_paid(&boxed);
         let refund = boxed.refund && paid > 0;
+        if let Some((chat_id, topic_id)) = boxed.direct {
+            self.run_direct_live(|driver| {
+                driver
+                    .set_direct_topic_free(chat_id, topic_id, true, refund)
+                    .map(|_| ())
+            });
+            cx.notify();
+            return;
+        }
         if let Some(live) = self.live.as_mut() {
             if live
                 .driver
@@ -281,6 +293,22 @@ impl QuillApp {
             demo.finish_unpaid_exception(boxed.user_id);
         }
         cx.notify();
+    }
+
+    fn remove_fee_paid(&self, boxed: &RemoveFeeBox) -> i64 {
+        let Some(session) = self.session() else {
+            return 0;
+        };
+        match boxed.direct {
+            Some((chat_id, topic_id)) => session.direct_topic_revenue(chat_id, topic_id),
+            None => session
+                .payments
+                .paid_messages
+                .revenue
+                .get(&boxed.user_id)
+                .copied(),
+        }
+        .unwrap_or(0)
     }
 
     pub(super) fn build_paid_confirm_dialog(
@@ -379,16 +407,7 @@ impl QuillApp {
             let Some(boxed) = this.paid_messages.remove_fee.as_ref() else {
                 return dialog.overlay(true).on_close(on_close);
             };
-            let paid = this
-                .session()
-                .and_then(|s| {
-                    s.payments
-                        .paid_messages
-                        .revenue
-                        .get(&boxed.user_id)
-                        .copied()
-                })
-                .unwrap_or(0);
+            let paid = this.remove_fee_paid(boxed);
             let mut body = div()
                 .flex()
                 .flex_col()

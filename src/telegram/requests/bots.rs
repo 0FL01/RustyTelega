@@ -1,3 +1,4 @@
+use crate::ids::TopicId;
 use crate::ids::{ChatId, MessageId, RequestId};
 use serde_json::{Value, json};
 
@@ -174,7 +175,7 @@ pub fn click_chat_sponsored_message(
 pub fn stop_pending_message(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     draft_id: i64,
 ) -> String {
     json!({"@type":"stopPendingMessage", "@extra":extra.as_extra(), "chat_id":chat_id.0,

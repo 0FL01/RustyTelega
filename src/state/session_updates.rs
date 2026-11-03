@@ -211,6 +211,9 @@ impl Session {
                 });
             }
         }
+        if self.outside_open_direct_topic(chat_id, message.extras.direct_messages_topic_id) {
+            return;
+        }
         let topic_id = message.topic_id;
         let row = history_message(message, pending);
         self.index_poll(&row);

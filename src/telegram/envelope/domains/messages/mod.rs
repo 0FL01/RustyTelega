@@ -131,7 +131,12 @@ pub enum MessagesPayload {
         chat_id: ChatId,
         message_id: MessageId,
     },
-    Messages(Vec<ParsedMessage>),
+    /// `messages`: `total_count` is exact only for some requests (a
+    /// direct messages conversation's history among them).
+    Messages {
+        messages: Vec<ParsedMessage>,
+        total_count: i32,
+    },
     Message(ParsedMessage),
     /// M1: `messageLink` (TDLib 1.8.67, `schema/td_api.tl:9666` —
     /// `messageLink link is_public`) — the `getMessageLink` answer. The

@@ -1,4 +1,5 @@
 use super::{SendReply, message_topic_value, send_reply_value};
+use crate::ids::TopicId;
 use crate::ids::{ChatId, MessageId, RequestId};
 use crate::poll::PollOptionInput;
 use serde_json::{Value, json};
@@ -80,7 +81,7 @@ pub fn get_inline_query_results(
 pub fn send_inline_query_result_message(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     reply_to: Option<SendReply>,
     query_id: i64,
     result_id: &str,
@@ -146,7 +147,7 @@ pub struct PollSend<'a> {
     pub close_date: i32,
     pub reply_to: Option<SendReply>,
     /// Parity slice 4: forum topic the send is addressed to (`None` = no topic).
-    pub topic_id: Option<i32>,
+    pub topic_id: Option<TopicId>,
 }
 
 /// The text of a new option as `formattedText`: composer markup in, only

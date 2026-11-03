@@ -194,6 +194,9 @@ impl Session {
     /// The newest message `chat_id` is known to have, from its summary
     /// (0 when unknown).
     fn chat_latest_id(&self, chat_id: ChatId) -> i64 {
+        if let Some(latest) = self.direct_topic_latest_id(chat_id) {
+            return latest;
+        }
         self.chats
             .get(&chat_id.0)
             .and_then(|chat| chat.last_message.as_ref())

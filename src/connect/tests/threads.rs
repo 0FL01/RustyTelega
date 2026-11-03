@@ -362,7 +362,7 @@ fn forum_topic_thread_routes_sends_into_the_topic() {
     let send = crate::telegram::requests::send_text(
         crate::ids::RequestId(9),
         ChatId(16),
-        Some(7),
+        Some(crate::ids::TopicId::forum(7)),
         "hi",
         None,
         &crate::composer::SendOptions::default(),

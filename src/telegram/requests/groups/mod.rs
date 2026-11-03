@@ -1,6 +1,6 @@
 use super::{format_entity_json, input_message_reply_to_with_quote};
 use crate::composer::parse_format_markup;
-use crate::ids::{ChatId, MessageId, RequestId};
+use crate::ids::{ChatId, MessageId, RequestId, TopicId};
 use serde_json::{Value, json};
 
 /// `getForumTopics` (TDLib 1.8.67, `schema/td_api.tl:12701`):
@@ -790,7 +790,7 @@ pub fn route_into_thread(
     object.insert(
         "topic_id".to_owned(),
         match forum_topic_id {
-            Some(_) => super::messages::message_topic_value(forum_topic_id),
+            Some(_) => super::messages::message_topic_value(forum_topic_id.map(TopicId::forum)),
             None => message_topic_thread_value(message_thread_id),
         },
     );

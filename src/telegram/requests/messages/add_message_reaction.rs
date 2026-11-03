@@ -1,6 +1,7 @@
 //! Methods moved out of `messages.rs` to keep files under 1000 lines.
 
 use super::*;
+use crate::ids::TopicId;
 
 /// `addMessageReaction` (TDLib 1.8.67). Chip / picker add: `is_big` false
 /// (tdesktop InlineList click, not the big-animation double-click).
@@ -156,7 +157,7 @@ pub fn get_game_high_scores(
 pub fn send_game(
     extra: RequestId,
     chat_id: ChatId,
-    topic_id: Option<i32>,
+    topic_id: Option<TopicId>,
     bot_user_id: i64,
     game_short_name: &str,
 ) -> String {
