@@ -224,8 +224,7 @@ jobs:
           ditto -c -k --keepParent dist/Quill.app "$RUNNER_TEMP/notarize.zip"
           bash scripts/macos-notarize.sh "$RUNNER_TEMP/notarize.zip"
           echo "QUILL_NOTARIZE=1" >> "$GITHUB_ENV"
-          xcrun stapler staple dist/Quill.app
-          xcrun stapler validate dist/Quill.app
+          bash scripts/macos-staple.sh dist/Quill.app
           spctl --assess --type execute --verbose=4 dist/Quill.app
       - name: run from the bundle
         env:
@@ -263,8 +262,7 @@ jobs:
           DMGBUILD="$RUNNER_TEMP/dmgbuild/bin/dmgbuild" bash scripts/macos-dmg.sh dist/Quill.app "$dmg"
           if [ "${QUILL_NOTARIZE:-}" = 1 ]; then
             bash scripts/macos-notarize.sh "$dmg"
-            xcrun stapler staple "$dmg"
-            xcrun stapler validate "$dmg"
+            bash scripts/macos-staple.sh "$dmg"
             spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg"
           fi
           (cd dist/macos && shasum -a 256 quill-macos-aarch64.dmg > quill-macos-aarch64.dmg.sha256)
