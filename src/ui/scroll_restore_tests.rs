@@ -1,7 +1,7 @@
 #![cfg(test)]
 #![cfg(feature = "demo-capture")]
-//! Leaving a chat mid-history and coming back lands on the same row, through
-//! the real app, scroller and render loop (`docs/decisions/sweep-scroll-restore.md`).
+//! Where a chat lands when it is opened again, and scrolling back to its
+//! newest message, through the real app, scroller and render loop.
 
 use crate::ui::app::QuillApp;
 use crate::ui::history::demo_chat::{A, frames, open, select};
@@ -27,8 +27,11 @@ fn saved(app: &Entity<QuillApp>, vcx: &mut VisualTestContext, chat: ChatId) -> O
     })
 }
 
+/// A chat left mid-history opens at its first unread message next time,
+/// with nothing remembered (`docs/decisions/sweep-scroll-restore.md`).
+/// Demo chat A has one unread message, followed by the 120 added here.
 #[gpui_kit::test]
-fn returning_to_a_chat_lands_on_the_row_it_was_left_at(cx: &mut TestAppContext) {
+fn a_chat_left_mid_history_reopens_at_its_unread_bar(cx: &mut TestAppContext) {
     let (app, mut vcx) = open(cx, 120);
     let vcx = &mut vcx;
     select(&app, vcx, A);
@@ -39,21 +42,18 @@ fn returning_to_a_chat_lands_on_the_row_it_was_left_at(cx: &mut TestAppContext) 
     });
     frames(vcx);
     let left = top(&app, vcx).expect("scrolled away from the tail");
-    assert_eq!(left.1, 12.);
-    assert_eq!(
-        saved(&app, vcx, A),
-        Some(SavedScroll {
-            anchor: left.0,
-            offset: 12.
-        })
+    assert_eq!(saved(&app, vcx, A).map(|s| s.anchor), Some(left.0));
+    select(&app, vcx, B);
+    select(&app, vcx, A);
+    assert_ne!(top(&app, vcx).map(|t| t.0), Some(left.0));
+    let bar_top = vcx.debug_bounds("unread-bar").expect("bar painted").top();
+    let viewport = app.update(vcx, |app, _| app.history.viewport.get());
+    let viewport = viewport.expect("history painted");
+    assert!(
+        (bar_top - viewport.top()).abs() < px(0.5),
+        "bar at {bar_top:?}, view at {:?}",
+        viewport.top()
     );
-    // Two round trips: the first restore must not drift or overwrite it.
-    for _ in 0..2 {
-        select(&app, vcx, B);
-        assert_eq!(saved(&app, vcx, A).map(|s| s.anchor), Some(left.0));
-        select(&app, vcx, A);
-        assert_eq!(top(&app, vcx), Some(left));
-    }
 }
 
 #[gpui_kit::test]
@@ -86,38 +86,6 @@ fn an_explicit_target_wins_over_the_saved_row(cx: &mut TestAppContext) {
         "target row {target_row:?} not in {shown:?}"
     );
     assert_ne!(saved(&app, vcx, A).map(|s| s.anchor), Some(left.0));
-}
-
-#[gpui_kit::test]
-fn a_saved_row_that_is_gone_opens_the_default_and_is_forgotten(cx: &mut TestAppContext) {
-    let (app, mut vcx) = open(cx, 120);
-    let vcx = &mut vcx;
-    select(&app, vcx, B);
-    app.update(vcx, |app, _| {
-        app.history.scroll_memory.record(
-            (A.0, None, 0),
-            Some(SavedScroll {
-                anchor: MessageId(999_999),
-                offset: 4.,
-            }),
-        );
-    });
-    select(&app, vcx, A);
-    // The default open: a little above the "Unread messages" divider. What
-    // is saved now is that row, as for any position away from the tail.
-    let divider = app.update(vcx, |app, _| {
-        app.history
-            .rows
-            .iter()
-            .position(|row| row.unread_divider())
-            .and_then(|ix| app.history.rows.get(ix.saturating_sub(1))?.first_id())
-    });
-    assert!(divider.is_some());
-    assert_eq!(top(&app, vcx).map(|t| t.0), divider);
-    assert_ne!(
-        saved(&app, vcx, A).map(|s| s.anchor),
-        Some(MessageId(999_999))
-    );
 }
 
 fn swipe(

@@ -12,8 +12,6 @@ struct ThreadWindow {
     unread_count: i32,
     has_newer: bool,
     window_epoch: u64,
-    /// The first page still loads around the saved scroll position.
-    saved_open: bool,
 }
 
 impl QuillApp {
@@ -55,7 +53,6 @@ impl QuillApp {
                 unread_count: thread.unread_count,
                 has_newer: thread.history.has_newer,
                 window_epoch: thread.history.window_epoch,
-                saved_open: thread.saved_anchor.is_some(),
             });
         let history_key = (
             viewed_chat.map(|chat| chat.0).unwrap_or(-1),
@@ -83,16 +80,6 @@ impl QuillApp {
                     }
                 })
                 .unwrap_or((None, false, 0)),
-        };
-        // A history opened at its saved position anchors once the window
-        // around that message is in, so the position comes with the first rows.
-        let saved_open_pending = match &thread_window {
-            Some(thread) => thread.saved_open,
-            None => {
-                viewed_topic.is_none()
-                    && viewed_chat
-                        .is_some_and(|chat| session.is_some_and(|s| s.saved_open_pending(chat)))
-            }
         };
         let unread_count = match &thread_window {
             Some(thread) => thread.unread_count,
@@ -300,13 +287,13 @@ impl QuillApp {
             }
             self.history.row_stats.note_built(rows_started);
             self.history.row_stats.messages_cloned += cloned;
-            self.rows_replaced(history_key, highlight_id, saved_open_pending, has_newer, cx);
+            self.rows_replaced(history_key, highlight_id, has_newer, cx);
         } else if let Some(splice) = splice {
             // Messages came or went: build the rows around them again and
             // keep the rest.
             let spliced = self.splice_rows(splice, &row_build);
             self.commit_spliced_rows(spliced, mark, rows_started, cx);
-            self.rows_replaced(history_key, highlight_id, saved_open_pending, has_newer, cx);
+            self.rows_replaced(history_key, highlight_id, has_newer, cx);
         } else {
             // Kept rows: patch the messages changed in place and bring the
             // chrome around the viewport up to date.
@@ -769,7 +756,6 @@ impl QuillApp {
         &mut self,
         history_key: quill::state::ScrollKey,
         highlight_id: Option<MessageId>,
-        saved_open_pending: bool,
         has_newer: bool,
         cx: &mut Context<Self>,
     ) {
@@ -782,7 +768,7 @@ impl QuillApp {
         self.history_a11y_rows_changed(cx);
         // A new or replaced window: start at the saved position, else the
         // jump target, else the "Unread messages" divider, else the bottom.
-        if self.history.anchor_pending && !self.history.rows.is_empty() && !saved_open_pending {
+        if self.history.anchor_pending && !self.history.rows.is_empty() {
             self.history.anchor_pending = false;
             self.anchor_opened_history(history_key, highlight_id, cx);
         }

@@ -70,7 +70,7 @@ impl<S: JsonSender> ConnectDriver<S> {
         self.draft_clock = DraftSaveClock::idle();
         self.pending_draft = None;
         self.session.open_chat(chat_id);
-        let around_saved = self.session.prepare_history_window_at(chat_id, open);
+        self.session.prepare_history_window(chat_id);
         // Channels are ungated since Phase 2.2: they follow the normal
         // openChat / history path; sponsored rows fetch for every channel.
         // A chat shown in its own window is open in TDLib already.
@@ -79,10 +79,9 @@ impl<S: JsonSender> ConnectDriver<S> {
         }
         self.fetch_open_chat_extras(chat_id)?;
         self.fetch_pinned_messages(chat_id)?;
-        match (open, around_saved) {
-            (HistoryOpen::Message(target), _) => self.jump_to_chat_search_message(target),
-            (_, Some(anchor)) => self.fetch_history_around_saved(chat_id, anchor),
-            _ => self.fetch_history(),
+        match open {
+            HistoryOpen::Message(target) => self.jump_to_chat_search_message(target),
+            HistoryOpen::Default => self.fetch_history(),
         }
     }
 
