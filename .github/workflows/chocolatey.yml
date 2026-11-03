@@ -1,0 +1,71 @@
+name: chocolatey
+# The Chocolatey package (packaging/chocolatey/): built from a published
+# release's setup.exe, installed, run and uninstalled on a Windows runner,
+# then pushed to community.chocolatey.org when CHOCO_API_KEY is set (a
+# stable release, or a manual run with push=true). Chocolatey moderates each
+# version before it is listed. docs/decisions/distribution-channels.md
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (vYEAR.MONTHDAY.COMMITS); empty for the latest release'
+        required: false
+        default: ''
+      push:
+        description: 'Push the package to community.chocolatey.org'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  chocolatey:
+    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: version
+        id: v
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          [ -n "$TAG" ] || TAG="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: build the package
+        shell: pwsh
+        run: |
+          python packaging/chocolatey/make-package.py '${{ steps.v.outputs.version }}' "$env:RUNNER_TEMP\choco"
+          if ($LASTEXITCODE -ne 0) { throw 'make-package failed' }
+          Push-Location "$env:RUNNER_TEMP\choco"
+          choco pack --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'choco pack failed' }
+          Pop-Location
+      - name: install, run and uninstall
+        shell: pwsh
+        run: |
+          choco install quill --source "$env:RUNNER_TEMP\choco" -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'choco install failed' }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Quill\quill.exe'
+          . scripts/windows-common.ps1
+          $v = Invoke-QuillExe $exe @('--version')
+          if ($v -ne 'Quill ${{ steps.v.outputs.version }}') { throw "installed --version: $v" }
+          choco uninstall quill -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'choco uninstall failed' }
+          for ($i = 0; $i -lt 20 -and (Test-Path $exe); $i++) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path $exe) { throw 'uninstall left quill.exe' }
+      - name: push
+        if: ${{ github.event_name == 'release' || inputs.push }}
+        shell: pwsh
+        env:
+          CHOCO_API_KEY: ${{ secrets.CHOCO_API_KEY }}
+        run: |
+          if (-not $env:CHOCO_API_KEY) { Write-Host '::notice::CHOCO_API_KEY is not set: the package was tested but not pushed'; exit 0 }
+          $pkg = Get-ChildItem "$env:RUNNER_TEMP\choco\quill.*.nupkg" | Select-Object -First 1
+          choco push $pkg.FullName --source https://push.chocolatey.org/ --api-key $env:CHOCO_API_KEY --limit-output
+          if ($LASTEXITCODE -ne 0) { throw 'choco push failed' }

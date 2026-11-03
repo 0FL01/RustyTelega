@@ -7,6 +7,7 @@ set up. Why it is built this way: `docs/decisions/distribution-channels.md`.
 |---|---|
 | `homebrew-tap/` | The contents of the `shinycake/homebrew-tap` repository (cask `quill-app`) |
 | `scoop-bucket/` | The contents of the `shinycake/scoop-bucket` repository (manifest `quill`) |
+| `chocolatey/` | `make-package.py`, which writes the Chocolatey package for a release |
 | `winget/` | `make-manifests.py`, which writes the manifests for a release in winget-pkgs layout |
 | `windows/` | `quill.iss`, the Inno Setup script for `quill-windows-x86_64-setup.exe` |
 | `flatpak/` | The Flatpak manifest submitted to Flathub |
@@ -44,3 +45,9 @@ hand. After that every channel follows new releases by itself.
    submits each stable release.
 
 4. **Flathub.** See `flatpak/README.md`.
+
+5. **Chocolatey.** Sign up at community.chocolatey.org, copy the API key
+   from the account page and add it as the `CHOCO_API_KEY` secret of this
+   repository. `chocolatey.yml` then pushes every stable release; run it by
+   hand with `push` checked for the current one. Chocolatey's moderators
+   review each version before it is listed.
