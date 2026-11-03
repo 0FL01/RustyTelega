@@ -18,6 +18,12 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 REPO = "shinycake/quill"
+# Chocolatey refuses raw.githubusercontent.com icons; jsDelivr pinned to the
+# commit that added the icon serves the same file and never changes.
+ICON_URL = (
+    "https://cdn.jsdelivr.net/gh/shinycake/quill@75dd5c6bd211b850ba69b3aa03de430baf1a3cad"
+    "/site/img/icon-256.png"
+)
 ASSET = "quill-windows-x86_64-setup.exe"
 
 NUSPEC = """<?xml version="1.0" encoding="utf-8"?>
@@ -29,7 +35,8 @@ NUSPEC = """<?xml version="1.0" encoding="utf-8"?>
     <authors>Quill contributors</authors>
     <owners>shinycake</owners>
     <projectUrl>https://shinycake.github.io/quill/</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/{repo}/main/site/img/icon-256.png</iconUrl>
+    <iconUrl>{icon_url}</iconUrl>
+    <copyright>Copyright (c) 2026 shinycake</copyright>
     <licenseUrl>https://github.com/{repo}/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <projectSourceUrl>https://github.com/{repo}</projectSourceUrl>
@@ -94,7 +101,7 @@ def main() -> None:
         sys.exit(f"no checksum for {ASSET}")
     url = os.environ.get("QUILL_SETUP_URL") or f"{base}/{ASSET}"
     (out / "tools").mkdir(parents=True, exist_ok=True)
-    (out / "quill.nuspec").write_text(NUSPEC.format(version=escape(version), repo=REPO), encoding="utf-8")
+    (out / "quill.nuspec").write_text(NUSPEC.format(version=escape(version), repo=REPO, icon_url=ICON_URL), encoding="utf-8")
     (out / "tools" / "chocolateyinstall.ps1").write_text(INSTALL.format(url=url, sha256=digest), encoding="utf-8")
     (out / "tools" / "chocolateyuninstall.ps1").write_text(UNINSTALL, encoding="utf-8")
     print(out)
