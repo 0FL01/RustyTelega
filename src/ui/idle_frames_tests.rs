@@ -63,7 +63,7 @@ fn an_open_chat_draws_nothing_behind_another_app(cx: &mut TestAppContext) {
 }
 
 /// In front, the focused composer's caret is all that draws: the composer
-/// alone, twice a second.
+/// alone, twice a second, until it stops blinking 10 s after the focus.
 #[gpui_kit::test]
 fn in_front_only_the_caret_draws(cx: &mut TestAppContext) {
     let (app, mut vcx) = open(cx, "ready-chats");
@@ -77,8 +77,10 @@ fn in_front_only_the_caret_draws(cx: &mut TestAppContext) {
         .filter(|kind| !["(window frame)", "app", "composer", "animation layer"].contains(kind))
         .collect();
     assert!(others.is_empty(), "drawn besides the caret: {drawn:?}");
-    let frames = drawn.get("(window frame)").copied().unwrap_or(0);
-    assert!((100..=121).contains(&frames), "the caret blinks: {drawn:?}");
+    let window_frames = drawn.get("(window frame)").copied().unwrap_or(0);
+    assert!((8..=12).contains(&window_frames), "the caret blinks: {drawn:?}");
+    let drawn = frames(vcx, 60);
+    assert!(drawn.is_empty(), "the caret stopped: {drawn:?}");
 }
 
 /// A dialog over the chat (Settings) draws nothing behind another app.
