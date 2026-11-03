@@ -78,7 +78,10 @@ fn in_front_only_the_caret_draws(cx: &mut TestAppContext) {
         .collect();
     assert!(others.is_empty(), "drawn besides the caret: {drawn:?}");
     let window_frames = drawn.get("(window frame)").copied().unwrap_or(0);
-    assert!((8..=12).contains(&window_frames), "the caret blinks: {drawn:?}");
+    assert!(
+        (8..=12).contains(&window_frames),
+        "the caret blinks: {drawn:?}"
+    );
     let drawn = frames(vcx, 60);
     assert!(drawn.is_empty(), "the caret stopped: {drawn:?}");
 }
