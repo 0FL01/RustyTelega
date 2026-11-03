@@ -64,7 +64,7 @@ fields on a default value. Nothing else in Quill needed a change.
 Done after this upgrade:
 
 - The caret stops blinking, visibly, 10 s after the last focus, edit or move
-  (`set_caret_policy`). Every blink woke a frame.
+  (`set_theme_mode`). Every blink woke a frame.
 - macOS and Windows take the saver from `App::power_mode`, with no probe. GPUI had
   no public change event, so Quill's copy adds `App::on_power_mode_change`. Linux
   keeps `battery_signal`: GPUI reads only the profile daemon, so a sandboxed app

@@ -144,19 +144,15 @@ pub fn set_high_contrast(on: bool) {
 pub fn set_theme_mode(mode: ThemeMode, window: Option<&mut Window>, cx: &mut App) {
     palette_state::set_dark(mode.is_dark());
     Theme::change(mode, window, cx);
+    Theme::update(cx, |theme| {
+        theme.cursor_blink = theme.cursor_blink.with_idle_timeout(CARET_BLINK_TIMEOUT);
+    });
 }
 
 /// The caret stops blinking this long after the last focus, edit or move
 /// and stays visible: each blink wakes a frame, in a window that may sit
 /// focused and idle for hours. GTK's `gtk-cursor-blink-timeout` is the same.
 const CARET_BLINK_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Set the caret policy once at startup. `Theme::change` keeps it.
-pub fn set_caret_policy(cx: &mut App) {
-    Theme::update(cx, |theme| {
-        theme.cursor_blink = theme.cursor_blink.with_idle_timeout(CARET_BLINK_TIMEOUT);
-    });
-}
 
 /// kit Phase 8: the app boots dark; screenshot demos can opt into the light
 /// theme with `QUILL_DEMO_THEME=light` so both themes get captured.
