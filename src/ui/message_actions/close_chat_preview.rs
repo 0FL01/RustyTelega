@@ -252,6 +252,11 @@ impl QuillApp {
         let unread = chat.is_marked_as_unread || chat.unread_count > 0;
         let archived = chat.in_archive;
         let can_clear = chat.can_be_deleted_only_for_self || chat.can_be_deleted_for_all_users;
+        // tdesktop `addClearHistory` skips a channel's direct messages.
+        let offers_clear = can_clear
+            && self
+                .session()
+                .is_none_or(|s| s.direct_messages_role(chat.id).is_none());
 
         // Telegram Desktop's chat menu: left-aligned rows with an icon, in
         // its order (Archive, Pin, Mute, Mark as read/unread, Clear
@@ -529,7 +534,7 @@ impl QuillApp {
             }
         );
         // One item; the box asks whether to clear for the other side too.
-        if can_clear {
+        if offers_clear {
             item_window!(
                 60,
                 Lucide::Eraser,

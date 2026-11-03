@@ -1,5 +1,3 @@
-//! State reducer tests: a channel's direct messages as its admins see them
-//! (conversations, the one on screen, the All view's reply lock, drafts).
 use super::common::*;
 use super::*;
 use crate::composer::DraftTopic;
@@ -62,7 +60,7 @@ fn conversations_list_in_order_and_count_unread() {
     assert_eq!(ids, vec![501, 502]);
     assert_eq!(session.direct_topic_count(direct), 2);
     assert_eq!(session.threads.direct.unread_topics(DIRECT), 2);
-    assert_eq!(session.direct_all_unread(direct), Some(4));
+    assert_eq!(session.direct_unread_count(direct), Some(4));
     assert_eq!(session.open_direct_topic(direct), None);
 }
 
@@ -82,7 +80,11 @@ fn opening_a_conversation_swaps_the_history_window() {
         Some(MessageId(1_999)),
         "the conversation's own read position"
     );
-    // Live messages of another conversation stay out of the window.
+    assert_eq!(
+        session.direct_unread_count(direct),
+        Some(3),
+        "its own unread count"
+    );
     apply_json(&mut session, &seq, &sink, &new_message(4_200, 502));
     apply_json(&mut session, &seq, &sink, &new_message(4_300, 501));
     let ids: Vec<i64> = session.histories[&DIRECT]
@@ -97,7 +99,6 @@ fn opening_a_conversation_swaps_the_history_window() {
             direct_messages_chat_topic_id: 501
         })
     );
-    // The open conversation stays the active one for the next visit.
     assert!(session.select_direct_topic(direct, None));
     assert_eq!(session.send_topic(direct), None);
 }
@@ -116,7 +117,6 @@ fn the_all_view_locks_the_field_until_a_reply_is_picked() {
     session.select_direct_topic(direct, Some(501));
     assert!(!session.direct_reply_locked(direct, None));
     session.select_direct_topic(direct, None);
-    // The channel turned direct messages off: no lock, nobody writes.
     apply_json(
         &mut session,
         &seq,
@@ -169,5 +169,5 @@ fn a_member_never_gets_admin_conversations() {
     assert!(!session.select_direct_topic(direct, Some(501)));
     assert_eq!(session.open_direct_topic(direct), None);
     assert!(!session.direct_reply_locked(direct, None));
-    assert_eq!(session.direct_all_unread(direct), None);
+    assert_eq!(session.direct_unread_count(direct), None);
 }

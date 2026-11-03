@@ -368,7 +368,7 @@ impl<S: JsonSender> ConnectDriver<S> {
         // (`messageSourceForumTopicHistory`, schema 1.8.67 line 3213), so
         // TDLib advances that topic's read position — as Telegram Desktop
         // does when a topic's messages are on screen.
-        let source = if let Some(source) = self.direct_view_source(chat_id) {
+        let source = if let Some(source) = self.direct_view_messages_source(chat_id) {
             source
         } else if self.session.thread_for_chat(chat_id).is_some() {
             "messageSourceMessageThreadHistory"

@@ -5,7 +5,8 @@
 //!
 //! `QUILL_DEMO_DIRECT=channel` opens the channel instead, for its bar with
 //! the direct messages button, Mute and Discuss; `free` makes the direct
-//! messages free.
+//! messages free; `admin` and `admin-all` show them to the channel's owner
+//! (`direct_messages_admin.rs`).
 #![deny(clippy::indexing_slicing)]
 
 use crate::ui::app::QuillApp;
@@ -25,10 +26,10 @@ register_demos![
     .setup(QuillApp::demo_direct_messages),
 ];
 
-const CHANNEL: i64 = -1_000_000_000_081;
-const CHANNEL_GROUP: i64 = 81;
-const DIRECT: i64 = -1_000_000_000_082;
-const DIRECT_GROUP: i64 = 82;
+pub(super) const CHANNEL: i64 = -1_000_000_000_081;
+pub(super) const CHANNEL_GROUP: i64 = 81;
+pub(super) const DIRECT: i64 = -1_000_000_000_082;
+pub(super) const DIRECT_GROUP: i64 = 82;
 const DISCUSSION: i64 = -1_000_000_000_083;
 const DISCUSSION_GROUP: i64 = 83;
 
@@ -74,6 +75,10 @@ impl QuillApp {
             }
         }
         session.histories.entry(DIRECT).or_default().loaded_complete = true;
+        if let Some(view) = mode.strip_prefix("admin") {
+            self.demo_direct_admin(view == "-all", window, cx);
+            return;
+        }
         let open = if mode == "channel" { CHANNEL } else { DIRECT };
         self.select_listed_chat(ChatId(open), window, cx);
         cx.notify();

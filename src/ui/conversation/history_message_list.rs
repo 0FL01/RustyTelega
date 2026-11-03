@@ -83,7 +83,11 @@ impl QuillApp {
         };
         let unread_count = match &thread_window {
             Some(thread) => thread.unread_count,
-            None => chat.map_or(0, |chat| chat.unread_count),
+            None => chat.map_or(0, |chat| {
+                session
+                    .and_then(|s| s.direct_unread_count(chat.id))
+                    .unwrap_or(chat.unread_count)
+            }),
         };
         let rows_started = std::time::Instant::now();
         let mark = self.chrome_mark();

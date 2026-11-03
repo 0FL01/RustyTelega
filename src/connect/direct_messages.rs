@@ -1,12 +1,8 @@
-//! Connect driver: a channel's direct messages as its admins see them —
-//! loading the conversations, opening one, and the conversation menu's
-//! actions (mark read / unread, delete, ban, the message fee).
 #![deny(clippy::indexing_slicing)]
 
 use super::*;
 use crate::ids::{ChatId, MessageId, RequestId, TopicId};
 use crate::state::{DIRECT_TOPICS_PAGE, GroupsPurpose, RequestPurpose, ThreadsPurpose};
-use crate::telegram::envelope::MessageSender;
 use crate::telegram::requests::{
     delete_direct_messages_chat_topic_history, get_chat_history, get_chat_member,
     get_direct_messages_chat_topic_history, get_direct_messages_chat_topic_revenue,
@@ -16,9 +12,6 @@ use crate::telegram::requests::{
 };
 
 impl<S: JsonSender> ConnectDriver<S> {
-    /// A page of the chat's main history: the open conversation's
-    /// (`getDirectMessagesChatTopicHistory`) while an admin has one open,
-    /// else `getChatHistory`.
     pub(crate) fn main_history_request(
         &self,
         extra: RequestId,
@@ -35,8 +28,7 @@ impl<S: JsonSender> ConnectDriver<S> {
         }
     }
 
-    /// `viewMessages` source for the rows of `chat_id` on screen.
-    pub(crate) fn direct_view_source(&self, chat_id: ChatId) -> Option<&'static str> {
+    pub(crate) fn direct_view_messages_source(&self, chat_id: ChatId) -> Option<&'static str> {
         self.session
             .open_direct_topic(chat_id)
             .map(|_| "messageSourceDirectMessagesChatTopicHistory")
@@ -260,13 +252,5 @@ impl<S: JsonSender> ConnectDriver<S> {
         let extra = self.session.request(purpose, Some(chat_id));
         let json = get_direct_messages_chat_topic_revenue(extra, chat_id, topic_id);
         self.send_json_request(extra, &json).map(Some)
-    }
-
-    /// The user writing in a conversation, for the ban menu row.
-    pub fn direct_topic_user(&self, chat_id: ChatId, topic_id: i64) -> Option<i64> {
-        match self.session.direct_topic(chat_id, topic_id)?.sender {
-            MessageSender::User { user_id } => Some(user_id),
-            MessageSender::Chat { .. } => None,
-        }
     }
 }

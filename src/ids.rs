@@ -105,7 +105,6 @@ impl TopicId {
         }
     }
 
-    /// The forum topic a message goes to, if any.
     pub fn forum_topic_id(self) -> Option<i32> {
         match self {
             Self::Forum { forum_topic_id } => i32::try_from(forum_topic_id).ok(),

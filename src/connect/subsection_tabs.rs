@@ -51,8 +51,6 @@ impl<S: JsonSender> ConnectDriver<S> {
                 is_forum: true,
                 ..
             }) => Some(*supergroup_id),
-            // An administered direct messages group: its conversations fill
-            // its row and tabs.
             EnvelopePayload::Groups(GroupsPayload::UpdateSupergroup {
                 supergroup_id,
                 direct_messages: Some(crate::suggested_posts::DirectMessagesRole::Admin),

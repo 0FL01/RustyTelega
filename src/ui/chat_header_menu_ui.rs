@@ -116,6 +116,8 @@ impl QuillApp {
                     }),
                     new_window: self.can_open_chat_window(c),
                     agent_access: crate::ui::agent_state::sees_agents(),
+                    is_direct_messages: session
+                        .is_some_and(|s| s.direct_messages_role(c.id).is_some()),
                 })
             })
             .unwrap_or_default();

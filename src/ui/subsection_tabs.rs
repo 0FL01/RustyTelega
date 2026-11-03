@@ -56,13 +56,16 @@ pub(super) struct TabsSnapshot {
     pub bot: Option<quill::state::BotTopics>,
     /// Each topic's badge (`Session::topic_badge`), by topic id.
     pub badges: std::collections::HashMap<i32, TopicBadge>,
+    pub direct: Option<super::direct_messages_tabs::DirectTabs>,
 }
 
 /// Which tab a click or menu targets.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Tab {
+pub(super) enum Tab {
     All,
     Topic(i32),
+    /// A conversation in a channel's direct messages.
+    Direct(i64),
 }
 
 impl QuillApp {
@@ -70,6 +73,17 @@ impl QuillApp {
     pub(super) fn subsection_tabs_snapshot(&self) -> Option<TabsSnapshot> {
         let session = self.session()?;
         let chat_id = session.open_chat?;
+        if let Some(direct) = super::direct_messages_tabs::DirectTabs::of(session, chat_id) {
+            return Some(TabsSnapshot {
+                chat_id,
+                mode: session.subsection_tabs_mode(chat_id),
+                active: None,
+                topics: Vec::new(),
+                bot: None,
+                badges: Default::default(),
+                direct: Some(direct),
+            });
+        }
         if !session.subsection_tabs_used_for(chat_id) {
             return None;
         }
@@ -88,6 +102,7 @@ impl QuillApp {
                 .iter()
                 .map(|t| (t.forum_topic_id, session.topic_badge(chat_id, t)))
                 .collect(),
+            direct: None,
         })
     }
 
@@ -106,10 +121,18 @@ impl QuillApp {
         // it to x on a div that only scrolls along x.
         let scroll = self.folders.topic_tabs_scroll.clone();
         let topic_ids: Vec<i32> = tabs.topics.iter().map(|t| t.forum_topic_id).collect();
-        if let Some(selected) = selected_child(tabs.active, &topic_ids) {
+        let selected = match &tabs.direct {
+            Some(direct) => direct.selected_child(),
+            None => selected_child(tabs.active, &topic_ids),
+        };
+        let tab_count = tabs
+            .direct
+            .as_ref()
+            .map_or(topic_ids.len(), |d| d.tabs.len());
+        if let Some(selected) = selected {
             let key = RevealKey {
                 selected,
-                tab_count: topic_ids.len(),
+                tab_count,
                 strip_width: f32::from(scroll.bounds().size.width) as i32,
             };
             if needs_reveal(self.folders.topic_tabs_revealed.get(), key) {
@@ -127,9 +150,10 @@ impl QuillApp {
             .overflow_x_scroll()
             .track_scroll(&scroll)
             .child(self.horizontal_tab(&tabs, Tab::All, cx));
-        for topic in &tabs.topics {
-            row = row.child(self.horizontal_tab(&tabs, Tab::Topic(topic.forum_topic_id), cx));
+        for tab in tab_list(&tabs) {
+            row = row.child(self.horizontal_tab(&tabs, tab, cx));
         }
+        let row = self.direct_tabs_paging(&tabs, row, false, cx);
         Some(
             div()
                 .id(if bottom {
@@ -172,10 +196,12 @@ impl QuillApp {
             .min_h_0()
             .w_full()
             .overflow_y_scroll()
+            .track_scroll(&self.folders.topic_tabs_column_scroll)
             .child(self.vertical_tab(&tabs, Tab::All, cx));
-        for topic in &tabs.topics {
-            list = list.child(self.vertical_tab(&tabs, Tab::Topic(topic.forum_topic_id), cx));
+        for tab in tab_list(&tabs) {
+            list = list.child(self.vertical_tab(&tabs, tab, cx));
         }
+        let list = self.direct_tabs_paging(&tabs, list, true, cx);
         Some(
             div()
                 .id("subsection-tabs-left")
@@ -267,6 +293,9 @@ impl QuillApp {
             .font_semibold()
             .text_color(text)
             .on_click(cx.listener(move |this, _, _, cx| this.select_subsection_tab(tab, cx)))
+            .when_some(self.direct_tab_userpic(tabs, tab, 18.), |this, userpic| {
+                this.child(userpic)
+            })
             .child({
                 let tip = label_may_be_cut(&label).then(|| SharedString::from(label.clone()));
                 div()
@@ -324,6 +353,9 @@ impl QuillApp {
                 .iter()
                 .find(|t| t.forum_topic_id == id)
                 .map(|t| topic_icon(t, ICON_SIZE, cx))
+                .unwrap_or_else(|| div().size(px(ICON_SIZE)).into_any_element()),
+            Tab::Direct(_) => self
+                .direct_tab_userpic(tabs, tab, ICON_SIZE)
                 .unwrap_or_else(|| div().size(px(ICON_SIZE)).into_any_element()),
         };
         let element = div()
@@ -395,6 +427,9 @@ impl QuillApp {
         element: Stateful<Div>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        if let Tab::Direct(topic_id) = tab {
+            return self.with_direct_menu(tabs.chat_id, topic_id, element, cx);
+        }
         let Tab::Topic(topic_id) = tab else {
             return element.into_any_element();
         };
@@ -525,8 +560,20 @@ impl QuillApp {
             .into_any_element()
     }
 
-    fn select_subsection_tab(&mut self, tab: Tab, cx: &mut Context<Self>) {
+    pub(super) fn select_subsection_tab(&mut self, tab: Tab, cx: &mut Context<Self>) {
+        let direct_chat = self
+            .session()
+            .and_then(|s| s.open_chat.filter(|chat| s.is_direct_messages_admin(*chat)));
+        if let Some(chat_id) = direct_chat {
+            let topic = match tab {
+                Tab::Direct(id) => Some(id),
+                _ => None,
+            };
+            self.select_direct_topic_ui(chat_id, topic, cx);
+            return;
+        }
         match tab {
+            Tab::Direct(_) => {}
             Tab::All => {
                 if self.session().is_some_and(|s| s.open_topic.is_some()) {
                     self.deselect_topic_ui(cx);
@@ -645,9 +692,28 @@ enum TopicMenuAction {
 }
 
 fn is_active(tabs: &TabsSnapshot, tab: Tab) -> bool {
+    if let Some(direct) = &tabs.direct {
+        return match tab {
+            Tab::Direct(id) => direct.active == Some(id),
+            Tab::All => direct.active.is_none(),
+            Tab::Topic(_) => false,
+        };
+    }
     match tab {
         Tab::All => tabs.active.is_none(),
         Tab::Topic(id) => tabs.active == Some(id),
+        Tab::Direct(_) => false,
+    }
+}
+
+fn tab_list(tabs: &TabsSnapshot) -> Vec<Tab> {
+    match &tabs.direct {
+        Some(direct) => direct.tabs.iter().map(|t| Tab::Direct(t.id)).collect(),
+        None => tabs
+            .topics
+            .iter()
+            .map(|t| Tab::Topic(t.forum_topic_id))
+            .collect(),
     }
 }
 
@@ -655,6 +721,12 @@ fn is_active(tabs: &TabsSnapshot, tab: Tab) -> bool {
 fn tab_label(tabs: &TabsSnapshot, tab: Tab) -> (String, TopicBadge, bool) {
     match tab {
         Tab::All => (tr(keys::Q_MISC_ALL).to_string(), TopicBadge::None, false),
+        Tab::Direct(id) => tabs
+            .direct
+            .as_ref()
+            .and_then(|direct| direct.tabs.iter().find(|t| t.id == id))
+            .map(|t| (t.short_name.clone(), t.badge, false))
+            .unwrap_or_else(|| (String::new(), TopicBadge::None, false)),
         Tab::Topic(id) => tabs
             .topics
             .iter()
@@ -682,12 +754,13 @@ fn tab_element_id(prefix: &'static str, tab: Tab) -> ElementId {
     match tab {
         Tab::All => ElementId::from(SharedString::from(format!("{prefix}-all"))),
         Tab::Topic(id) => ElementId::from((prefix, id as u64)),
+        Tab::Direct(id) => ElementId::from((prefix, id as u64)),
     }
 }
 
 /// A tab's unread mark: the counter, or a small dot when the count isn't
 /// known (`TopicBadge::Dot`).
-fn badge_pill(badge: TopicBadge, muted: bool, cx: &App) -> AnyElement {
+pub(super) fn badge_pill(badge: TopicBadge, muted: bool, cx: &App) -> AnyElement {
     match badge {
         TopicBadge::Count(count) => count_pill(count, muted, cx).into_any_element(),
         TopicBadge::Dot => {
@@ -786,6 +859,7 @@ mod tests {
             topics: Vec::new(),
             bot: None,
             badges: Default::default(),
+            direct: None,
         }
     }
 

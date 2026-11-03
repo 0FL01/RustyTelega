@@ -41,6 +41,16 @@ impl QuillApp {
     /// The sentence that takes the composer's place when the viewer may
     /// send nothing here (tdesktop's `TextErrorSendRestriction`).
     pub(super) fn composer_restriction(&self) -> Option<String> {
+        let session = self.session()?;
+        let chat_id = session.open_chat?;
+        let replying = self
+            .composer_ui
+            .reply()
+            .filter(|reply| reply.chat_id == chat_id)
+            .map(|reply| reply.message_id);
+        if session.direct_reply_locked(chat_id, replying) {
+            return Some(quill::lang::tr(quill::lang::keys::MONOFORUM_CHOOSE_TO_REPLY).to_string());
+        }
         self.open_send_rights()?.composer_block(&until_text)
     }
 

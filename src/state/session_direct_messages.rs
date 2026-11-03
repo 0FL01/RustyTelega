@@ -31,7 +31,6 @@ impl Session {
         }
     }
 
-    /// The viewer administers `chat_id`, a channel's direct messages.
     pub fn is_direct_messages_admin(&self, chat_id: ChatId) -> bool {
         self.direct_messages_role(chat_id) == Some(DirectMessagesRole::Admin)
     }
@@ -48,7 +47,6 @@ impl Session {
         self.threads.direct.get(chat_id.0, topic_id)
     }
 
-    /// The open conversation of `chat_id`, when one is open.
     pub fn open_direct_topic_info(&self, chat_id: ChatId) -> Option<&DirectMessagesTopic> {
         self.direct_topic(chat_id, self.open_direct_topic(chat_id)?)
     }
@@ -65,9 +63,7 @@ impl Session {
             .is_some_and(|info| info.direct_messages_chat_id == 0)
     }
 
-    /// `updateDirectMessagesChatTopic` / `directMessagesChatTopic`. The
-    /// draft goes through the remote-draft path, so a composer with unsaved
-    /// text keeps it.
+    /// `updateDirectMessagesChatTopic` / `directMessagesChatTopic`.
     pub(crate) fn apply_direct_topic(&mut self, mut topic: DirectMessagesTopic) {
         let chat_id = ChatId(topic.chat_id);
         let slot = DraftTopic::DirectMessages(topic.id);
@@ -127,14 +123,11 @@ impl Session {
         )
     }
 
-    /// A message belongs to a different conversation than the one shown:
-    /// it stays out of the chat's history window.
     pub(crate) fn outside_open_direct_topic(&self, chat_id: ChatId, direct_topic_id: i64) -> bool {
         self.open_direct_topic(chat_id)
             .is_some_and(|open| open != direct_topic_id)
     }
 
-    /// The person or chat writing in a conversation.
     pub fn direct_topic_name(&self, topic: &DirectMessagesTopic) -> String {
         self.sender_name_and_accent(Some(topic.sender))
             .0
@@ -211,16 +204,30 @@ impl Session {
             .copied()
     }
 
-    /// Conversations the admin header counts ("N chats").
+    /// The price of a message to the channel (`supergroup.paid_message_star_count`
+    /// of the direct messages group); 0 when free.
+    pub fn direct_messages_price(&self, chat_id: ChatId) -> i64 {
+        self.chat_supergroup(chat_id)
+            .and_then(|id| self.payments.paid_messages.dm_price.get(&id).copied())
+            .unwrap_or(0)
+    }
+
     pub fn direct_topic_count(&self, chat_id: ChatId) -> usize {
         self.threads.direct.ordered(chat_id.0).len()
     }
 
-    /// The jump-down counter of an admin's All view (tdesktop
-    /// `chatListUnreadState().messages`); `None` for any other view.
-    pub fn direct_all_unread(&self, chat_id: ChatId) -> Option<i32> {
-        (self.is_direct_messages_admin(chat_id) && self.open_direct_topic(chat_id).is_none())
-            .then(|| self.threads.direct.unread_messages(chat_id.0))
+    /// The jump-down counter of an admin's direct messages: the open
+    /// conversation's unread messages, or in All every conversation's
+    /// (tdesktop `chatListUnreadState().messages`). `None` for any other
+    /// chat.
+    pub fn direct_unread_count(&self, chat_id: ChatId) -> Option<i32> {
+        if !self.is_direct_messages_admin(chat_id) {
+            return None;
+        }
+        Some(match self.open_direct_topic_info(chat_id) {
+            Some(topic) => topic.unread_count,
+            None => self.threads.direct.unread_messages(chat_id.0),
+        })
     }
 
     /// Whether the user behind a conversation is banned from the channel;
@@ -233,7 +240,7 @@ impl Session {
             .copied()
     }
 
-    pub(crate) fn set_direct_member_banned(&mut self, channel: ChatId, user_id: i64, banned: bool) {
+    pub fn set_direct_member_banned(&mut self, channel: ChatId, user_id: i64, banned: bool) {
         self.threads
             .direct
             .kicked
@@ -270,8 +277,6 @@ impl Session {
         self.view_generation.bump();
     }
 
-    /// `ok` answers: a deleted conversation leaves the list, a ban or unban
-    /// from a conversation's menu flips the menu row at once.
     pub(crate) fn settle_direct_messages_ok(&mut self, pending: Option<&PendingRequest>) {
         let Some(pending) = pending else {
             return;

@@ -133,6 +133,7 @@ pub struct QuillApp {
     pub(super) giveaway: super::giveaway_state::GiveawayUi,
     /// Paid messages: price, confirmation, Remove Fee (`ui/paid_messages_state.rs`).
     pub(super) paid_messages: super::paid_messages_state::PaidMessagesUi,
+    pub(super) direct_messages: super::direct_messages_state::DirectMessagesUi,
     /// Suggested posts: price, time and decision boxes (`ui/suggested_posts_state.rs`).
     pub(super) suggested_posts: super::suggested_posts_state::SuggestedPostsUi,
     /// Gift resale, auctions and crafting boxes (`ui/gift_market_state.rs`).

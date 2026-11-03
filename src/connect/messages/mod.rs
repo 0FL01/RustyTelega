@@ -226,9 +226,6 @@ impl<S: JsonSender> ConnectDriver<S> {
     /// `topic_id = messageTopicForum{forum_topic_id}` (schema 1.8.67, lines
     /// 12200 and 3004). Story replies keep a null topic — they address the
     /// poster chat, never a topic.
-    /// A channel's direct messages admin writes into the open conversation
-    /// (`messageTopicDirectMessages`); in the All view the reply picks it
-    /// (`Self::thread_routed`).
     pub(crate) fn send_topic(&self, chat_id: ChatId) -> Option<crate::ids::TopicId> {
         self.session.send_topic(chat_id)
     }

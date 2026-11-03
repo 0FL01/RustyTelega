@@ -1,6 +1,3 @@
-//! Connect-driver tests: a channel's direct messages as its admins see
-//! them — the conversations load, one opens with its own history, and a
-//! reply from the All view goes to the replied message's conversation.
 use super::super::*;
 use super::*;
 use crate::diagnostics::{DiagnosticSink, MemorySink};
@@ -79,7 +76,6 @@ fn an_admin_loads_conversations_and_writes_into_one() {
     let page = pages.last().unwrap();
     assert_eq!(page["topic_id"], 502);
 
-    // A send from the open conversation names it.
     let routed = driver.thread_routed(
         ChatId(DIRECT),
         crate::telegram::requests::send_text(
@@ -94,7 +90,6 @@ fn an_admin_loads_conversations_and_writes_into_one() {
     let routed: Value = serde_json::from_str(&routed).unwrap();
     assert_eq!(routed["topic_id"]["direct_messages_chat_topic_id"], 502);
 
-    // Back to All: a reply takes the replied message's conversation.
     driver.select_direct_topic(ChatId(DIRECT), None).unwrap();
     ingest(
         &mut driver,
