@@ -73,9 +73,6 @@ impl Session {
         // memory ends there: older pages still ask the server.
         self.store_first_page(chat_id, messages);
         if let Some(message_id) = pending.around_message_id {
-            if self.settle_saved_open(chat_id, message_id) {
-                return;
-            }
             self.finish_history_around(Some(pending), message_id, false, seq);
         }
     }

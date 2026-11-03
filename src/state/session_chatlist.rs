@@ -229,9 +229,6 @@ impl Session {
         history.visible.clear();
         history.visible_reported = false;
         history.reader = ReaderPosition::Tail;
-        // A saved-position open belongs to one view; the opener sets it again.
-        history.saved_open = None;
-        history.saved_open_missed = false;
         history.unread_anchor = unread_anchor;
         history.opened_with_unread = history.unread_anchor.is_some();
     }

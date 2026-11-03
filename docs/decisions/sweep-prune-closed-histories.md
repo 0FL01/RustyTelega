@@ -106,6 +106,35 @@ chat, except these:
 - Pinned messages (`messages.pinned_messages`), unread counters, the chat
   list preview and notifications read their own state (`ChatSummary`, the
   notification payload), not `histories`.
+- Scroll restore (#949) was removed for opened chats (see
+  `sweep-scroll-restore.md`): an opened chat lands at its first unread
+  message or the bottom, so the trim never has a saved row to keep.
+- Chat-list "Mark as read" views the newest loaded message, or the chat
+  summary's last message when the history was dropped (TGX views
+  `chat.lastMessage`).
+- Reopening a closed chat goes through the same path as before
+  (`open_chat`, `prepare_history_window`, `fetch_history`): the tail shows at
+  once, a window that does not reach the unread boundary is replaced, and
+  the next page loads from the oldest kept row. A chat whose history was
+  dropped loads as a never-opened chat does.
+
+## Readers checked
+
+Every reader of `Session.histories` and `topic_histories` acts on a shown
+chat, except these:
+
+- forward and selection source (`selection_mode`, `share_box_ui`,
+  `session_share`): held.
+- player bar and voice/audio playlists: the chat is held while its track
+  plays. The playlist is limited to the loaded rows, as before.
+- `download_display_name`, `sticker_requires_premium`: scan whatever is
+  loaded; a dropped history only means a name falls back to the existing
+  default.
+- `message_deleted`: tombstones are kept when trimming and, past dropping
+  an entry, in the side table; "not loaded" is not "deleted" there.
+- Pinned messages (`messages.pinned_messages`), unread counters, the chat
+  list preview and notifications read their own state (`ChatSummary`, the
+  notification payload), not `histories`.
 - Scroll restore (#949): a left chat keeps only the newest 60 rows, so a
   saved reading position older than that is not in memory on reopen.
   `Session::prepare_history_window_at` checks the window as it is after the

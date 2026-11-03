@@ -126,3 +126,78 @@ fn an_unread_run_that_fits_opens_at_the_bottom_without_a_bar(cx: &mut TestAppCon
     assert!(following);
     assert!(held, "reads are still held back until the rows are seen");
 }
+
+fn apply(app: &Entity<QuillApp>, vcx: &mut VisualTestContext, json: &str) {
+    app.update(vcx, |app, cx| {
+        if let Some(session) = app.demo_session.as_mut() {
+            let sink: Arc<dyn DiagnosticSink> = Arc::new(MemorySink::new());
+            let seq = AtomicU64::new(session.last_seq);
+            if let Some(owned) = copy_and_parse(json, &seq, &sink) {
+                session.apply(owned);
+            }
+        }
+        cx.notify();
+    });
+    frames(vcx);
+}
+
+fn select(app: &Entity<QuillApp>, vcx: &mut VisualTestContext, chat: ChatId) {
+    app.update_in(vcx, |app, window, cx| {
+        app.select_listed_chat(chat, window, cx)
+    });
+    frames(vcx);
+}
+
+fn following(app: &Entity<QuillApp>, vcx: &mut VisualTestContext) -> bool {
+    app.update(vcx, |app, cx| {
+        app.history.scroller.read(cx).is_following_tail()
+    })
+}
+
+/// A chat left where it opened, at its bar, opens at the bottom once
+/// everything in it is read: never back at the old bar.
+#[gpui_kit::test]
+fn a_chat_left_at_its_bar_reopens_at_the_bottom_once_read(cx: &mut TestAppContext) {
+    let (app, mut vcx) = open(cx, 1_080, 1_040);
+    let vcx = &mut vcx;
+    assert!(
+        !following(&app, vcx),
+        "opened at the bar, away from the tail"
+    );
+    select(&app, vcx, B);
+    apply(
+        &app,
+        vcx,
+        r#"{"@type":"updateChatReadInbox","chat_id":11,"last_read_inbox_message_id":1079,"unread_count":0}"#,
+    );
+    select(&app, vcx, A);
+    assert_eq!(bar_anchor(&app, vcx), None);
+    assert!(
+        following(&app, vcx),
+        "nothing unread: the chat opens at the bottom"
+    );
+}
+
+/// New messages after a chat was left at its old bar: it reopens with the
+/// new bar at the top.
+#[gpui_kit::test]
+fn a_chat_left_at_its_bar_reopens_at_the_new_bar(cx: &mut TestAppContext) {
+    let (app, mut vcx) = open(cx, 1_080, 1_040);
+    let vcx = &mut vcx;
+    select(&app, vcx, B);
+    apply(
+        &app,
+        vcx,
+        r#"{"@type":"updateChatReadInbox","chat_id":11,"last_read_inbox_message_id":1050,"unread_count":29}"#,
+    );
+    select(&app, vcx, A);
+    assert_eq!(bar_anchor(&app, vcx), Some(1_050));
+    let bar_top = vcx.debug_bounds("unread-bar").expect("bar painted").top();
+    let viewport = app.update(vcx, |app, _| app.history.viewport.get());
+    let viewport = viewport.expect("history painted");
+    assert!(
+        (bar_top - viewport.top()).abs() < px(0.5),
+        "bar at {bar_top:?}, view at {:?}",
+        viewport.top()
+    );
+}

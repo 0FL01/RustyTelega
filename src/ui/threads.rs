@@ -155,26 +155,17 @@ impl QuillApp {
             return;
         };
         if live.driver.thread_needs_start() {
-            // The first page loads around the thread's saved scroll position
-            // when it has one, so it is restored with the first rows.
-            let saved = live
-                .driver
-                .session
-                .threads
-                .thread
-                .as_ref()
-                .and_then(|thread| {
-                    let topic = match thread.needs_chat_switch {
-                        true => None,
-                        false => live.driver.session.open_topic,
-                    };
-                    self.history
-                        .scroll_memory
-                        .get((thread.chat_id.0, topic, thread.thread_id))
-                });
-            live.driver
-                .session
-                .open_thread_at_saved(saved.map(|saved| saved.anchor));
+            // An opened thread lands at its first unread reply or its
+            // latest, never where it was left last time.
+            if let Some(thread) = live.driver.session.threads.thread.as_ref() {
+                let topic = match thread.needs_chat_switch {
+                    true => None,
+                    false => live.driver.session.open_topic,
+                };
+                self.history
+                    .scroll_memory
+                    .forget((thread.chat_id.0, topic, thread.thread_id));
+            }
             let switch_to = live
                 .driver
                 .session

@@ -1,5 +1,22 @@
 # Scroll position restore per chat
 
+## 2026-11-03: opened chats no longer restore
+Owner report: chats opened too high, on old messages. The cause was this
+restore. A chat that opens with unread messages lands at its "Unread
+messages" bar, which is away from the tail, so that spot was saved. If the
+reader left without scrolling to the bottom, every later open went back
+there, past the new unread messages or the bottom.
+
+Owner rule: a chat opens at its first unread message, else at the bottom.
+So opening a chat (chat list, search, a link), a forum topic or a reply
+thread now drops its saved position (`ScrollMemory::open`, the topic and
+thread openers). The around-load for a saved position is gone
+(`HistoryOpen::Saved`, `HistoryState::saved_open`, `ThreadView::saved_anchor`,
+`connect/messages/saved_open.rs`). The memory itself stays for one case:
+closing a reply thread puts its chat back where it was left, in the window
+that is still loaded. The rest of this document describes the removed
+version.
+
 ## What tdesktop does
 `HistoryInner` counts `History::scrollTopItem` / `scrollTopOffset` on every scroll
 (`countScrollState`), forgets them while the view is at the bottom

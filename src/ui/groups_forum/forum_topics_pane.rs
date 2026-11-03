@@ -336,6 +336,12 @@ impl QuillApp {
         // view or the previous topic): save it there, then restore the new
         // topic's draft once the switch is done.
         self.flush_leaving_draft(cx);
+        // An opened topic lands at its bottom, never where it was left.
+        if let Some(chat_id) = self.session().and_then(|s| s.open_chat) {
+            self.history
+                .scroll_memory
+                .forget((chat_id.0, Some(forum_topic_id), 0));
+        }
         if let Some(live) = self.live.as_mut() {
             let result = live.driver.select_topic(forum_topic_id);
             self.connection.set_note(match result {

@@ -5,11 +5,10 @@ use super::*;
 use quill::state::{HistoryOpen, ReaderPosition, SavedScroll, ScrollKey, ScrollOpen};
 
 impl QuillApp {
-    /// Where `chat_id` opens from the chat list, search or a link. An
-    /// explicit target wins and drops the saved scroll position; a chat
-    /// opened at its default position loads around the saved one, so its
-    /// first rows already hold it. Re-selecting the open chat keeps its
-    /// live view.
+    /// Where `chat_id` opens from the chat list, search or a link: at an
+    /// explicit target, else at its first unread message or the bottom.
+    /// Either way the position it was left at is dropped. Re-selecting the
+    /// open chat keeps its live view.
     pub(in crate::ui) fn chat_open_at(
         &mut self,
         chat_id: ChatId,
@@ -62,8 +61,8 @@ impl QuillApp {
     }
 
     /// The first rows of a new or replaced window are in: start at the
-    /// saved position (its window was loaded around it), else the jump
-    /// target, else a little above the "Unread messages" divider, else the
+    /// saved position (left behind when a thread opened over this history),
+    /// else the jump target, else the "Unread messages" bar, else the
     /// bottom. A jump target or a saved message that is not there drops
     /// the saved position.
     pub(super) fn anchor_opened_history(

@@ -1,13 +1,13 @@
-//! Where each chat was left when it is not read to the tail.
+//! Where each history was left when it is not read to the tail, for going
+//! back to it from a reply thread opened over it.
 //!
 //! Telegram Desktop keeps `History::scrollTopItem` / `scrollTopOffset` for
-//! every history: they are counted on each scroll, forgotten while the view
-//! sits at the bottom (`forgetScrollState`) and when an explicit target (a
-//! jump to a message) opens the chat, and read back when the chat is shown
-//! again at its default position: the chat then opens around that message,
-//! so the position is restored with the first rows. This is the same rule
-//! over message ids and pixel offsets, kept in memory for the running
-//! account.
+//! every history, counted on each scroll and forgotten while the view sits
+//! at the bottom (`forgetScrollState`). Quill keeps the same rule over
+//! message ids and pixel offsets, but a chat, topic or thread that is
+//! opened always lands at its first unread message, else at the bottom
+//! (`docs/decisions/sweep-scroll-restore.md`): opening drops the entry, and
+//! only closing a thread brings its chat back to where it was left.
 use super::*;
 use std::collections::{HashMap, VecDeque};
 
@@ -79,21 +79,12 @@ impl ScrollMemory {
         self.saved.is_empty()
     }
 
-    /// How the history `key` opens. An explicit target (a search hit, a
-    /// reply, a notification, a message link) wins and drops the saved
-    /// position, as tdesktop's `forgetScrollState` does when a chat is shown
-    /// at a message; otherwise a saved position opens the history around
-    /// its message.
+    /// How the history `key` opens: at an explicit target (a search hit,
+    /// a reply, a message link), else at its first unread message or the
+    /// bottom. Either way the saved position is dropped.
     pub fn open(&mut self, key: ScrollKey, explicit: Option<MessageId>) -> HistoryOpen {
-        match explicit {
-            Some(target) => {
-                self.forget(key);
-                HistoryOpen::Message(target)
-            }
-            None => self.get(key).map_or(HistoryOpen::Default, |saved| {
-                HistoryOpen::Saved(saved.anchor)
-            }),
-        }
+        self.forget(key);
+        explicit.map_or(HistoryOpen::Default, HistoryOpen::Message)
     }
 }
 
@@ -104,10 +95,6 @@ pub enum HistoryOpen {
     Default,
     /// An explicit target: loaded around and highlighted.
     Message(MessageId),
-    /// The saved top row: loaded around it, not highlighted, so the first
-    /// rows already hold it and the position is restored with them
-    /// (tdesktop `showHistory` with `showAtMsgId = scrollTopItem`).
-    Saved(MessageId),
 }
 
 /// What the first rows of an opened history scroll to.
@@ -117,9 +104,8 @@ pub enum ScrollOpen {
     Restore { row: usize, offset: f32 },
     /// A jump target is set: it wins and the saved position is dropped.
     Jump,
-    /// A saved position whose message is not in the window opened for it
-    /// (deleted, or gone from the topic's loaded history): the default
-    /// position, and the saved one is dropped.
+    /// A saved position whose message is no longer in the window (deleted,
+    /// or trimmed): the default position, and the saved one is dropped.
     Missing,
     /// Nothing saved: the unread divider, else the bottom.
     Default,
@@ -217,16 +203,11 @@ mod tests {
     }
 
     #[test]
-    fn a_saved_position_opens_around_its_message_without_a_highlight() {
+    fn opening_lands_at_the_default_and_drops_the_saved_position() {
         let mut memory = ScrollMemory::default();
         memory.record((1, None, 0), at(40, 12.));
-        assert_eq!(
-            memory.open((1, None, 0), None),
-            HistoryOpen::Saved(MessageId(40))
-        );
-        // Opening does not use the entry up: it is read again by the first rows.
-        assert_eq!(memory.get((1, None, 0)), at(40, 12.));
-        assert_eq!(memory.open((2, None, 0), None), HistoryOpen::Default);
+        assert_eq!(memory.open((1, None, 0), None), HistoryOpen::Default);
+        assert_eq!(memory.get((1, None, 0)), None);
     }
 
     #[test]
