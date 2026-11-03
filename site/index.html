@@ -583,6 +583,20 @@
             </ul>
           </div>
 
+          <div class="inst-card" data-asset="quill-linux-x86_64.flatpak" hidden>
+            <h4>Or install it with Flatpak</h4>
+            <p class="inst-lede">Quill has its own Flatpak repository, so it updates along with your other Flatpak apps. Open the file below with your software center, or run:</p>
+            <div class="cmd">
+              <code id="linux-flatpak-cmd">flatpak install --user https://shinycake.github.io/quill/flatpak/quill.flatpakref</code>
+              <button type="button" class="copy" aria-describedby="linux-flatpak-cmd">Copy</button>
+            </div>
+            <a class="btn ghost" id="linux-flatpakref" href="flatpak/quill.flatpakref">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+              Download quill.flatpakref
+            </a>
+            <p class="why-note">Signed with Quill's own key. The GNOME runtime it needs comes from Flathub, which Flatpak offers to add if it's missing.</p>
+          </div>
+
           <div class="inst-card">
             <h4>Or download it yourself</h4>
             <p class="inst-lede">Get Quill as a tarball. It runs from any folder, or installs under <code>~/.local</code>.</p>

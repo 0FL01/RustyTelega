@@ -1,6 +1,6 @@
-# Quill on Flathub
+# Quill's Flatpak
 
-`io.github.shinycake.Quill.yml` builds the Flathub package. It does not compile
+`io.github.shinycake.Quill.yml` builds the Flatpak. It does not compile
 Quill: it unpacks the Linux release tarball for each CPU
 (`quill-linux-<arch>-bundle.tar.gz`, made by `scripts/linux-package.sh`) into
 `/app/lib/quill`, links `/app/bin/quill` to it, and renames the desktop file and
@@ -32,53 +32,33 @@ flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo   # aft
 CI (`.github/workflows/flatpak.yml`) does all of this for x86_64 and aarch64 on
 every pull request that touches these files, on demand, and on every published
 release. It also runs `quill --version` and `ldd` on every binary inside the
-sandbox. Pull requests skip the two screenshot checks, because the screenshots
-are linked from `main` and a new one exists there only after the merge.
+sandbox. The build lint skips the screenshot errors listed in
+`lint-exceptions.json`, which only Flathub's own screenshot mirror satisfies;
+pull requests also skip the screenshot URL check, because the screenshots are
+linked from `main` and a new one exists there only after the merge.
+
+## Quill's own repository
+
+Quill is not on Flathub. Each published release runs `flatpak.yml`, which
+builds the manifest for both CPUs, attaches `quill-linux-<arch>.flatpak` to the
+release and asks the site to rebuild. The Pages job runs
+`scripts/site-flatpak-repo.sh`: it imports the latest release's bundles into a
+fresh OSTree repo signed with `FLATPAK_GPG_KEY`, and publishes
+
+- `https://shinycake.github.io/quill/flatpak/repo/`, the repo,
+- `quill.flatpakref`, which installs Quill and pulls the GNOME runtime from
+  Flathub,
+- `quill.flatpakrepo`, which adds the repo only,
+- `quill.gpg`, the public key (also in `quill-repo.gpg` here).
+
+The private key lives outside the repo, in
+`~/.config/quill-release/flatpak-signing.asc` on the owner's Mac. Losing it
+means a new key, and every user re-adding the remote. For a release from before
+this workflow, run `flatpak.yml` by hand with its tag.
 
 ## A new release
 
-`bash packaging/flatpak/bump.sh vYEAR.MONTHDAY.COMMITS` points both tarball URLs
-and their sha256 at that release. On Flathub, flatpak-external-data-checker
-does the same by itself: the `x-checker-data` blocks read the latest GitHub
-release and it opens a pull request on the Flathub repo, adding a `<release>`
-to the metainfo there.
-
-## Submitting to Flathub
-
-Do this once, with the first release that includes the Flatpak changes in
-`src/desktop_app_id.rs` (anything after v2026.1103.4940). That release sets the
-window app_id to `io.github.shinycake.Quill` inside Flatpak, hides the
-autostart switch, and shows agent setup commands that work outside the
-sandbox. v2026.1103.4940 builds and starts in the Flatpak, but those three
-things are wrong in it.
-
-1. `bash packaging/flatpak/bump.sh <that tag>` and merge the change here.
-2. Fork https://github.com/flathub/flathub on GitHub. Keep "Copy the master
-   branch only" unticked: the submission branches from `new-pr`.
-3. Clone the fork and branch from `new-pr`:
-   ```sh
-   git clone --branch new-pr git@github.com:<you>/flathub.git
-   cd flathub
-   git checkout -b add-quill
-   ```
-4. Copy the files in, resolving the metainfo symlink:
-   ```sh
-   cp /path/to/quill/packaging/flatpak/io.github.shinycake.Quill.yml .
-   cp -L /path/to/quill/packaging/flatpak/io.github.shinycake.Quill.metainfo.xml .
-   ```
-   No `flathub.json` is needed: the manifest builds for both x86_64 and aarch64,
-   which is Flathub's default.
-5. Commit, push, and open a pull request against `flathub/flathub` with base
-   branch `new-pr` and the title `Add io.github.shinycake.Quill`. Fill in the
-   template's checklist.
-6. Reviewers comment on the pull request. A comment of `bot, build` from them
-   (or you) starts a test build. Once accepted, Flathub creates
-   `flathub/io.github.shinycake.Quill` and invites the submitter as maintainer.
-   Later changes go to that repo, not to `flathub/flathub`.
-
-The app id `io.github.shinycake.Quill` is verified through the GitHub account
-`shinycake`: after the app is published, sign in to flathub.org with that
-account to get the verified badge.
-
-Reviewers may ask why Quill is not built from source; the decision doc has the
-answer to give.
+Nothing to do: `flatpak.yml` runs `bash packaging/flatpak/bump.sh <tag>` on
+the published release before it builds. Run the same command and commit it
+when the manifest in the repo should name a newer release, for example before
+changing the manifest.

@@ -1,7 +1,10 @@
-# Builds the Flathub manifest (packaging/flatpak) in Flathub's build
+# Builds the Flatpak manifest (packaging/flatpak) in Flathub's build
 # container, lints it the way Flathub does, and checks the installed app
 # starts and finds every library. Pull requests build the release the
-# manifest names; a published release builds that new release.
+# manifest names; a published release builds that new release, attaches
+# the bundles to it (quill-linux-<arch>.flatpak) and rebuilds the site,
+# which serves them as Quill's own Flatpak repo (scripts/site-flatpak-repo.sh).
+# A manual run with a tag does the same for that release.
 name: flatpak
 
 on:
@@ -12,6 +15,11 @@ on:
       - docs/screenshots/flathub/**
       - .github/workflows/flatpak.yml
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release to build and attach the bundles to (vYEAR.MONTHDAY.COMMITS); empty builds main's manifest
+        required: false
+        default: ""
   release:
     types: [published]
 
@@ -43,16 +51,18 @@ jobs:
     env:
       APP_ID: io.github.shinycake.Quill
       MANIFEST: packaging/flatpak/io.github.shinycake.Quill.yml
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Point the manifest at this release
-        if: github.event_name == 'release'
-        run: bash packaging/flatpak/bump.sh "${{ github.event.release.tag_name }}"
+        if: env.TAG != ''
+        run: bash packaging/flatpak/bump.sh "$TAG"
 
       # Screenshots are linked from main, so a pull request that adds or
-      # changes one cannot reach it yet: pull requests skip the URL checks
-      # (here and the two screenshot lint errors), main checks them.
+      # changes one cannot reach it yet: pull requests skip the URL check.
+      # The build lint always skips the screenshot errors that only
+      # Flathub's own mirror (dl.flathub.org/media) can satisfy.
       - name: Validate the metainfo
         run: |
           net=()
@@ -63,10 +73,9 @@ jobs:
         with:
           manifest-path: ${{ env.MANIFEST }}
           arch: ${{ matrix.arch }}
-          bundle: quill-${{ matrix.arch }}.flatpak
+          bundle: quill-linux-${{ matrix.arch }}.flatpak
           upload-artifact: ${{ github.event_name != 'pull_request' }}
           artifact-name: quill-flatpak-${{ matrix.arch }}
-          mirror-screenshots-url: ${{ github.event_name != 'pull_request' && 'https://dl.flathub.org/media' || '' }}
 
       - name: Install flatpak-builder-lint
         run: |
@@ -78,10 +87,8 @@ jobs:
 
       - name: Lint the build
         run: |
-          exceptions=()
-          [[ "${{ github.event_name }}" == pull_request ]] &&
-            exceptions=(--exceptions --user-exceptions packaging/flatpak/pr-lint-exceptions.json)
-          flatpak run --command=flatpak-builder-lint org.flatpak.Builder "${exceptions[@]}" repo repo
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            --exceptions --user-exceptions packaging/flatpak/lint-exceptions.json repo repo
 
       - name: Install the build
         run: |
@@ -106,3 +113,23 @@ jobs:
           fi
           # Quill finds its helpers beside its real path, not /app/bin.
           run --command=sh "$APP_ID" -c 'readlink -f /app/bin/quill' | grep -qx /app/lib/quill/quill
+
+  publish:
+    name: attach the bundles and rebuild the site's Flatpak repo
+    needs: flatpak
+    if: github.event_name == 'release' || inputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: quill-flatpak-*
+          merge-multiple: true
+      - name: Attach the bundles to the release
+        run: gh release upload "$TAG" -R "$GITHUB_REPOSITORY" quill-linux-x86_64.flatpak quill-linux-aarch64.flatpak --clobber
+      - name: Rebuild the site
+        run: gh api "repos/$GITHUB_REPOSITORY/dispatches" -f event_type=site-refresh
