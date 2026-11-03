@@ -56,7 +56,10 @@ impl QuillApp {
         // Phase 6: the header title opens the info panel for private chats
         // (user profile) and supergroups/channels (group info). Other chat
         // kinds keep the plain title.
+        // A channel's direct messages show the channel's profile, as
+        // tdesktop draws the monoforum with its broadcast's name and status.
         let info_target = actions.and_then(|(chat_id, _, _, _)| {
+            let chat_id = self.direct_messages_channel().unwrap_or(chat_id);
             self.session().and_then(|s| s.chat_info_target(chat_id))
         });
         // A comment / reply thread titles the header "Discussion" with the

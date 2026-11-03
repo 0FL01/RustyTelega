@@ -16,10 +16,10 @@ use quill::lang::{keys, tr};
 use quill::locked_intro::{IntroPiece, LockedIntro};
 use quill::premium_hub::group_digits;
 use quill::state::{ChatSummary, Session};
+use quill::suggested_posts::DirectMessagesRole;
 use quill::telegram::envelope::ChatKind;
 
-/// The channel behind `chat_id` when it is that channel's direct messages
-/// as a writer, not its admin.
+/// The channel behind `chat_id` when it is that channel's direct messages.
 fn writer_channel(session: &Session, chat_id: ChatId) -> Option<ChatId> {
     session.direct_messages_role(chat_id)?;
     session.chat_direct_messages_chat(chat_id)
@@ -56,7 +56,12 @@ impl QuillApp {
     ) -> Option<AnyElement> {
         let chat = chat?;
         let session = self.session()?;
-        let direct = session.direct_messages_role(chat.id).is_some();
+        // The channel's admins answer from here; the card is for writers.
+        let role = session.direct_messages_role(chat.id);
+        if role == Some(DirectMessagesRole::Admin) {
+            return None;
+        }
+        let direct = role.is_some();
         let private = matches!(chat.kind, ChatKind::Private { .. });
         if !direct && !private {
             return None;
