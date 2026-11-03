@@ -25,16 +25,17 @@
 //! `count-visible: false`, which also clears any stale badge left by a
 //! previous run on the first tick.
 //!
-//! The dock resolves the badge against the app's installed desktop file;
-//! Quill ships no `.desktop` file yet (packaging is a separate slice), so
-//! [`APP_URI`] names the `org.shinycake.quill.desktop` id a future install will satisfy.
+//! The dock resolves the badge against the app's installed desktop file,
+//! named by [`app_uri`].
 #![deny(clippy::indexing_slicing)]
 
 use crate::state::Session;
 
 /// App URI carried by the LauncherEntry signal: `application://` +
 /// the desktop-file id docks match against.
-pub const APP_URI: &str = "application://org.shinycake.quill.desktop";
+pub fn app_uri() -> String {
+    format!("application://{}", crate::desktop_app_id::desktop_file_name())
+}
 
 thread_local! {
     /// Last count pushed to the OS. Starts unset so the first tick always
@@ -349,6 +350,7 @@ fn emit_launcher_entry(unread: u32) {
         WORKER.call_once(|| {
             let _ = crate::thread_guard::spawn_guarded("quill-launcher-badge", || {
                 let mut connection: Option<zbus::blocking::Connection> = None;
+                let app_uri = app_uri();
                 loop {
                     let count = LAUNCHER_SLOT.take();
                     if connection.is_none() {
@@ -364,7 +366,7 @@ fn emit_launcher_entry(unread: u32) {
                         "/",
                         "com.canonical.Unity.LauncherEntry",
                         "Update",
-                        &(APP_URI, props),
+                        &(app_uri.as_str(), props),
                     );
                     if sent.is_err() {
                         connection = None;

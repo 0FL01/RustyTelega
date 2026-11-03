@@ -320,7 +320,11 @@ impl QuillApp {
             let note = self.appearance_section(
                 cx,
                 tr(keys::Q_PREFS_LAUNCH_AT_LOGIN),
-                tr(keys::Q_PREFS_AUTOSTART_IS_NOT_AVAILABLE_ON),
+                if quill::desktop_app_id::in_flatpak() {
+                    tr(keys::Q_PREFS_AUTOSTART_FLATPAK)
+                } else {
+                    tr(keys::Q_PREFS_AUTOSTART_IS_NOT_AVAILABLE_ON)
+                },
                 div().into_any_element(),
             );
             return self.setting_spot(&["system.launch_at_login"], note, cx);

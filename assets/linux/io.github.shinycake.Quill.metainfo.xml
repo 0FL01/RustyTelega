@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.shinycake.Quill</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Quill</name>
+  <summary>Fast, unofficial desktop client for Telegram</summary>
+  <developer id="io.github.shinycake">
+    <name>Idan Birman</name>
+  </developer>
+  <description>
+    <p>
+      Quill is an independent desktop app for chatting on Telegram. It signs in to your
+      existing Telegram account and keeps your chats, groups and channels in sync with your
+      other devices.
+    </p>
+    <ul>
+      <li>Chats, groups, channels and forum topics, with folders and an archive</li>
+      <li>Photos, videos, files, voice notes, stickers, animated emoji and GIFs</li>
+      <li>Voice and video calls, and screen sharing</li>
+      <li>Stories, polls, reactions, replies and edits</li>
+      <li>Light and dark themes, accent colors and Telegram Desktop theme files</li>
+      <li>Several accounts, a local passcode and auto-lock</li>
+    </ul>
+    <p>
+      Quill is not affiliated with, endorsed by, or sponsored by Telegram. It uses the
+      official Telegram API through TDLib.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.shinycake.Quill.desktop</launchable>
+  <url type="homepage">https://shinycake.github.io/quill/</url>
+  <url type="bugtracker">https://github.com/shinycake/quill/issues</url>
+  <url type="vcs-browser">https://github.com/shinycake/quill</url>
+  <categories>
+    <category>Network</category>
+    <category>InstantMessaging</category>
+  </categories>
+  <keywords>
+    <keyword>telegram</keyword>
+    <keyword>tg</keyword>
+    <keyword>messenger</keyword>
+    <keyword>messaging</keyword>
+    <keyword>chat</keyword>
+  </keywords>
+  <branding>
+    <color type="primary" scheme_preference="light">#5fc7fb</color>
+    <color type="primary" scheme_preference="dark">#03263f</color>
+  </branding>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/shinycake/quill/main/docs/screenshots/flathub/chat-light.png</image>
+      <caption>A group chat with a link preview and a reply</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/shinycake/quill/main/docs/screenshots/flathub/channel-light.png</image>
+      <caption>A channel with photos and reactions</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/shinycake/quill/main/docs/screenshots/flathub/poll-dark.png</image>
+      <caption>Polls and quizzes in the dark theme</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/shinycake/quill/main/docs/screenshots/flathub/appearance-dark.png</image>
+      <caption>Themes and accent colors</caption>
+    </screenshot>
+  </screenshots>
+  <requires>
+    <display_length compare="ge">480</display_length>
+    <internet>always</internet>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <provides>
+    <binary>quill</binary>
+    <mediatype>x-scheme-handler/tg</mediatype>
+  </provides>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-audio">intense</content_attribute>
+    <content_attribute id="social-contacts">intense</content_attribute>
+    <content_attribute id="social-location">intense</content_attribute>
+    <content_attribute id="money-purchasing">intense</content_attribute>
+    <content_attribute id="money-advertising">moderate</content_attribute>
+  </content_rating>
+  <releases>
+    <release version="2026.1103.4940" date="2026-11-03">
+      <url type="details">https://github.com/shinycake/quill/releases/tag/v2026.1103.4940</url>
+      <description>
+        <p>New poll design, wallpapers set by the other person, and notifications that open the chat with the cursor in the message box.</p>
+      </description>
+    </release>
+    <release version="2026.1102.4879" date="2026-11-02">
+      <url type="details">https://github.com/shinycake/quill/releases/tag/v2026.1102.4879</url>
+      <description>
+        <p>More picture formats can be sent as photos, and the cache is kept to 1 GB by default.</p>
+      </description>
+    </release>
+    <release version="2026.1031.4046" date="2026-10-31">
+      <url type="details">https://github.com/shinycake/quill/releases/tag/v2026.1031.4046</url>
+      <description>
+        <p>Chats in their own windows use less memory and CPU, and voice notes take far less CPU.</p>
+      </description>
+    </release>
+    <release version="2026.1031.4016" date="2026-10-31">
+      <url type="details">https://github.com/shinycake/quill/releases/tag/v2026.1031.4016</url>
+      <description>
+        <p>Lower memory use through long sessions, and less CPU when sounds play.</p>
+      </description>
+    </release>
+  </releases>
+</component>

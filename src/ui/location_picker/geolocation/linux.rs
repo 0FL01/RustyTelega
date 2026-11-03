@@ -17,8 +17,6 @@ const MANAGER_PATH: &str = "/org/freedesktop/GeoClue2/Manager";
 const MANAGER: &str = "org.freedesktop.GeoClue2.Manager";
 const CLIENT: &str = "org.freedesktop.GeoClue2.Client";
 const LOCATION: &str = "org.freedesktop.GeoClue2.Location";
-/// The window's app id, which GeoClue's agent shows when it asks.
-const DESKTOP_ID: &str = "org.shinycake.quill";
 /// `GCLUE_ACCURACY_LEVEL_EXACT`.
 const ACCURACY_EXACT: u32 = 8;
 const FIX_TIMEOUT: Duration = Duration::from_secs(20);
@@ -65,7 +63,7 @@ async fn lookup() -> GeoOutcome {
         Err(error) => return fail(error),
     };
     let setup = async {
-        client.set_property("DesktopId", DESKTOP_ID).await?;
+        client.set_property("DesktopId", quill::desktop_app_id::get()).await?;
         client
             .set_property("RequestedAccuracyLevel", ACCURACY_EXACT)
             .await?;

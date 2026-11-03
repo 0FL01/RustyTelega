@@ -242,7 +242,7 @@ fn ui_main(args: &[String]) {
     application.run(move |cx| {
         quill::startup_trace::mark("app_run");
         ui::early_connect::open_if_ready();
-        cx.set_app_identity("org.shinycake.quill", "Quill");
+        cx.set_app_identity(quill::desktop_app_id::get(), "Quill");
         #[cfg(windows)]
         quill::notify::register_toast_icon("org.shinycake.quill");
         gpui_kit::init(cx);
@@ -294,7 +294,7 @@ fn main_window_options(
         cx.update(|cx| restored_window_bounds(quill::settings::load_window_state(), cx));
     gpui_kit::WindowOptions {
         window_bounds: Some(window_bounds),
-        app_id: Some("org.shinycake.quill".into()),
+        app_id: Some(quill::desktop_app_id::get().into()),
         show: !start_in_tray,
         focus: !start_in_tray,
         ..ui::window_frame::window_options("Quill")
@@ -580,7 +580,7 @@ fn run_screenshot_demo(demo: (ui::ScreenshotDemo, std::path::PathBuf)) {
     quill_application(ui::interface_zoom::demo_interface_scale().unwrap_or(100))
         .with_assets(QuillAssets)
         .run(move |cx| {
-            cx.set_app_identity("org.shinycake.quill", "Quill");
+            cx.set_app_identity(quill::desktop_app_id::get(), "Quill");
             #[cfg(windows)]
             quill::notify::register_toast_icon("org.shinycake.quill");
             gpui_kit::init(cx);
@@ -604,7 +604,7 @@ fn run_screenshot_demo(demo: (ui::ScreenshotDemo, std::path::PathBuf)) {
                                 origin: point(px(demo_x), px(demo_y)),
                                 size: size(px(demo_w), px(demo_h)),
                             })),
-                            app_id: Some("org.shinycake.quill".into()),
+                            app_id: Some(quill::desktop_app_id::get().into()),
                             ..ui::window_frame::window_options(kind.window_title())
                         },
                         move |window, cx| {

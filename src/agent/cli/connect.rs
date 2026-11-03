@@ -141,7 +141,7 @@ fn store_config(packages: &Path) -> Option<PathBuf> {
 
 /// This executable, as a string for configs and commands.
 fn executable() -> String {
-    crate::agent::link::executable()
+    crate::agent::link::shown_executable()
         .map(|path| path.to_string_lossy().into_owned())
         .unwrap_or_else(|| "quill".to_string())
 }
@@ -308,6 +308,18 @@ Then restart {} and turn on Agent access in Quill ({SWITCH_PLACE}).",
             app.label(),
         ));
         return Ok(Output::Text(text));
+    }
+    if crate::desktop_app_id::in_flatpak() {
+        return Err(Failure::new(
+            Exit::LocalFile,
+            format!(
+                "Quill runs in a Flatpak sandbox and cannot edit {}'s settings. Run `{} agent connect {} --print` and add what it prints to {} yourself.",
+                app.label(),
+                exe,
+                app.arg_name(),
+                app.label(),
+            ),
+        ));
     }
     let outcome = merge_into(path, &entry)?;
     let backup = match &outcome {

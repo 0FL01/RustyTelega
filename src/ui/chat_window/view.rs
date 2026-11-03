@@ -381,7 +381,7 @@ pub(super) fn open_chat_window(
         }),
         app_owns_titlebar_drag: true,
         window_decorations: super::super::window_frame::window_decorations(),
-        app_id: Some("org.shinycake.quill".into()),
+        app_id: Some(quill::desktop_app_id::get().into()),
         focus: true,
         show: true,
         inactive_frame_interval: Some(super::super::window_frame::INACTIVE_FRAME_INTERVAL),

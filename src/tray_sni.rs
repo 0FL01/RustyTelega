@@ -82,7 +82,7 @@ impl SniTray {
 
 impl ksni::Tray for SniTray {
     fn id(&self) -> String {
-        "org.shinycake.quill".into()
+        crate::desktop_app_id::get().into()
     }
 
     fn title(&self) -> String {
@@ -143,10 +143,6 @@ impl ksni::Tray for SniTray {
     }
 }
 
-/// Flatpak/Snap-style sandboxes cannot own a well-known D-Bus name.
-fn sandboxed() -> bool {
-    std::path::Path::new("/.flatpak-info").exists()
-}
 
 enum Phase {
     /// No attempt in flight; the next one may start at the instant.
@@ -316,7 +312,8 @@ fn start_registration(unread: u32, toggles: (bool, bool)) -> Receiver<Option<Han
     // If the thread cannot spawn, `sender` is dropped with the closure and
     // the receiver reports `Disconnected`, which schedules a retry.
     let _ = crate::thread_guard::spawn_guarded("quill-tray-sni", move || {
-        let tray = SniTray { unread, toggles }.disable_dbus_name(sandboxed());
+        let tray = SniTray { unread, toggles }// A Flatpak sandbox cannot own the well-known name ksni would take.
+            .disable_dbus_name(crate::desktop_app_id::in_flatpak());
         let handle = within(DBUS_LIMIT, tray.spawn()).and_then(Result::ok);
         let _ = sender.send(handle);
     });

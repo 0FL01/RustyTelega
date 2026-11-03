@@ -1,0 +1,99 @@
+# Builds the Flathub manifest (packaging/flatpak) in Flathub's build
+# container, lints it the way Flathub does, and checks the installed app
+# starts and finds every library. Pull requests build the release the
+# manifest names; a published release builds that new release.
+name: flatpak
+
+on:
+  pull_request:
+    paths:
+      - packaging/flatpak/**
+      - assets/linux/**
+      - docs/screenshots/flathub/**
+      - .github/workflows/flatpak.yml
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flatpak-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flatpak:
+    name: flatpak (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      # bubblewrap needs it to build and run the sandbox.
+      options: --privileged
+    defaults:
+      run:
+        shell: bash
+    env:
+      APP_ID: io.github.shinycake.Quill
+      MANIFEST: packaging/flatpak/io.github.shinycake.Quill.yml
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Point the manifest at this release
+        if: github.event_name == 'release'
+        run: bash packaging/flatpak/bump.sh "${{ github.event.release.tag_name }}"
+
+      - name: Validate the metainfo
+        # --no-net: the screenshot URLs on main exist only once this merges.
+        run: appstreamcli validate --strict --no-net --explain "assets/linux/$APP_ID.metainfo.xml"
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
+        with:
+          manifest-path: ${{ env.MANIFEST }}
+          arch: ${{ matrix.arch }}
+          bundle: quill-${{ matrix.arch }}.flatpak
+          upload-artifact: ${{ github.event_name != 'pull_request' }}
+          artifact-name: quill-flatpak-${{ matrix.arch }}
+
+      - name: Install flatpak-builder-lint
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+
+      - name: Lint the manifest
+        run: flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest "$MANIFEST"
+
+      - name: Lint the build
+        run: |
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
+
+      - name: Install the build
+        run: |
+          flatpak remote-add --user --no-gpg-verify --if-not-exists quill-ci "$PWD/repo"
+          flatpak install --user -y --noninteractive quill-ci "$APP_ID"
+          exports="$HOME/.local/share/flatpak/exports/share"
+          test -f "$exports/applications/$APP_ID.desktop"
+          grep -qx "MimeType=x-scheme-handler/tg;" "$exports/applications/$APP_ID.desktop"
+          test -f "$exports/icons/hicolor/512x512/apps/$APP_ID.png"
+
+      - name: Smoke test inside the sandbox
+        run: |
+          XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_RUNTIME_DIR
+          run() { dbus-run-session -- flatpak run "$@"; }
+          run --command=quill "$APP_ID" --version
+          run --command=sh "$APP_ID" -c '
+            cd /app/lib/quill && ldd quill quill-webview ffmpeg ffprobe lib/*.so*' | tee ldd.txt
+          if grep -n "not found" ldd.txt; then
+            echo "::error::a library is missing inside the Flatpak"
+            exit 1
+          fi
+          # Quill finds its helpers beside its real path, not /app/bin.
+          run --command=sh "$APP_ID" -c 'readlink -f /app/bin/quill' | grep -qx /app/lib/quill/quill

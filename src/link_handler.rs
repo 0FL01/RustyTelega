@@ -95,7 +95,8 @@ pub fn turn_off_note() -> &'static str {
 
 // ---- Linux ---------------------------------------------------------------
 
-/// The desktop file `xdg-mime` is told about.
+/// The desktop file `xdg-mime` is told about (outside Flatpak, see
+/// [`crate::desktop_app_id`]).
 pub const LINUX_DESKTOP_FILE: &str = "org.shinycake.quill.desktop";
 /// The name older installs used; still counts as ours.
 const LEGACY_LINUX_DESKTOP_FILE: &str = "quill.desktop";
@@ -163,10 +164,11 @@ pub fn linux_desktop_entry(exe: &std::path::Path) -> String {
     format!(
         "[Desktop Entry]\nType=Application\nName=Quill\n\
          Comment=Unofficial Telegram desktop client\n\
-         Exec={exec} %u\nIcon=quill\nTerminal=false\nStartupWMClass=org.shinycake.quill\n\
+         Exec={exec} %u\nIcon=quill\nTerminal=false\nStartupWMClass={wm_class}\n\
          Categories=Network;Chat;\nMimeType={LINUX_SCHEME_MIME};\nActions=quit;\n\n\
          [Desktop Action quit]\nName=Quit Quill\nExec={exec} --quit\nIcon=application-exit\n",
-        exec = crate::autostart::desktop_exec(exe)
+        exec = crate::autostart::desktop_exec(exe),
+        wm_class = crate::desktop_app_id::DEFAULT,
     )
 }
 
@@ -403,6 +405,9 @@ fn query_state() -> LinkHandlerState {
 
 #[cfg(target_os = "linux")]
 fn query_state() -> LinkHandlerState {
+    if crate::desktop_app_id::in_flatpak() {
+        return flatpak_unavailable();
+    }
     match run_xdg_mime(&linux_query_args()) {
         Ok(out) => parse_xdg_default(&out),
         Err(why) => LinkHandlerState::Unavailable(why),
@@ -569,8 +574,19 @@ fn platform_make_default() -> Result<(), String> {
     })
 }
 
+/// Flatpak exports its own desktop file with the `tg` scheme and keeps
+/// `xdg-mime` inside the sandbox, so the user picks the handler in their
+/// desktop settings.
+#[cfg(target_os = "linux")]
+fn flatpak_unavailable() -> LinkHandlerState {
+    LinkHandlerState::Unavailable(tr(keys::Q_PREFS_DEFAULT_APP_FLATPAK).into())
+}
+
 #[cfg(target_os = "linux")]
 fn platform_make_default() -> Result<(), String> {
+    if crate::desktop_app_id::in_flatpak() {
+        return Err(tr(keys::Q_PREFS_DEFAULT_APP_FLATPAK).to_string());
+    }
     let env = |key| std::env::var(key).ok();
     let dirs = linux_application_dirs(
         env("XDG_DATA_HOME").as_deref(),
@@ -872,7 +888,7 @@ mod packaged_entry_tests {
     #[test]
     fn shipped_desktop_file_matches_the_window_app_id() {
         let app_id = LINUX_DESKTOP_FILE.trim_end_matches(".desktop");
-        assert_eq!(app_id, "org.shinycake.quill");
+        assert_eq!(app_id, crate::desktop_app_id::DEFAULT);
         // lines(): a Windows checkout may have CRLF line ends.
         let wm_class = format!("StartupWMClass={app_id}");
         assert!(SHIPPED.lines().any(|line| line.trim_end() == wm_class));
