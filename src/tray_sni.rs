@@ -143,7 +143,6 @@ impl ksni::Tray for SniTray {
     }
 }
 
-
 enum Phase {
     /// No attempt in flight; the next one may start at the instant.
     Idle(Instant),
@@ -312,7 +311,7 @@ fn start_registration(unread: u32, toggles: (bool, bool)) -> Receiver<Option<Han
     // If the thread cannot spawn, `sender` is dropped with the closure and
     // the receiver reports `Disconnected`, which schedules a retry.
     let _ = crate::thread_guard::spawn_guarded("quill-tray-sni", move || {
-        let tray = SniTray { unread, toggles }// A Flatpak sandbox cannot own the well-known name ksni would take.
+        let tray = SniTray { unread, toggles } // A Flatpak sandbox cannot own the well-known name ksni would take.
             .disable_dbus_name(crate::desktop_app_id::in_flatpak());
         let handle = within(DBUS_LIMIT, tray.spawn()).and_then(Result::ok);
         let _ = sender.send(handle);

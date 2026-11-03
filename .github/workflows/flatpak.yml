@@ -50,9 +50,14 @@ jobs:
         if: github.event_name == 'release'
         run: bash packaging/flatpak/bump.sh "${{ github.event.release.tag_name }}"
 
+      # Screenshots are linked from main, so a pull request that adds or
+      # changes one cannot reach it yet: pull requests skip the URL checks
+      # (here and the two screenshot lint errors), main checks them.
       - name: Validate the metainfo
-        # --no-net: the screenshot URLs on main exist only once this merges.
-        run: appstreamcli validate --strict --no-net --explain "assets/linux/$APP_ID.metainfo.xml"
+        run: |
+          net=()
+          [[ "${{ github.event_name }}" == pull_request ]] && net=(--no-net)
+          appstreamcli validate --strict "${net[@]}" --explain "assets/linux/$APP_ID.metainfo.xml"
 
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
         with:
@@ -61,6 +66,7 @@ jobs:
           bundle: quill-${{ matrix.arch }}.flatpak
           upload-artifact: ${{ github.event_name != 'pull_request' }}
           artifact-name: quill-flatpak-${{ matrix.arch }}
+          mirror-screenshots-url: ${{ github.event_name != 'pull_request' && 'https://dl.flathub.org/media' || '' }}
 
       - name: Install flatpak-builder-lint
         run: |
@@ -72,7 +78,10 @@ jobs:
 
       - name: Lint the build
         run: |
-          flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
+          exceptions=()
+          [[ "${{ github.event_name }}" == pull_request ]] &&
+            exceptions=(--exceptions --user-exceptions packaging/flatpak/pr-lint-exceptions.json)
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder "${exceptions[@]}" repo repo
 
       - name: Install the build
         run: |

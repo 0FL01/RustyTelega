@@ -63,7 +63,9 @@ async fn lookup() -> GeoOutcome {
         Err(error) => return fail(error),
     };
     let setup = async {
-        client.set_property("DesktopId", quill::desktop_app_id::get()).await?;
+        client
+            .set_property("DesktopId", quill::desktop_app_id::get())
+            .await?;
         client
             .set_property("RequestedAccuracyLevel", ACCURACY_EXACT)
             .await?;

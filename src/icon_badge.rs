@@ -34,7 +34,10 @@ use crate::state::Session;
 /// App URI carried by the LauncherEntry signal: `application://` +
 /// the desktop-file id docks match against.
 pub fn app_uri() -> String {
-    format!("application://{}", crate::desktop_app_id::desktop_file_name())
+    format!(
+        "application://{}",
+        crate::desktop_app_id::desktop_file_name()
+    )
 }
 
 thread_local! {

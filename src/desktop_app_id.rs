@@ -107,7 +107,14 @@ mod tests {
 
     #[test]
     fn malformed_ids_keep_the_default() {
-        for bad in ["", "quill", "a.b", "io.github.1quill", "io..Quill", "io.github.Qu ill"] {
+        for bad in [
+            "",
+            "quill",
+            "a.b",
+            "io.github.1quill",
+            "io..Quill",
+            "io.github.Qu ill",
+        ] {
             assert_eq!(choose(Some(bad), true), DEFAULT, "{bad:?}");
         }
         assert!(well_formed(DEFAULT));
