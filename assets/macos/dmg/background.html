@@ -1,6 +1,6 @@
 <!doctype html>
-<!-- Source of the DMG window background (660x400 points). It has no text of
-     its own: Finder's two icon labels are the only words in the window.
+<!-- Source of the DMG window background (660x400 points). Its only text is the
+     small "drag" over the arrow; Finder adds the two icon labels.
      Render it to the committed background.png and background@2x.png with the
      command in docs/decisions/distribution-channels.md. Colors are the landing
      page's (site/styles.css) and the icon's blue. -->
@@ -67,6 +67,8 @@ svg { position: absolute; inset: 0; }
     <path d="M -10 292 C 60 284, 170 289, 170 289" fill="none"/>
   </g>
   <!-- Quill to Applications. -->
+  <text x="330" y="166" text-anchor="middle" fill="#5fc7fb" fill-opacity="0.9"
+        font-family="-apple-system, 'SF Pro Text', sans-serif" font-size="12" font-weight="600" letter-spacing="0.6">drag</text>
   <path d="M 268 196 C 304 176, 356 176, 392 196" fill="none" stroke="url(#arrow)" stroke-width="3" stroke-linecap="round"/>
   <path d="M 380 184 L 394 197 L 376 203" fill="none" stroke="#5fc7fb" stroke-opacity="0.95" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
