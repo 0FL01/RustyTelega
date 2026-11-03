@@ -101,7 +101,8 @@ fn editor_with_sticker_file(
     vcx: &mut VisualTestContext,
     path: &str,
 ) -> FileId {
-    let png = scratch("sticker-base.png");
+    // Tests run in parallel, so each needs its own base picture.
+    let png = scratch(&format!("sticker-base-{path}.png"));
     image::RgbaImage::from_pixel(8, 4, image::Rgba([1, 2, 3, 255]))
         .save(&png)
         .expect("png");
