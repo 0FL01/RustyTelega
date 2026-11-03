@@ -273,7 +273,7 @@ A weekly `telegram-update-watch` scheduled job keeps this checklist current with
 - [x] Composer state buttons: Unblock, Start, Join, Apply to join, Mute and Unmute (partial: Join and Mute exist; Unblock and Apply to join unverified) <!-- parity:chrome-composer-states -->
 - [x] "Discuss" and "Direct messages" buttons in the channel bottom bar <!-- parity:chrome-discuss-buttons -->
 - [x] Writing to a channel's direct messages: composer instead of Join, price card with Buy Stars, paid placeholder, back to the channel <!-- parity:chrome-channel-direct-messages -->
-- [ ] A channel's direct messages for its admins: one tab per person, "N chats" header, "Choose a message to reply." in All, ban, fee and delete menus <!-- parity:chrome-channel-direct-messages-admin -->
+- [x] A channel's direct messages for its admins: one tab per person, "N chats" header, "Choose a message to reply." in All, ban, fee and delete menus <!-- parity:chrome-channel-direct-messages-admin -->
 - [x] Middle-click autoscroll in history <!-- parity:chrome-middle-click-scroll -->
 - [x] PageUp, PageDown, Home and End scroll the history <!-- parity:chrome-page-keys -->
 - [x] Window title shows the chat name or unread count <!-- parity:chrome-window-title -->

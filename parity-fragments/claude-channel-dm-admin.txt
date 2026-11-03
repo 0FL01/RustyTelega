@@ -1,2 +1,0 @@
-# channel direct messages, admin side: sublist tabs, header, reply lock, menus
-parity:chrome-channel-direct-messages-admin
