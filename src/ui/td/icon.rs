@@ -103,6 +103,10 @@ td_icons! {
     FoldersPoo => "folders/folders_poo",
     // Stream B
     ReplyCancel => "box_button_close",
+    // Stream C
+    VoiceToText => "chat/voice_to_text",
+    HistorySent => "history_sent",
+    HistoryReceived => "history_received",
 }
 
 /// The scale a window draws at, as the mask file to use.

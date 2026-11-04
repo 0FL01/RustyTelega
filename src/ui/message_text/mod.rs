@@ -246,13 +246,20 @@ pub(super) fn message_footer(
     use gpui_kit::assets::IconName;
     let time = message_time_hhmm(date)?;
     let mark = if pending {
-        Some(IconName::Clock)
+        Some(Icon::new(IconName::Clock).size(px(14.)).into_any_element())
     } else {
-        match receipt {
-            OutboxReceipt::Read => Some(IconName::CheckCheck),
-            OutboxReceipt::Sent => Some(IconName::Check),
+        let icon = match receipt {
+            OutboxReceipt::Read => Some(super::td::TdIcon::HistoryReceived),
+            OutboxReceipt::Sent => Some(super::td::TdIcon::HistorySent),
             OutboxReceipt::None => None,
-        }
+        };
+        icon.map(|icon| {
+            super::td::td_icon(
+                icon,
+                super::td::td(quill::app_theme::PaletteKey::HistoryOutIconFg),
+            )
+            .into_any_element()
+        })
     };
     let status = if pending {
         "sending"
@@ -275,9 +282,7 @@ pub(super) fn message_footer(
         .text_xs()
         .opacity(footer_alpha(outgoing))
         .child(time)
-        .when_some(mark, |this, icon| {
-            this.child(Icon::new(icon).size(px(14.)).flex_none())
-        });
+        .when_some(mark, |this, icon| this.child(icon));
     // Pressing the time and moving picks the message up for a chat row.
     Some(crate::ui::forward_drag_source::draggable(footer, drag).into_any_element())
 }
@@ -475,12 +480,19 @@ pub(super) fn message_chrome(
         // avatar column so bubbles stay aligned.
         avatar: sender_avatar.map(|avatar| {
             if avatar.name.is_empty() {
-                div().size(px(32.)).flex_none().into_any_element()
+                div()
+                    .size(px(super::td::st::chat::MSG_PHOTO_SIZE))
+                    .flex_none()
+                    .into_any_element()
             } else {
                 super::userpic_videos::UserpicFrame::over(
                     avatar.video.as_ref(),
-                    kit_avatar_element(&avatar.name, avatar.photo.as_deref(), px(32.)),
-                    32.,
+                    kit_avatar_element(
+                        &avatar.name,
+                        avatar.photo.as_deref(),
+                        px(super::td::st::chat::MSG_PHOTO_SIZE),
+                    ),
+                    super::td::st::chat::MSG_PHOTO_SIZE,
                 )
             }
         }),

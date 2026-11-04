@@ -36,7 +36,7 @@ pub(super) fn reply_header_strip(
     cx: &mut Context<QuillApp>,
 ) -> AnyElement {
     let color = if on_fill {
-        text_on_fill().into()
+        super::td::td(quill::app_theme::PaletteKey::MsgOutReplyBarColor).into()
     } else {
         header
             .accent

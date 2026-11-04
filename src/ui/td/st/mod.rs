@@ -25,3 +25,4 @@ pub(crate) mod window;
 // named after the tdesktop style it ports.
 pub(crate) mod compose;
 pub(crate) mod top_bar;
+pub(crate) mod chat;

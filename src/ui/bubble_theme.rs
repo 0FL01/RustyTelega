@@ -11,9 +11,9 @@
 //! bubbles, as before.
 #![deny(clippy::indexing_slicing)]
 
-use super::chat_theme::accent_strong;
 use gpui_kit::component::theme::ActiveTheme;
 use gpui_kit::*;
+use quill::app_theme::PaletteKey;
 use quill::telegram::envelope::ThemeSettings;
 use quill::wallpaper_raster::vertical_color_at;
 use std::cell::Cell;
@@ -106,7 +106,7 @@ impl OutgoingFill {
 
 /// The background of outgoing bubbles: the theme's fill, else the accent.
 pub(crate) fn outgoing_bubble_color(fill: Option<OutgoingFill>) -> Rgba {
-    fill.map_or_else(accent_strong, |f| rgb(f.solid()))
+    fill.map_or_else(|| super::td::td(PaletteKey::MsgOutBg), |f| rgb(f.solid()))
 }
 
 /// Where a bubble from `top` to `bottom` sits in `area`, as 0-1 fractions.

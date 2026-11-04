@@ -118,6 +118,39 @@ pub(in crate::ui) fn waveform_row(
     row
 }
 
+/// `historyTranscribeSize` and `historyTranscribeRadius` from chat.style.
+fn transcribe_button(
+    chat_id: ChatId,
+    message_id: MessageId,
+    outgoing: bool,
+    cx: &mut Context<QuillApp>,
+) -> AnyElement {
+    use crate::ui::td::st::chat;
+    use crate::ui::td::{TdIcon, td, td_icon};
+    use quill::app_theme::PaletteKey;
+    let color = td(if outgoing {
+        PaletteKey::MsgFileOutBg
+    } else {
+        PaletteKey::MsgFileInBg
+    });
+    div()
+        .id(("transcribe", message_id.0 as u64))
+        .w(px(chat::HISTORY_TRANSCRIBE_WIDTH))
+        .h(px(chat::HISTORY_TRANSCRIBE_HEIGHT))
+        .flex_none()
+        .rounded(px(chat::HISTORY_TRANSCRIBE_RADIUS))
+        .bg(Hsla::from(color).opacity(if outgoing { 0.18 } else { 0.12 }))
+        .role(Role::Button)
+        .aria_label(tr(keys::Q_AV_TRANSCRIBE))
+        .tab_index(0)
+        .cursor_pointer()
+        .child(td_icon(TdIcon::VoiceToText, color))
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.request_transcription(chat_id, message_id, cx);
+        }))
+        .into_any_element()
+}
+
 pub(in crate::ui) fn voice_note_row(
     chat_id: ChatId,
     message_id: MessageId,
@@ -141,8 +174,31 @@ pub(in crate::ui) fn voice_note_row(
     let accent = bubble_accent(outgoing, cx);
     // Phase 4.6: the active row shows elapsed / total (tdesktop-style).
     let total = format_voice_duration(note.duration);
-    // The widest the status line gets ("played / total").
-    let widest_status = format!("{total} / {total}");
+    // `Document::composeStatusText` uses FormatDurationAndSizeText while
+    // the file is not yet downloaded. Keep the duration alone if TDLib
+    // has not supplied a size instead of inventing one.
+    let file = files.get(&file_id.0);
+    let size = file
+        .map(|file| file.size.max(file.expected_size))
+        .filter(|size| *size > 0);
+    let idle_status = size
+        .filter(|_| file.and_then(|file| file.usable_path()).is_none())
+        .map_or_else(
+            || total.clone(),
+            |size| {
+                format!(
+                    "{total}, {}",
+                    quill::telegram::envelope::format_size_text(size)
+                )
+            },
+        );
+    // Include both idle and playback labels when estimating width.
+    let playback_status = format!("{total} / {total}");
+    let widest_status = if idle_status.len() > playback_status.len() {
+        &idle_status
+    } else {
+        &playback_status
+    };
     let meta = if downloading_now && !seek.is_playing {
         tr(keys::Q_AV_DOWNLOADING_4).to_string()
     } else if active {
@@ -152,7 +208,7 @@ pub(in crate::ui) fn voice_note_row(
             format_voice_duration(seek.label_secs() as i32)
         )
     } else {
-        total
+        idle_status.clone()
     };
     let unheard = !outgoing && !note.is_listened && !active;
     let (icon, label, ring) = if seek.is_playing {
@@ -223,21 +279,30 @@ pub(in crate::ui) fn voice_note_row(
                         .flex()
                         .flex_col()
                         .gap_0p5()
-                        .child(match &seek.slider {
-                            // The active note's waveform is its scrubber.
-                            Some(slider) => AudioScrubber::new(
-                                ("voice-scrubber", row_key),
-                                slider,
-                                ScrubberFace::Waveform(bars),
-                                accent,
-                                QuillApp::seek_hover_handler(SeekSite::Row, cx),
-                            )
-                            .progress(progress)
-                            .hover(seek.hover)
-                            .dragging(seek.dragging)
-                            .into_any_element(),
-                            None => waveform_canvas(bars, accent, progress).into_any_element(),
-                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(10.))
+                                .child(
+                                    div().flex_1().min_w_0().child(match &seek.slider {
+                                        Some(slider) => AudioScrubber::new(
+                                            ("voice-scrubber", row_key),
+                                            slider,
+                                            ScrubberFace::Waveform(bars),
+                                            accent,
+                                            QuillApp::seek_hover_handler(SeekSite::Row, cx),
+                                        )
+                                        .progress(progress)
+                                        .hover(seek.hover)
+                                        .dragging(seek.dragging)
+                                        .into_any_element(),
+                                        None => waveform_canvas(bars, accent, progress)
+                                            .into_any_element(),
+                                    }),
+                                )
+                                .child(transcribe_button(chat_id, message_id, outgoing, cx)),
+                        )
                         .child(
                             div()
                                 .flex()
@@ -258,13 +323,15 @@ pub(in crate::ui) fn voice_note_row(
         })
         // MED2: transcription (schema 1.8.67 `speechRecognitionResult`
         // on `voiceNote`).
-        .child(transcription_row(
-            chat_id,
-            message_id,
-            &note.transcription,
-            accent,
-            cx,
-        ))
+        .when(note.transcription.is_some(), |this| {
+            this.child(transcription_row(
+                chat_id,
+                message_id,
+                &note.transcription,
+                accent,
+                cx,
+            ))
+        })
         .into_any_element()
 }
 

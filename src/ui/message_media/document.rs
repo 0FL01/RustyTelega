@@ -43,13 +43,20 @@ pub(in crate::ui) fn action_disc(
     icon: gpui_kit::assets::IconName,
     ring: Option<Option<f32>>,
     label: &'static str,
-    cx: &App,
+    _cx: &App,
 ) -> Stateful<Div> {
+    use quill::app_theme::PaletteKey;
     let id = id.into();
     let (bg, fg) = if outgoing {
-        (gpui_kit::white().opacity(0.22), gpui_kit::white())
+        (
+            super::super::td::td(PaletteKey::MsgFileOutBg),
+            super::super::td::td(PaletteKey::HistoryFileOutIconFg),
+        )
     } else {
-        (cx.theme().primary, gpui_kit::white())
+        (
+            super::super::td::td(PaletteKey::MsgFileInBg),
+            super::super::td::td(PaletteKey::HistoryFileInIconFg),
+        )
     };
     div()
         .id(id.clone())

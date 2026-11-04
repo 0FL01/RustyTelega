@@ -23,11 +23,17 @@ use base64::engine::general_purpose::STANDARD;
 /// tdesktop voice waveform is a short run of 5-bit bars (often about 100).
 pub const WAVEFORM_BAR_CAP: usize = 64;
 
+/// Telegram Desktop `Ui::FormatDurationText`, including its hours field.
 pub fn format_voice_duration(seconds: i32) -> String {
     let seconds = seconds.max(0);
-    let minutes = seconds / 60;
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
     let rest = seconds % 60;
-    format!("{minutes}:{rest:02}")
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{rest:02}")
+    } else {
+        format!("{minutes:02}:{rest:02}")
+    }
 }
 
 /// Pack amplitudes `0..=31` into TDLib / Telegram 5-bit waveform bytes.
@@ -763,9 +769,11 @@ mod tests {
 
     #[test]
     fn duration_format_is_minutes_and_seconds() {
-        assert_eq!(format_voice_duration(0), "0:00");
-        assert_eq!(format_voice_duration(5), "0:05");
-        assert_eq!(format_voice_duration(65), "1:05");
-        assert_eq!(format_voice_duration(-3), "0:00");
+        assert_eq!(format_voice_duration(0), "00:00");
+        assert_eq!(format_voice_duration(5), "00:05");
+        assert_eq!(format_voice_duration(65), "01:05");
+        assert_eq!(format_voice_duration(3600), "1:00:00");
+        assert_eq!(format_voice_duration(3661), "1:01:01");
+        assert_eq!(format_voice_duration(-3), "00:00");
     }
 }

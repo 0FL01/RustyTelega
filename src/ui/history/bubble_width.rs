@@ -30,11 +30,9 @@ use quill::bubble_layout::{
     skip_block_width,
 };
 
-/// Horizontal chrome of a padded bubble around its content: the kit
-/// bubble's `px_3` on each side and its 1 px border
-/// (`message_media::bubble_outer_width`). Telegram Desktop's widths are
-/// bubble widths, so a row inside a padded bubble takes this much less.
-pub(in crate::ui) const PADDED_CHROME: i32 = 26;
+/// Horizontal `msgPadding` from `ui/chat/chat.style` (11 px each side).
+/// Telegram Desktop's widths include this padding.
+pub(in crate::ui) const PADDED_CHROME: i32 = 22;
 
 /// Content width of a bubble Telegram Desktop makes `outer` wide.
 pub(in crate::ui) fn content_for_outer(outer: i32, plain: bool) -> Pixels {
@@ -81,7 +79,7 @@ impl BubbleRoom {
         let chrome = if self.plain {
             0
         } else if led {
-            2
+            0
         } else {
             PADDED_CHROME
         };
@@ -111,7 +109,7 @@ pub(in crate::ui) fn voice_row_width(
         name_width: 0,
         status_width,
         skip_block_width: skip_block_width(info_width),
-        transcribe_width: 0,
+        transcribe_width: 28 + 10,
     });
     content_for_outer(room.cap(outer), room.plain)
 }
@@ -457,19 +455,19 @@ mod tests {
     #[test]
     fn rows_take_telegram_desktop_widths_less_the_bubble_chrome() {
         // msgFileMinWidth 268 is the bubble's width; the padded kit bubble
-        // adds 12 + 12 + 2 around its content.
-        assert_eq!(content_for_outer(268, false), px(242.));
+        // adds 11 + 11 around its content.
+        assert_eq!(content_for_outer(268, false), px(246.));
         assert_eq!(content_for_outer(268, true), px(268.));
-        assert_eq!(file_row_bounds(PADDED), (px(242.), px(404.)));
+        assert_eq!(file_row_bounds(PADDED), (px(246.), px(408.)));
         assert_eq!(poll_min_width(PLAIN), px(268.));
     }
 
     #[test]
     fn a_voice_row_is_as_wide_as_a_full_waveform() {
         // 100 bars of 3 px, the row's 12 + 10 padding, the 44 px disc and
-        // its 11 px skip: 377, as Telegram Desktop; 351 inside the bubble.
-        assert_eq!(voice_row_width(40, 30, PLAIN), px(377.));
-        assert_eq!(voice_row_width(40, 30, PADDED), px(351.));
+        // its 11 px skip and 38 px transcription button: 415, or 393 inside.
+        assert_eq!(voice_row_width(40, 30, PLAIN), px(415.));
+        assert_eq!(voice_row_width(40, 30, PADDED), px(393.));
         // A very wide status line (a long "played / total") still wins.
         // 67 text left + 300 status + 12 unread dot + 40 skip block + 11.
         assert_eq!(voice_row_width(300, 30, PLAIN), px(430.));
@@ -513,9 +511,9 @@ mod tests {
 
     #[test]
     fn file_rows_in_the_plain_look_take_the_whole_bubble_widths() {
-        // No bubble padding to leave out: 268..430, not 242..404.
+        // No bubble padding to leave out: 268..430, not 246..408.
         assert_eq!(file_row_bounds(PLAIN), (px(268.), px(430.)));
-        assert_eq!(file_row_bounds(PADDED), (px(242.), px(404.)));
+        assert_eq!(file_row_bounds(PADDED), (px(246.), px(408.)));
     }
 
     #[test]
@@ -523,8 +521,8 @@ mod tests {
         // No block, or one that fits: msgMaxWidth stays.
         assert_eq!(bubble_width_limit(0, false), None);
         assert_eq!(bubble_width_limit(404, false), None);
-        // 500 px of code (its chrome included) and the 26 px bubble chrome.
-        assert_eq!(bubble_width_limit(500, false), Some(px(526.)));
+        // 500 px of code (its chrome included) and the 22 px bubble chrome.
+        assert_eq!(bubble_width_limit(500, false), Some(px(522.)));
         assert_eq!(bubble_width_limit(500, true), Some(px(500.)));
         assert_eq!(bubble_width_limit(430, true), None);
     }
@@ -582,7 +580,7 @@ mod tests {
             small_line: 16.8,
         };
         let inner = preview_inner_max(PADDED);
-        assert_eq!(inner, 386);
+        assert_eq!(inner, 390);
         // Site, title and one description line: 16.8 + 19.6 + 16.8.
         assert_eq!(article_thumb((90, 90), &copy, inner), (53, 53));
         // A portrait thumbnail keeps its proportions in that height.
@@ -608,7 +606,7 @@ mod tests {
         // inside of the card at the widest bubble.
         let (w, h) = preview_photo_frame((1100, 740), PADDED);
         assert_eq!(w, preview_inner_max(PADDED));
-        assert_eq!(h, 259);
+        assert_eq!(h, 262);
         // A small one keeps `historyPhotoBubbleMinWidth`.
         assert_eq!(preview_photo_frame((90, 90), PADDED).0, 200);
     }
@@ -636,19 +634,19 @@ mod tests {
         let own = BubbleRoom::new(HistoryWidth::new(380.), false, false);
         assert_eq!(group.outer(), 252);
         assert_eq!(own.outer(), 284);
-        // Pictures: inside the 1 px border, or the padding under a header.
-        assert_eq!(group.media(true), 250);
-        assert_eq!(group.media(false), 226);
+        // Pictures: without an inset, or inside the padding under a header.
+        assert_eq!(group.media(true), 252);
+        assert_eq!(group.media(false), 230);
         // Files and polls drop their msgFileMinWidth floor to the room.
-        assert_eq!(file_row_bounds(group), (px(226.), px(226.)));
-        assert_eq!(file_row_bounds(own), (px(242.), px(258.)));
-        assert_eq!(poll_min_width(group), px(226.));
+        assert_eq!(file_row_bounds(group), (px(230.), px(230.)));
+        assert_eq!(file_row_bounds(own), (px(246.), px(262.)));
+        assert_eq!(poll_min_width(group), px(230.));
         // A voice row narrows (its waveform takes fewer bars).
-        assert_eq!(voice_row_width(40, 30, group), px(226.));
+        assert_eq!(voice_row_width(40, 30, group), px(230.));
         // A link preview card and its large photo.
-        assert_eq!(preview_inner_max(group), 252 - 26 - 18);
+        assert_eq!(preview_inner_max(group), 252 - 22 - 18);
         let (w, h) = preview_photo_frame((1100, 740), group);
-        assert_eq!(w, 208);
+        assert_eq!(w, 212);
         assert!(h < 259 && h > 100, "{h}");
         // A 500 px history only narrows the photo rows a little.
         let mid = BubbleRoom::new(HistoryWidth::new(500.), true, false);

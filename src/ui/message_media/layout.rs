@@ -68,16 +68,13 @@ pub(in crate::ui) fn media_content_width(
         .min(px(width_max.max(1) as f32).max(media))
 }
 
-/// Outer bubble width for `content` width: a media-led bubble keeps only
-/// its 1 px border around the picture, a padded one adds the text padding
-/// (`px_3`) too, the plain look has neither.
+/// Outer width from the content width. Media-led and plain bubbles have no
+/// inset; padded bubbles add tdesktop's `msgPadding` on both sides.
 pub(in crate::ui) fn bubble_outer_width(content: Pixels, media_led: bool, plain: bool) -> Pixels {
-    if plain {
+    if plain || media_led {
         content
-    } else if media_led {
-        content + px(2.)
     } else {
-        content + px(26.)
+        content + px(22.)
     }
 }
 
@@ -454,8 +451,8 @@ mod tests {
 
     #[test]
     fn outer_width_adds_only_the_bubble_chrome() {
-        assert_eq!(bubble_outer_width(px(360.), true, false), px(362.));
-        assert_eq!(bubble_outer_width(px(360.), false, false), px(386.));
+        assert_eq!(bubble_outer_width(px(360.), true, false), px(360.));
+        assert_eq!(bubble_outer_width(px(360.), false, false), px(382.));
         assert_eq!(bubble_outer_width(px(360.), true, true), px(360.));
     }
 }

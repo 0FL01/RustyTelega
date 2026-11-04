@@ -174,7 +174,7 @@ impl BubbleLook {
 
 /// Radius of a corner that joins a neighbouring bubble or carries the
 /// bubble's tail (tdesktop `bubbleRadiusSmall`).
-const JOINED_RADIUS: f32 = 5.0;
+const JOINED_RADIUS: f32 = super::td::st::chat::BUBBLE_RADIUS_SMALL;
 
 impl BubbleLook {
     /// Pre-login synthetic placeholder: today's fixed look.
@@ -463,6 +463,11 @@ fn message_bubble_with_quote(
         .and_then(|fill| super::bubble_theme::gradient_layer(fill, look.joined_above));
     let bubble_content = component::bubble::BubbleContent::new()
         .relative()
+        .when(!look.plain && !bubbleless, |this| {
+            // `chat.style`: msgPadding and bubbleRadiusLarge. Override the
+            // component defaults, including its extra one-pixel border.
+            this.rounded(px(16.)).border_0().px(px(11.)).py(px(8.))
+        })
         .children(gradient)
         // Where a delete's dust starts.
         .child(super::vanish::bubble_tracker(row.id as i64))
