@@ -49,6 +49,10 @@ impl QuillApp {
             })
             .child(
                 div()
+                    .text_size(px(13.))
+                    .text_color(super::super::td::td(
+                        quill::app_theme::PaletteKey::WindowBoldFg,
+                    ))
                     .font_semibold()
                     .truncate()
                     .child(super::super::bidi_line::one_line_plain(title)),
@@ -133,14 +137,13 @@ impl QuillApp {
             .flex()
             .flex_none()
             .items_center()
-            .gap_1()
             .when(view_in_chat, |this| {
                 this.child(thread_view_in_chat_button(cx))
             })
+            .child(chat_find_button(chat_search_open, cx))
             .when_some(call_user, |this, user_id| {
                 this.child(chat_call_button(user_id, cx))
             })
-            .child(chat_find_button(chat_search_open, cx))
             .when(voice_ok, |this| {
                 this.child(self.chat_voice_chat_button(chat_id, voice_live, cx))
             })
@@ -169,11 +172,11 @@ fn conversation_status_line(
         .id("conversation-status")
         .flex()
         .items_center()
-        .text_xs()
+        .text_size(px(13.))
         .text_color(if accent {
-            cx.theme().primary
+            super::super::td::td(quill::app_theme::PaletteKey::WindowActiveTextFg)
         } else {
-            cx.theme().muted_foreground
+            super::super::td::td(quill::app_theme::PaletteKey::WindowSubTextFg)
         })
         .when_some(indicator, |this, indicator| {
             this.child(super::super::activity_indicator::activity_indicator(
@@ -207,7 +210,13 @@ fn thread_view_in_chat_button(cx: &mut Context<QuillApp>) -> AnyElement {
 #[inline(never)]
 fn chat_call_button(user_id: i64, cx: &mut Context<QuillApp>) -> AnyElement {
     Button::new("chat-call")
-        .icon(IconName::Phone)
+        .child(super::super::td::td_icon(
+            super::super::td::TdIcon::TopBarCall,
+            super::super::td::td(quill::app_theme::PaletteKey::MenuIconFg),
+        ))
+        .w(px(40.))
+        .h(px(54.))
+        .p_0()
         .ghost()
         .tooltip(tr(keys::Q_CHAT_CALL))
         .accessibility_label(tr(keys::Q_CHAT_CALL))
@@ -220,7 +229,22 @@ fn chat_call_button(user_id: i64, cx: &mut Context<QuillApp>) -> AnyElement {
 #[inline(never)]
 fn chat_find_button(open: bool, cx: &mut Context<QuillApp>) -> AnyElement {
     Button::new("chat-find")
-        .icon(if open { IconName::X } else { IconName::Search })
+        .child(if open {
+            Icon::new(gpui_kit::assets::IconName::X)
+                .text_color(super::super::td::td(
+                    quill::app_theme::PaletteKey::MenuIconFg,
+                ))
+                .into_any_element()
+        } else {
+            super::super::td::td_icon(
+                super::super::td::TdIcon::TopBarSearch,
+                super::super::td::td(quill::app_theme::PaletteKey::MenuIconFg),
+            )
+            .into_any_element()
+        })
+        .w(px(40.))
+        .h(px(54.))
+        .p_0()
         .ghost()
         .tooltip(if open {
             tr(keys::Q_CHAT_CLOSE_SEARCH)
@@ -241,7 +265,13 @@ fn chat_find_button(open: bool, cx: &mut Context<QuillApp>) -> AnyElement {
 #[inline(never)]
 fn chat_info_toggle(target: InfoPanelTarget, open: bool, cx: &mut Context<QuillApp>) -> AnyElement {
     Button::new("chat-info-toggle")
-        .icon(IconName::PanelRight)
+        .child(super::super::td::td_icon(
+            super::super::td::TdIcon::TopBarProfile,
+            super::super::td::td(quill::app_theme::PaletteKey::MenuIconFg),
+        ))
+        .w(px(40.))
+        .h(px(54.))
+        .p_0()
         .ghost()
         .selected(open)
         .tooltip(if open {

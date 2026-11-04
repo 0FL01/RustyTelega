@@ -117,7 +117,7 @@ fn click(cx: &mut VisualTestContext, id: &'static str) {
 fn placeholder_follows_the_chat(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
     let vcx = &mut vcx;
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
     open_chat(&app, vcx, PAID_USER);
     assert_eq!(placeholder(&app, vcx), "Message for 25 Stars");
     open_chat(&app, vcx, CHANNEL);
@@ -126,7 +126,7 @@ fn placeholder_follows_the_chat(cx: &mut TestAppContext) {
     frames(vcx);
     assert_eq!(placeholder(&app, vcx), "Silent broadcast…");
     open_chat(&app, vcx, GROUP);
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
 }
 
 #[gpui_kit::test]
@@ -137,7 +137,7 @@ fn editing_changes_the_placeholder_and_cancelling_restores_it(cx: &mut TestAppCo
     assert_eq!(placeholder(&app, vcx), "New message…");
     escape(&app, vcx);
     assert!(!editing(&app, vcx));
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
 }
 
 #[gpui_kit::test]
@@ -352,7 +352,7 @@ fn an_anonymous_admin_sends_anonymously_until_demoted_or_revealed(cx: &mut TestA
         vcx,
         r#"{"@type":"chatMemberStatusAdministrator","can_be_edited":false,"rights":{"@type":"chatAdministratorRights","is_anonymous":false}}"#,
     );
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
     supergroup_status(
         &app,
         vcx,
@@ -367,7 +367,7 @@ fn an_anonymous_admin_sends_anonymously_until_demoted_or_revealed(cx: &mut TestA
     );
     assert_eq!(placeholder(&app, vcx), "Send anonymously…");
     supergroup_status(&app, vcx, r#"{"@type":"chatMemberStatusMember"}"#);
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
 }
 
 #[gpui_kit::test]
@@ -454,9 +454,9 @@ fn a_forum_field_names_the_topic_it_sends_to(cx: &mut TestAppContext) {
     assert_eq!(placeholder(&app, vcx), "Reply in Changelog");
     // Inside an open topic the field is plain, as in tdesktop's topic view.
     select_topic(&app, vcx, FORUM, 5);
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
     open_chat(&app, vcx, GROUP);
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
 }
 
 #[gpui_kit::test]
@@ -467,11 +467,11 @@ fn a_bot_keyboards_placeholder_shows_while_the_keyboard_does(cx: &mut TestAppCon
     assert_eq!(placeholder(&app, vcx), "Choose a size");
     // Hiding the keyboard takes its text with it.
     click(vcx, "composer-keyboard-toggle");
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
     click(vcx, "composer-keyboard-toggle");
     assert_eq!(placeholder(&app, vcx), "Choose a size");
     open_chat(&app, vcx, GROUP);
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
 }
 
 #[gpui_kit::test]
@@ -481,7 +481,7 @@ fn a_bot_that_makes_its_own_topics_is_off_thread_until_one_opens(cx: &mut TestAp
     open_chat(&app, vcx, TOPIC_BOT);
     assert_eq!(placeholder(&app, vcx), "Off-thread message");
     select_topic(&app, vcx, TOPIC_BOT, 2);
-    assert_eq!(placeholder(&app, vcx), "Write a message…");
+    assert_eq!(placeholder(&app, vcx), "Write a message...");
     open_chat(&app, vcx, KEYBOARD_BOT);
     assert_eq!(placeholder(&app, vcx), "Choose a size");
 }

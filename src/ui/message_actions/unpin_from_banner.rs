@@ -117,18 +117,18 @@ impl QuillApp {
                 .id("pinned-message-bar")
                 .flex()
                 .items_center()
-                .gap_2()
-                .px_3()
-                .py_1p5()
+                .h(px(super::td::st::compose::HISTORY_REPLY_HEIGHT))
+                .flex_none()
+                .pl(px(11.))
                 .border_b_1()
-                .border_color(cx.theme().border)
-                .bg(bg_canvas())
+                .border_color(super::td::td(quill::app_theme::PaletteKey::ShadowFg))
+                .bg(super::td::td(quill::app_theme::PaletteKey::HistoryPinnedBg))
                 .child(
                     div()
                         .id("pinned-message-jump")
                         .flex()
                         .items_center()
-                        .gap_2()
+                        .gap(px(8.))
                         .min_w_0()
                         .flex_1()
                         .role(gpui_kit::Role::Button)
@@ -147,7 +147,7 @@ impl QuillApp {
                                 .flex()
                                 .flex_col()
                                 .gap(px(2.))
-                                .h(px(34.))
+                                .h(px(super::td::st::compose::MSG_REPLY_BAR_HEIGHT))
                                 .children(segments),
                         )
                         .child(
@@ -157,17 +157,21 @@ impl QuillApp {
                                 .min_w_0()
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .font_medium()
-                                        .text_color(accent())
+                                        .text_size(px(13.))
+                                        .font_semibold()
+                                        .text_color(super::td::td(
+                                            quill::app_theme::PaletteKey::WindowActiveTextFg,
+                                        ))
                                         .child(title),
                                 )
                                 .child(
-                                    div().text_sm().truncate().text_color(text_primary()).child(
-                                        super::bidi_line::one_line_plain(
+                                    div()
+                                        .text_size(px(13.))
+                                        .truncate()
+                                        .text_color(text_primary())
+                                        .child(super::bidi_line::one_line_plain(
                                             super::search_ui::one_line_preview(&preview),
-                                        ),
-                                    ),
+                                        )),
                                 ),
                         ),
                 )
@@ -344,9 +348,14 @@ fn pinned_bar_close_button(
     cx: &mut Context<QuillApp>,
 ) -> AnyElement {
     Button::new("pinned-bar-close")
-        .icon(gpui_kit::assets::IconName::X)
+        .child(super::td::td_icon(
+            super::td::TdIcon::ReplyCancel,
+            super::td::td(quill::app_theme::PaletteKey::MenuIconFg),
+        ))
+        .w(px(49.))
+        .h(px(49.))
+        .p_0()
         .ghost()
-        .small()
         .tooltip(if can_pin {
             tr(keys::CONTEXT_UNPIN_FROM_TOP)
         } else {
@@ -381,9 +390,14 @@ fn pinned_bar_close_button(
 /// The pinned bar's list toggle when several messages are pinned.
 fn pinned_bar_list_button(open: bool, cx: &mut Context<QuillApp>) -> AnyElement {
     Button::new("pinned-bar-list")
-        .icon(gpui_kit::assets::IconName::List)
+        .child(super::td::td_icon(
+            super::td::TdIcon::PinnedShowAll,
+            super::td::td(quill::app_theme::PaletteKey::MenuIconFg),
+        ))
+        .w(px(49.))
+        .h(px(49.))
+        .p_0()
         .ghost()
-        .small()
         .selected(open)
         .tooltip(tr(keys::Q_CHAT_PINNED_MESSAGES))
         .accessibility_label(tr(keys::Q_CHAT_PINNED_MESSAGES))

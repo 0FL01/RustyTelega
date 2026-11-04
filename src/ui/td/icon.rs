@@ -101,6 +101,8 @@ td_icons! {
     FoldersUnmuted => "folders/folders_unmuted",
     FoldersSetup => "folders/folders_setup",
     FoldersPoo => "folders/folders_poo",
+    // Stream B
+    ReplyCancel => "box_button_close",
 }
 
 /// The scale a window draws at, as the mask file to use.

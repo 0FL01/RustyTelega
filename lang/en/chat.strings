@@ -57,7 +57,7 @@
 "lng_manage_messages_ttl_menu" = "Auto-Delete";
 "lng_menu_formatting_spoiler" = "Spoiler";
 "lng_menu_insert_unicode" = "Insert Unicode control character";
-"lng_message_ph" = "Write a message…";
+"lng_message_ph" = "Write a message...";
 "lng_message_stars_ph#one" = "Message for {count} Star";
 "lng_message_stars_ph#other" = "Message for {count} Stars";
 "lng_mute_menu_duration" = "Mute for…";

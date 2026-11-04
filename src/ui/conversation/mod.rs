@@ -7,7 +7,6 @@ use super::history::HistoryShared;
 use super::history::{album_history_row, history_skeleton, session_history_row};
 use super::synthetic::BubbleLook;
 use super::*;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::button::*;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::message_scroller::MessageScroller;
@@ -291,10 +290,12 @@ impl QuillApp {
         });
         let header = div()
             .id("conversation-header")
-            .px_4()
-            .py_2()
+            .h(px(super::td::st::top_bar::HEIGHT))
+            .flex_none()
+            .pl(px(17.))
             .border_b_1()
-            .border_color(cx.theme().border)
+            .border_color(super::td::td(quill::app_theme::PaletteKey::ShadowFg))
+            .bg(super::td::td(quill::app_theme::PaletteKey::TopBarBg))
             .flex()
             .items_center()
             .justify_between()
@@ -307,7 +308,9 @@ impl QuillApp {
                     .items_center()
                     .gap_1()
                     .min_w_0()
-                    .children(self.sidebar_toggle_button(cx))
+                    .when(self.history.pane_width.get() < px(880.), |this| {
+                        this.children(self.sidebar_toggle_button(cx))
+                    })
                     .when(thread_header.is_some(), |this| {
                         this.child(self.thread_back_button(cx))
                     })

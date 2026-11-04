@@ -1,5 +1,5 @@
 //! The composer's round Send / Record / Save / Schedule / slow-mode button,
-//! after Telegram Desktop's `Ui::SendButton`: one 32px button whose glyph
+//! after Telegram Desktop's `Ui::SendButton`: one 44×46px button whose glyph
 //! cross-fades and scales over 120 ms when the state changes, and which
 //! shows the remaining slow-mode time as "m:ss" instead of an icon.
 //!
@@ -23,8 +23,6 @@ use quill::send_rights::SendKind;
 use std::sync::OnceLock;
 use std::time::Instant;
 
-/// Diameter of the round button.
-const BUTTON_SIZE: f32 = 32.;
 /// Glyph size at full scale.
 const GLYPH_SIZE: f32 = 16.;
 /// A record button whose recording the chat refuses is drawn at this
@@ -107,26 +105,6 @@ impl QuillApp {
             self.request_animation_tick(60, cx);
         }
 
-        let theme = cx.theme();
-        let primary = theme.primary;
-        let fill = |k: SendButtonKind| if k.filled() { 1.0_f32 } else { 0.0 };
-        let fill_alpha =
-            fill(morph.source()) + (fill(morph.target()) - fill(morph.source())) * progress;
-        let (hover, active) = if kind.filled() {
-            (theme.primary_hover, theme.primary_active)
-        } else {
-            (theme.accent, theme.accent)
-        };
-        let variant = ButtonCustomVariant::new(cx)
-            .color(primary.opacity(fill_alpha))
-            .foreground(if kind.filled() {
-                theme.primary_foreground
-            } else {
-                theme.secondary_foreground
-            })
-            .hover(hover)
-            .active(active);
-
         // The glyphs: during the fade both are drawn on top of each other.
         let (outgoing, incoming) = morph_layers(progress);
         let glyphs = div()
@@ -139,14 +117,10 @@ impl QuillApp {
             .child(glyph_layer(morph.target(), wait, incoming, cx));
 
         let button = Button::new("composer-send")
-            // `custom` washes its fill out 20%, so only the fade itself uses
-            // it; settled states use the kit's own solid variants.
-            .when(animating, |b| b.custom(variant))
-            .when(!animating && kind.filled(), |b| b.primary())
-            .when(!animating && !kind.filled(), |b| b.ghost())
-            .rounded_full()
-            .w(px(BUTTON_SIZE))
-            .h(px(BUTTON_SIZE))
+            // The send glyph uses the accent; its button remains transparent.
+            .ghost()
+            .w(px(super::td::st::compose::HISTORY_ATTACH_WIDTH))
+            .h(px(super::td::st::compose::HISTORY_ATTACH_HEIGHT))
             .p_0()
             .tooltip(kind.tooltip(wait))
             .accessibility_label(match kind {
@@ -227,10 +201,16 @@ fn glyph_layer(
     };
     let icon = |name| layer().child(Icon::new(name).size(size).text_color(color));
     match kind {
-        SendButtonKind::Send => icon(gpui_kit::assets::IconName::Send),
+        SendButtonKind::Send => layer().child(super::td::td_icon(
+            super::td::TdIcon::InputSend,
+            super::td::td(quill::app_theme::PaletteKey::HistorySendIconFg),
+        )),
         SendButtonKind::Save => icon(gpui_kit::assets::IconName::Check),
         SendButtonKind::Schedule => icon(gpui_kit::assets::IconName::Clock),
-        SendButtonKind::Record { video: false } => icon(gpui_kit::assets::IconName::Mic),
+        SendButtonKind::Record { video: false } => layer().child(super::td::td_icon(
+            super::td::TdIcon::InputRecord,
+            super::td::td(quill::app_theme::PaletteKey::HistoryComposeIconFg),
+        )),
         SendButtonKind::Record { video: true } => icon(gpui_kit::assets::IconName::Video),
         SendButtonKind::Slowmode => layer().child(
             div()

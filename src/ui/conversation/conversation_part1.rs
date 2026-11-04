@@ -188,9 +188,9 @@ impl QuillApp {
                                     .child(super::anim_layer::occluder(circle)),
                             )
                         })
-                        .p_3()
                         .border_t_1()
-                        .border_color(cx.theme().border)
+                        .border_color(super::td::td(quill::app_theme::PaletteKey::ShadowFg))
+                        .bg(super::td::td(quill::app_theme::PaletteKey::HistoryComposeAreaBg))
                         .flex()
                         .flex_col()
                         .gap_2()
@@ -345,7 +345,8 @@ impl QuillApp {
                                 .relative()
                                 .flex()
                                 .items_end()
-                                .gap_2()
+                                .min_h(px(super::td::st::compose::HISTORY_ATTACH_HEIGHT))
+                                .px(px(super::td::st::compose::HISTORY_SEND_RIGHT))
                                 .when(show_attach, |row| {
                                     row.when_some(self.bot_menu_button(cx), |row, button| {
                                         row.child(button)
@@ -357,26 +358,6 @@ impl QuillApp {
                                             cx,
                                         ),
                                     )
-                                    .child(
-                                        Button::new("composer-emoji")
-                                            .icon(IconName::FaceSlightlySmiling)
-                                            .ghost()
-                                            .tooltip(if self.sticker_panel_open() {
-                                                tr(keys::Q_CHAT_CLOSE_STICKERS)
-                                            } else {
-                                                tr(keys::Q_CHAT_STICKERS)
-                                            })
-                                            .accessibility_label(tr(keys::Q_CHAT_STICKERS))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.toggle_media_panel(
-                                                    super::media_panel::PanelTab::Emoji,
-                                                    cx,
-                                                );
-                                            })),
-                                    )
-                                    .when(rich_preview.is_none(), |row| {
-                                        row.child(self.format_menu_button(cx))
-                                    })
                                 })
                                 .when(!show_attach, |row| row.children(self.ai_compose_button(cx)))
                                 .when_some(rich_preview, |row, preview| row.child(preview))
@@ -397,6 +378,7 @@ impl QuillApp {
                                         .key_context(super::keybindings::COMPOSER_CONTEXT)
                                         .child(
                                             Textarea::new(&self.composer)
+                                                .text_size(px(13.))
                                                 .appearance(false)
                                                 .bordered(false)
                                                 .aria_label(tr(keys::SR_CHAT_COLUMN_MESSAGE))
@@ -433,6 +415,28 @@ impl QuillApp {
                                             wrap.child(wash)
                                         }),
                                 )
+                                .when(show_attach, |row| {
+                                    row.child(
+                                        Button::new("composer-emoji")
+                                            .child(super::td::td_icon(super::td::TdIcon::InputSmileFace, super::td::td(quill::app_theme::PaletteKey::HistoryComposeIconFg)))
+                                            .w(px(44.))
+                                            .h(px(46.))
+                                            .p_0()
+                                            .ghost()
+                                            .tooltip(if self.sticker_panel_open() {
+                                                tr(keys::Q_CHAT_CLOSE_STICKERS)
+                                            } else {
+                                                tr(keys::Q_CHAT_STICKERS)
+                                            })
+                                            .accessibility_label(tr(keys::Q_CHAT_STICKERS))
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.toggle_media_panel(
+                                                    super::media_panel::PanelTab::Emoji,
+                                                    cx,
+                                                );
+                                            })),
+                                    )
+                                })
                                 // Scheduled-messages button while the chat has
                                 // any (`updateChatHasScheduledMessages`).
                                 .when_some(self.scheduled_messages_button(cx), |row, button| {

@@ -122,7 +122,14 @@ impl QuillApp {
             })
             .unwrap_or_default();
         Button::new("chat-more-menu")
-            .icon(gpui_kit::assets::IconName::EllipsisVertical)
+            .child(div().relative().left(px(-2.)).child(super::td::td_icon(
+                super::td::TdIcon::TopBarMenu,
+                super::td::td(quill::app_theme::PaletteKey::MenuIconFg),
+            )))
+            .w(px(44.))
+            .h(px(54.))
+            .p_0()
+            .ml(px(-5.))
             .ghost()
             .accessibility_label(tr(keys::Q_CHAT_CHAT_ACTIONS))
             .on_click(|event, window, cx| {

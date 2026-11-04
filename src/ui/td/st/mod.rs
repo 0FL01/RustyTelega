@@ -23,3 +23,5 @@ pub(crate) mod window;
 
 // Each area of the main window keeps its metrics in its own file below,
 // named after the tdesktop style it ports.
+pub(crate) mod compose;
+pub(crate) mod top_bar;

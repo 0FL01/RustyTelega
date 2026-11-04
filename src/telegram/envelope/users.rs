@@ -43,13 +43,29 @@ impl UserStatusKind {
                 if ago < 60 {
                     "last seen just now".to_string()
                 } else if ago < 3600 {
-                    format!("last seen {}m ago", ago / 60)
-                } else if ago < 86400 {
-                    format!("last seen {}h ago", ago / 3600)
-                } else if ago < 7 * 86400 {
-                    format!("last seen {}d ago", ago / 86400)
+                    let n = ago / 60;
+                    format!("last seen {n} minute{} ago", if n == 1 { "" } else { "s" })
+                } else if ago < 12 * 3600 {
+                    let n = ago / 3600;
+                    format!("last seen {n} hour{} ago", if n == 1 { "" } else { "s" })
                 } else {
-                    "last seen a long time ago".to_string()
+                    let was = i64::from(was_online);
+                    let now = i64::try_from(now_secs).unwrap_or(i64::MAX);
+                    let seen =
+                        crate::local_time::civil_at(was, crate::local_time::utc_offset_at(was));
+                    let current =
+                        crate::local_time::civil_at(now, crate::local_time::utc_offset_at(now));
+                    let time = format!("{:02}:{:02}", seen.hour, seen.minute);
+                    match current.day_number() - seen.day_number() {
+                        0 => format!("last seen today at {time}"),
+                        1 => format!("last seen yesterday at {time}"),
+                        _ => format!(
+                            "last seen {:02}/{:02}/{:02}",
+                            seen.month,
+                            seen.day,
+                            seen.year.rem_euclid(100)
+                        ),
+                    }
                 }
             }
         }

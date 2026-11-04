@@ -413,7 +413,13 @@ impl QuillApp {
         // `PeerMatchesTypes`).
         let attach_bots = self.attachment_menu_bots_for_open_chat();
         Button::new("composer-attach")
-            .icon(IconName::Paperclip)
+            .child(super::td::td_icon(
+                super::td::TdIcon::InputAttach,
+                super::td::td(quill::app_theme::PaletteKey::HistoryComposeIconFg),
+            ))
+            .w(px(44.))
+            .h(px(46.))
+            .p_0()
             .ghost()
             .tooltip(tr(keys::Q_CHAT_ATTACH))
             .accessibility_label(tr(keys::Q_CHAT_ATTACH))

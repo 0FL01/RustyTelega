@@ -938,7 +938,7 @@ fn a_chat_window_shows_the_placeholder_of_its_own_chat(cx: &mut TestAppContext) 
             .placeholder()
             .to_string()
     });
-    assert_eq!(main_text, "Write a message…");
+    assert_eq!(main_text, "Write a message...");
 }
 
 #[gpui_kit::test]

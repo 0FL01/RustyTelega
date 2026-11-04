@@ -115,7 +115,21 @@ fn user_status_display_buckets() {
             was_online: 1_699_999_400
         }
         .display_at(1_700_000_000),
-        "last seen 10m ago"
+        "last seen 10 minutes ago"
+    );
+    assert_eq!(
+        UserStatusKind::Offline {
+            was_online: 1_699_999_940
+        }
+        .display_at(1_700_000_000),
+        "last seen 1 minute ago"
+    );
+    assert_eq!(
+        UserStatusKind::Offline {
+            was_online: 1_699_996_400
+        }
+        .display_at(1_700_000_000),
+        "last seen 1 hour ago"
     );
     assert_eq!(
         UserStatusKind::Offline { was_online: 0 }.display_at(1_700_000_000),
