@@ -147,5 +147,5 @@ fn a_move_from_another_device_reorders_the_tabs(cx: &mut TestAppContext) {
             .try_find(rail_item(2))
             .map(|e| e.label().map(str::to_owned))
     });
-    assert_eq!(last.flatten().as_deref(), Some("All"));
+    assert_eq!(last.flatten().as_deref(), Some("✓ All chats"));
 }

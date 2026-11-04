@@ -14,3 +14,8 @@ pub(crate) const WINDOW_FILTERS_ICON_TOP: f32 = 6.;
 pub(crate) const WINDOW_FILTERS_FONT_SIZE: f32 = 11.;
 /// `windowFiltersButton.textSkip`.
 pub(crate) const WINDOW_FILTERS_TEXT_SKIP: f32 = 6.;
+
+/// `connectingMargin` around the connection indicator.
+pub(crate) const CONNECTING_MARGIN: f32 = 2.;
+/// `connectingRadial.size` and proxy icon bounding box.
+pub(crate) const CONNECTING_PROXY_SIZE: f32 = 20.;

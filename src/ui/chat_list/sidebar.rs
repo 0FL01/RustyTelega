@@ -50,7 +50,21 @@ impl QuillApp {
                     .flex_none()
                     .h_full()
                     .child(self.folder_rail(cx))
-                    .child(list)
+                    .child(
+                        div()
+                            .relative()
+                            .flex_none()
+                            .w(self.list_width())
+                            .h_full()
+                            .child(list)
+                            .children(self.proxy_shield_button(cx).map(|button| {
+                                div()
+                                    .absolute()
+                                    .left(px(crate::ui::td::st::window::CONNECTING_MARGIN))
+                                    .bottom(px(crate::ui::td::st::window::CONNECTING_MARGIN))
+                                    .child(button)
+                            })),
+                    )
                     .into_any_element();
             }
             return list.into_any_element();
@@ -79,7 +93,7 @@ impl QuillApp {
             .h_full()
             .when(mode != PaneMode::Ready, |this| this.p_3().gap_2())
             .border_r_1()
-            .border_color(cx.theme().border)
+            .border_color(crate::ui::td::td(quill::app_theme::PaletteKey::ShadowFg))
             .bg(crate::ui::td::td(quill::app_theme::PaletteKey::DialogsBg))
             .flex()
             .flex_col()

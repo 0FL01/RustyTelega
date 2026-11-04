@@ -473,6 +473,12 @@ impl QuillApp {
                     .child(
                         Textarea::new(&self.search_ui.input)
                             .aria_label(tr(keys::Q_CHAT_SEARCH))
+                            .appearance(false)
+                            .bg(crate::ui::td::td(
+                                quill::app_theme::PaletteKey::FilterInputInactiveBg,
+                            ))
+                            .rounded(px(crate::ui::td::st::dialogs::DIALOGS_FILTER_RADIUS))
+                            .px(px(crate::ui::td::st::dialogs::DIALOGS_FILTER_TEXT_LEFT))
                             .h(px(crate::ui::td::st::dialogs::DIALOGS_FILTER_HEIGHT)),
                     ),
             )

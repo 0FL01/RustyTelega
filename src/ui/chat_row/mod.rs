@@ -597,7 +597,7 @@ pub(super) fn session_chat_row(
             div()
                 .flex()
                 .items_center()
-                .gap(px(12.))
+                .gap(px(14.))
                 // Parity slice: circular chat photo or colored initials for
                 // every chat-list row / chat type.
                 // Slice CL3: the select-mode check circle precedes the
@@ -804,8 +804,8 @@ pub(super) fn session_chat_row(
                                                     .size(px(crate::ui::td::st::dialogs::DIALOGS_MINI_PREVIEW_SIZE))
                                                     .aspect_square()
                                                     .flex_none()
-                                                    .mr_1()
-                                                    .rounded_sm()
+                                                    .mr(px(crate::ui::td::st::dialogs::DIALOGS_MINI_PREVIEW_RIGHT))
+                                                    .rounded(px(crate::ui::td::st::dialogs::DIALOGS_MINI_PREVIEW_RADIUS))
                                                     .object_fit(ObjectFit::Cover),
                                                 )
                                             },

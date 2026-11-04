@@ -359,7 +359,14 @@ impl QuillApp {
         );
         let accounts_unread = self.other_accounts_unread();
         let button = Button::new("main-menu")
-            .icon(gpui_kit::assets::IconName::Menu)
+            .child(crate::ui::td::td_icon(
+                crate::ui::td::TdIcon::DialogsMenu,
+                crate::ui::td::td(if self.folder_rail_active() {
+                    quill::app_theme::PaletteKey::SideBarIconFg
+                } else {
+                    quill::app_theme::PaletteKey::DialogsMenuIconFg
+                }),
+            ))
             .ghost()
             .tooltip(tr(keys::MAIN_MENU))
             .accessibility_label(tr(keys::MAIN_MENU))

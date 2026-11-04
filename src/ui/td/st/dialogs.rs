@@ -10,3 +10,12 @@ pub(crate) const DIALOGS_FILTER_CONTAINER_HEIGHT: f32 = 54.;
 pub(crate) const DEFAULT_DIALOG_ROW_HEIGHT: f32 = 62.;
 /// `dialogsMiniPreview` size.
 pub(crate) const DIALOGS_MINI_PREVIEW_SIZE: f32 = 16.;
+
+/// `dialogsFilter.borderRadius`.
+pub(crate) const DIALOGS_FILTER_RADIUS: f32 = 18.;
+/// `dialogsFilter.textMargins.left` plus placeholder left margin.
+pub(crate) const DIALOGS_FILTER_TEXT_LEFT: f32 = 17.;
+/// `dialogsMiniPreviewRadius`.
+pub(crate) const DIALOGS_MINI_PREVIEW_RADIUS: f32 = 2.;
+/// `dialogsMiniPreviewRight`.
+pub(crate) const DIALOGS_MINI_PREVIEW_RIGHT: f32 = 3.;

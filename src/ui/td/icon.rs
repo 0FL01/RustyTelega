@@ -54,6 +54,8 @@ td_icons! {
     TitleRestore => "title_button_restore",
     TitleClose => "title_button_close",
     DialogsMenu => "dialogs/dialogs_menu",
+    ProxyOn => "proxy_on",
+    ProxyOff => "proxy_off",
     DialogsChannel => "dialogs/dialogs_channel",
     DialogsChat => "dialogs/dialogs_chat",
     DialogsBot => "dialogs/dialogs_bot",

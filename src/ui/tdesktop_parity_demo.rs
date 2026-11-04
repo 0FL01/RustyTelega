@@ -4,6 +4,7 @@
 use super::app::QuillApp;
 use super::demo::{demo_file_json, demo_media_allowlist, seed_ready_chats_session};
 use super::screenshot_demo::{DemoSpec, register_demos};
+use base64::Engine as _;
 use gpui_kit::{Context, Window};
 use quill::diagnostics::{DiagnosticSink, MemorySink};
 use quill::ids::ChatId;
@@ -46,8 +47,19 @@ fn file(id: i32, name: &str, size: i64) -> Value {
 }
 
 fn photo(id: i32, name: &str, caption: &str) -> Value {
+    let mini = image::open(demo_media_allowlist().join(name))
+        .ok()
+        .and_then(|image| {
+            let image = image.thumbnail(40, 40);
+            let mut bytes = std::io::Cursor::new(Vec::new());
+            image.write_to(&mut bytes, image::ImageFormat::Jpeg).ok()?;
+            Some(
+                json!({"@type":"minithumbnail", "width":image.width(), "height":image.height(),
+            "data":base64::engine::general_purpose::STANDARD.encode(bytes.into_inner())}),
+            )
+        });
     json!({"@type":"messagePhoto", "photo":{"@type":"photo", "has_stickers":false,
-        "minithumbnail":null,"sizes":[{"@type":"photoSize","type":"m",
+        "minithumbnail":mini,"sizes":[{"@type":"photoSize","type":"m",
         "photo":file(id,name,24),"width":1100,"height":740,"progressive_sizes":[]}]},
         "caption":{"@type":"formattedText","text":caption,"entities":[]},
         "show_caption_above_media":false,"has_spoiler":false,"is_secret":false})
@@ -105,7 +117,7 @@ fn seed(sink: Arc<MemorySink>) -> Session {
     let midnight =
         now - i64::from(local.hour) * 3600 - i64::from(local.minute) * 60 - now.rem_euclid(60);
     let at = |h: i64, m: i64| midnight + h * 3600 + m * 60;
-    let today = at(22, 13).min(now - 60);
+    let today = at(22, 13);
     let monday = midnight - i64::from(local.weekday) * 86400 + 12 * 3600;
     let monday = if monday > now {
         monday - 7 * 86400
@@ -115,7 +127,7 @@ fn seed(sink: Arc<MemorySink>) -> Session {
     let offset = i64::from(quill::local_time::utc_offset_at(now));
     let old_oct = 1_793_188_800 - offset; // 2026-10-28 12:00 UTC interpreted locally
     let old_sep = 1_790_683_200 - offset; // 2026-09-29 12:00
-    let folders: Vec<_> = [("Humanoid","Private"),("Bots","Bots"),("Work","Work"),
+    let folders: Vec<_> = [("Humanoid","Groups"),("Bots","Bots"),("Work","Work"),
         ("News","Channels"),("AI News","Study"),("Info","Custom")].iter().enumerate().map(|(i,(name,icon))| json!({
         "@type":"chatFolderInfo","id":i+1,"name":{"@type":"chatFolderName","text":{
         "@type":"formattedText","text":name,"entities":[]}},"icon":{"@type":"chatFolderIcon","name":icon},

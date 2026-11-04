@@ -525,13 +525,19 @@ impl QuillApp {
             session.connection,
             ConnectionState::Ready | ConnectionState::Updating
         );
+        let icon = if connected {
+            crate::ui::td::TdIcon::ProxyOn
+        } else {
+            crate::ui::td::TdIcon::ProxyOff
+        };
+        let color = crate::ui::td::td(if connected {
+            quill::app_theme::PaletteKey::WindowBgActive
+        } else {
+            quill::app_theme::PaletteKey::MenuIconFg
+        });
         Some(
             Button::new("proxy-shield")
-                .icon(if connected {
-                    gpui_kit::assets::IconName::ShieldCheck
-                } else {
-                    gpui_kit::assets::IconName::Shield
-                })
+                .child(crate::ui::td::td_icon(icon, color))
                 .ghost()
                 .tooltip(if connected {
                     tr(keys::Q_PREFS_PROXY_ENABLED)
