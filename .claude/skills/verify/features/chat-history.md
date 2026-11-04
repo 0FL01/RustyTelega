@@ -47,3 +47,8 @@ are drawn (not empty), the time footer sits inside the bubble.
   `QUILL_DEMO_UPDATE_STREAM=4 QUILL_DEMO_STREAM_OPEN=1` with a pause step
   (`QUILL_DEMO_CLICK=p:7000`); `QUILL_TRACE_TICKS=1` prints row builds,
   splices and patches per second. `ready-group-commands` shows sender runs.
+- Where a chat opens: `ready-unread-landing` opens demo chat A read up to the
+  middle of 160 messages, with the "Unread messages" bar at the top. Scroll
+  up, then click chat A in the list to go back to the bar (or to the latest
+  once the bar is in view). `QUILL_DEMO_SEND_PENDING=1` keeps a sent text
+  pending as TDLib does, so a send while scrolled up returns to the latest.

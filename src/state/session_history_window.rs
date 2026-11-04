@@ -84,16 +84,16 @@ impl Session {
             .is_some_and(|h| h.load_failed && h.messages.is_empty())
     }
 
-    /// The open history has nothing to show yet because its first page is
-    /// still on the way (no entry yet, or an empty window with a page in
-    /// flight) — the UI shows a skeleton rather than "No messages".
+    /// The open history waits for its first page (no entry yet, or a page
+    /// that starts the window in flight): the UI shows a skeleton rather
+    /// than "No messages". Live messages that arrived meanwhile don't show
+    /// on their own either: where the history opens is decided by the page
+    /// (tdesktop `HistoryWidget::_firstLoadRequest`).
     pub fn history_loading(&self, chat_id: ChatId) -> bool {
         match self.histories.get(&chat_id.0) {
             None => true,
             Some(history) => {
-                history.messages.is_empty()
-                    && !history.load_failed
-                    && self.history_page_in_flight(chat_id, WindowEdge::First)
+                !history.load_failed && self.history_page_in_flight(chat_id, WindowEdge::First)
             }
         }
     }
@@ -439,8 +439,9 @@ impl Session {
     /// message: an incoming message stays out of the window (it is not
     /// adjacent to it); an outgoing one means the user just sent from the
     /// middle of the history, so the window jumps to the latest run, which
-    /// starts with this message. Returns whether the message still needs
-    /// the normal upsert.
+    /// starts with this message. Either way an outgoing message ends the
+    /// unread bar. Returns whether the message still needs the normal
+    /// upsert.
     pub(crate) fn route_new_message_into_window(&mut self, message: &ParsedMessage) -> bool {
         let chat_id = message.chat_id;
         // A send while the window waits for a page around an older message
@@ -452,6 +453,13 @@ impl Session {
                 .into_iter()
                 .any(|id| !self.stale_history_requests.contains(&id.0));
         if !around_in_flight && !self.history_has_newer(chat_id) {
+            // tdesktop `History::newItemAdded`: an own message ends the
+            // unread bar.
+            if message.is_outgoing
+                && let Some(history) = self.histories.get_mut(&chat_id.0)
+            {
+                history.end_unread_open();
+            }
             return true;
         }
         // Incoming messages are always server messages; an outgoing one

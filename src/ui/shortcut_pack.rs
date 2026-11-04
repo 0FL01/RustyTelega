@@ -253,6 +253,7 @@ impl QuillApp {
         if self.shortcut_blocked(window, cx) || self.session().and_then(|s| s.open_chat).is_none() {
             return false;
         }
+        self.end_landing();
         // A screen reader on the focused history: the keys move its focus.
         let page = self
             .history

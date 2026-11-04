@@ -73,6 +73,27 @@ register_demos![
         "screenshot demo — in-chat search (injected searchChatMessages)"
     )
     .setup(QuillApp::demo_ready_search_in_chat),
+    // A long chat read up to the middle opens with the "Unread messages"
+    // bar at the top (docs/decisions/unread-open-landing.md).
+    DemoSpec::chats(
+        "ready-unread-landing",
+        "screenshot demo — a chat opens at its first unread message"
+    )
+    .setup(QuillApp::demo_ready_unread_landing),
+];
+
+/// Messages `UNREAD_FIRST..=UNREAD_LAST` follow demo chat A's own; the reader
+/// read up to `UNREAD_READ`.
+const UNREAD_FIRST: i64 = 1_001;
+const UNREAD_READ: i64 = 1_100;
+const UNREAD_LAST: i64 = 1_160;
+
+const UNREAD_LINES: [&str; 5] = [
+    "Are we still on for Thursday?",
+    "I moved the call to the afternoon so everyone can make it, and I put the notes from last week in the shared folder.",
+    "Sounds good.",
+    "Can you send me the latest version when you get a chance? I want to read it through once more before we send it out.",
+    "On it.",
 ];
 
 impl QuillApp {
@@ -223,6 +244,48 @@ impl QuillApp {
         if let Some(session) = self.demo_session.as_mut() {
             self.demo_ui.seq.store(session.last_seq, Ordering::SeqCst);
             apply_ready_search(session, &self.demo_ui.sink, &self.demo_ui.seq);
+        }
+    }
+
+    fn demo_ready_unread_landing(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
+        let outgoing = |id: i64| id % 4 == 0;
+        let message = |id: i64| {
+            let line = UNREAD_LINES
+                .get(usize::try_from(id).unwrap_or(0) % UNREAD_LINES.len())
+                .copied()
+                .unwrap_or_default();
+            format!(
+                r#"{{"id":{id},"chat_id":11,"is_outgoing":{},"date":{},"content":{{"@type":"messageText","text":{{"@type":"formattedText","text":"{} {line}","entities":[]}}}}}}"#,
+                outgoing(id),
+                1_790_640_000 + (id - UNREAD_FIRST) * 90,
+                id - UNREAD_FIRST + 1
+            )
+        };
+        let unread = (UNREAD_READ + 1..=UNREAD_LAST)
+            .filter(|id| !outgoing(*id))
+            .count();
+        let mut jsons: Vec<String> = (UNREAD_FIRST..=UNREAD_LAST)
+            .map(|id| {
+                format!(
+                    r#"{{"@type":"updateNewMessage","message":{}}}"#,
+                    message(id)
+                )
+            })
+            .collect();
+        jsons.push(format!(
+            r#"{{"@type":"updateChatLastMessage","chat_id":11,"last_message":{},"positions":[{{"@type":"chatPosition","list":{{"@type":"chatListMain"}},"order":"30","is_pinned":true}}]}}"#,
+            message(UNREAD_LAST)
+        ));
+        jsons.push(format!(
+            r#"{{"@type":"updateChatReadInbox","chat_id":11,"last_read_inbox_message_id":{UNREAD_READ},"unread_count":{unread}}}"#
+        ));
+        // Opened again once the reads are in, so it lands at the bar.
+        if let Some(session) = self.demo_session.as_mut() {
+            session.open_chat(ChatId(12));
+        }
+        self.demo_apply_jsons(jsons);
+        if let Some(session) = self.demo_session.as_mut() {
+            session.open_chat(ChatId(11));
         }
     }
 

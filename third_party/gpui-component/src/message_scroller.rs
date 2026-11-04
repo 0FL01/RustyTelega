@@ -205,6 +205,14 @@ impl MessageScrollerState {
         true
     }
 
+    /// QUILL: scroll the rows by `distance` pixels (positive: toward the
+    /// latest row) from where they are, measured over the rows laid out so
+    /// far.
+    pub fn scroll_by(&mut self, distance: Pixels, cx: &mut Context<Self>) {
+        self.list_state.scroll_by(distance);
+        cx.notify();
+    }
+
     /// Resume tail following and scroll to the latest row.
     pub fn scroll_to_end(&mut self, cx: &mut Context<Self>) {
         self.list_state.set_follow_mode(FollowMode::Tail);

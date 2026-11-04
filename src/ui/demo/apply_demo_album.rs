@@ -205,8 +205,9 @@ impl QuillApp {
                 )
             }
             None => format!(
-                r#"{{"@type":"updateNewMessage","message":{{"id":{id},"chat_id":{},"is_outgoing":true,"content":{{"@type":"messageText","text":{{"@type":"formattedText","text":{},"entities":[]}}}}{reply_json}}}}}"#,
+                r#"{{"@type":"updateNewMessage","message":{{"id":{id},"chat_id":{},"is_outgoing":true,{}"content":{{"@type":"messageText","text":{{"@type":"formattedText","text":{},"entities":[]}}}}{reply_json}}}}}"#,
                 chat_id.0,
+                demo_send_state(),
                 serde_json::to_string(text).unwrap_or_else(|_| "\"\"".into()),
             ),
         };
@@ -757,5 +758,15 @@ impl QuillApp {
                 session.apply(owned);
             }
         }
+    }
+}
+
+/// `QUILL_DEMO_SEND_PENDING=1`: a sent text stays pending, as TDLib reports
+/// a message until the server confirms it.
+fn demo_send_state() -> &'static str {
+    if std::env::var_os("QUILL_DEMO_SEND_PENDING").is_some_and(|value| value == "1") {
+        r#""sending_state":{"@type":"messageSendingStatePending","sending_id":0},"#
+    } else {
+        ""
     }
 }

@@ -151,7 +151,12 @@ impl Session {
     }
 }
 
+/// The history row of `message`. `pending`: it answers this app's own send
+/// request; TDLib also marks a message this app is still sending in
+/// `updateNewMessage` and history pages.
 pub(crate) fn history_message(message: ParsedMessage, pending: bool) -> HistoryMessage {
+    let pending =
+        pending || message.send_state == crate::telegram::envelope::MessageSendState::Pending;
     HistoryMessage {
         sender: message.sender,
         id: message.id,

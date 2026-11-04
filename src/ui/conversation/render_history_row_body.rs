@@ -373,6 +373,7 @@ impl QuillApp {
     /// message is replaced by the newest page (the scroller re-anchors at
     /// the bottom when it lands); otherwise just scroll down.
     pub(in crate::ui) fn jump_to_latest_messages(&mut self, cx: &mut Context<Self>) {
+        self.end_landing();
         self.forget_scroll_on_return_to_latest();
         let in_thread = self.thread_active();
         // Inside a thread the button addresses the thread's window: its
@@ -401,9 +402,9 @@ impl QuillApp {
         };
         if !replaced {
             if !in_thread
-                && let Some(live) = self.live.as_mut()
-                && let Some(chat) = live.driver.session.open_chat
-                && let Some(history) = live.driver.session.histories.get_mut(&chat.0)
+                && let Some(session) = self.session_mut()
+                && let Some(chat) = session.open_chat
+                && let Some(history) = session.histories.get_mut(&chat.0)
             {
                 history.end_unread_open();
             }
@@ -420,8 +421,7 @@ impl QuillApp {
     /// jumping to its latest replies.
     pub(in crate::ui) fn jump_down_messages(&mut self, cx: &mut Context<Self>) {
         let unread = !self.thread_active()
-            && self.live.as_ref().is_some_and(|live| {
-                let session = &live.driver.session;
+            && self.session().is_some_and(|session| {
                 session
                     .open_chat
                     .and_then(|chat| session.chats.get(&chat.0))
@@ -432,9 +432,15 @@ impl QuillApp {
             self.jump_to_latest_messages(cx);
             return;
         }
+        self.end_landing();
         self.forget_scroll_on_return_to_latest();
         if let Some(live) = self.live.as_mut() {
             let _ = live.driver.jump_down();
+        } else if let Some(session) = self.demo_session.as_mut()
+            && let Some(chat) = session.open_chat
+        {
+            // The demo history is all in memory: no page to load.
+            let _ = session.show_first_unread(chat);
         }
         cx.notify();
     }

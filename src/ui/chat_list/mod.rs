@@ -191,6 +191,14 @@ impl QuillApp {
             }
         }
         let open_at = self.chat_list.open_at.take();
+        // The open chat chosen again, with no reply thread or topic over
+        // its history to leave.
+        let reselect = !thread_switch
+            && open_at.is_none()
+            && !self.thread_active()
+            && self
+                .session()
+                .is_some_and(|s| s.open_chat == Some(chat_id) && s.open_topic.is_none());
         let open = self.chat_open_at(chat_id, open_at);
         if let Some(live) = self.live.as_mut() {
             let driver = &mut live.driver;
@@ -211,6 +219,9 @@ impl QuillApp {
             if let quill::state::HistoryOpen::Message(message_id) = open {
                 let _ = session.begin_chat_search_jump(message_id);
             }
+        }
+        if reselect {
+            self.reselect_open_chat(cx);
         }
         self.restore_open_draft(window, cx);
         if carried_reply.is_some() {
