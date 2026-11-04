@@ -49,6 +49,7 @@ macro_rules! td_icons {
 }
 
 td_icons! {
+    BubbleTail => "bubble_tail",
     TitleMinimize => "title_button_minimize",
     TitleMaximize => "title_button_maximize",
     TitleRestore => "title_button_restore",
@@ -124,7 +125,7 @@ fn mask_scale(window: &Window) -> u8 {
     }
 }
 
-type Key = (TdIcon, u32, u8);
+type Key = (TdIcon, u32, u8, bool);
 
 thread_local! {
     /// Tinted masks: a handful of icons in a handful of colours, kept for
@@ -151,11 +152,15 @@ fn pack(color: Rgba) -> u32 {
     (byte(color.r) << 24) | (byte(color.g) << 16) | (byte(color.b) << 8) | byte(color.a)
 }
 
-/// The mask for `scale` in `color`, as straight-alpha BGRA (GPUI sprites).
-fn tint(icon: TdIcon, color: u32, scale: u8) -> Option<Arc<RenderImage>> {
+/// The mask for `scale` in `color`, as straight-alpha BGRA (GPUI sprites),
+/// mirrored left to right when `mirror` (tdesktop's `-flip_horizontal`).
+fn tint(icon: TdIcon, color: u32, scale: u8, mirror: bool) -> Option<Arc<RenderImage>> {
     let mut image = image::load_from_memory(icon.bytes(scale))
         .ok()?
         .into_rgba8();
+    if mirror {
+        image::imageops::flip_horizontal_in_place(&mut image);
+    }
     let [r, g, b, a] = color.to_be_bytes();
     for pixel in image.pixels_mut() {
         // tdesktop masks are grey: the red channel is the coverage.
@@ -170,16 +175,21 @@ fn tint(icon: TdIcon, color: u32, scale: u8) -> Option<Arc<RenderImage>> {
 
 /// `icon` in `color`, sized as tdesktop sizes it.
 pub(crate) fn td_icon(icon: TdIcon, color: impl Into<Rgba>) -> Img {
+    td_icon_mirrored(icon, color, false)
+}
+
+/// [`td_icon`], mirrored left to right when `mirror`.
+pub(crate) fn td_icon_mirrored(icon: TdIcon, color: impl Into<Rgba>, mirror: bool) -> Img {
     let color = pack(color.into());
     let size = icon_size(icon);
     img(ImageSource::Custom(Arc::new(move |window, _cx| {
-        let key = (icon, color, mask_scale(window));
+        let key = (icon, color, mask_scale(window), mirror);
         TINTED.with(|cache| {
             let mut cache = cache.borrow_mut();
             if let Some(image) = cache.get(&key) {
                 return Some(Ok(image.clone()));
             }
-            let image = tint(icon, color, key.2)?;
+            let image = tint(icon, color, key.2, mirror)?;
             cache.insert(key, image.clone());
             Some(Ok(image))
         })

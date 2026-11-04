@@ -464,11 +464,18 @@ impl QuillApp {
                     weak.update(cx, |this, cx| this.render_history_row(ix, window, cx))
                         .unwrap_or_else(|_| div().into_any_element())
                 })
-                // The kit's default row wrapper pads every non-last row with
-                // pb_8 (32px); override to pb_1 to restore the old gap_1
-                // density. The kit also supplies row px and list py, so the
-                // outer div needs neither.
-                .with_row_style(StyleRefinement::default().pb_1())
+                // Rows carry tdesktop's message margins themselves: no gap
+                // between them. The list insets put the sender photo at
+                // `historyPhotoLeft` (the history starts under the 1px
+                // column divider, a pixel left of this view) and end the
+                // last message `historyPaddingBottom` above the composer.
+                .with_row_style(StyleRefinement::default().pb_0())
+                .with_list_style(
+                    StyleRefinement::default()
+                        .pl(px(crate::ui::td::st::chat::HISTORY_PHOTO_LEFT - 1.))
+                        .pr(px(crate::ui::td::st::chat::HISTORY_PHOTO_LEFT - 1.))
+                        .pb(px(crate::ui::td::st::chat::HISTORY_PADDING_BOTTOM)),
+                )
                 // Jump to latest: shows the unread count, and replaces a
                 // window that stops short of the latest message instead of
                 // only scrolling to its end.

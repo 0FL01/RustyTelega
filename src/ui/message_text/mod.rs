@@ -270,19 +270,36 @@ pub(super) fn message_footer(
             OutboxReceipt::None => "",
         }
     };
-    let outgoing = pending || receipt != OutboxReceipt::None;
     let accessible = format!("{time} {status}");
+    // tdesktop `BottomInfo::paint`: the time in `msgDateFont`, then the send
+    // state in a `historySendStateSpace` slot, its icon at
+    // `historySendStatePosition`.
+    use super::td::st::{chat::info, font};
     let footer = div()
         .id("message-time")
         .role(Role::Label)
         .aria_label(accessible)
         .flex()
-        .items_center()
-        .gap(px(3.))
-        .text_xs()
-        .opacity(footer_alpha(outgoing))
+        .items_start()
+        .text_size(px(info::FONT))
+        .line_height(px(font::HEIGHT))
         .child(time)
-        .when_some(mark, |this, icon| this.child(icon));
+        .when_some(mark, |this, icon| {
+            this.child(
+                div()
+                    .relative()
+                    .flex_none()
+                    .w(px(info::SEND_STATE_SPACE))
+                    .h(px(font::HEIGHT))
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(info::SEND_STATE_SPACE + info::SEND_STATE_LEFT))
+                            .top(px(info::SEND_STATE_TOP))
+                            .child(icon),
+                    ),
+            )
+        });
     // Pressing the time and moving picks the message up for a chat row.
     Some(crate::ui::forward_drag_source::draggable(footer, drag).into_any_element())
 }
@@ -501,6 +518,7 @@ pub(super) fn message_chrome(
         footer_overlay: false,
         footer_rebuild: None,
         media_led: false,
+        media_bleed: false,
         bubbleless: false,
         actions: None,
         actions_span: px(34.),

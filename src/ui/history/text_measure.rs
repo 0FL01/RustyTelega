@@ -295,5 +295,61 @@ pub(in crate::ui) fn longest_line_width(
     longest_with_extra(&lines, false, last_line_extra)
 }
 
+/// tdesktop's middle elision (`elisionMiddle` in `text_renderer.cpp`): the
+/// longest start and end of `text` that each fit half of `width` less the
+/// "..." between them. `None` when the whole text fits.
+pub(in crate::ui) fn middle_elision(
+    cx: &App,
+    text: &str,
+    font_size: Pixels,
+    weight: FontWeight,
+    width: f32,
+) -> Option<MiddleElided> {
+    let mut measurer = Measurer::new(cx, font_size);
+    let face = Face {
+        bold: weight >= FontWeight::SEMIBOLD,
+        ..Face::default()
+    };
+    let chars: Vec<char> = text.chars().collect();
+    let advances: Vec<f32> = chars.iter().map(|&c| measurer.advance(face, c)).collect();
+    if advances.iter().sum::<f32>() <= width {
+        return None;
+    }
+    let ellipsis: f32 = "...".chars().map(|c| measurer.advance(face, c)).sum();
+    let half = (width - ellipsis) / 2.;
+    let fit = |iter: &mut dyn Iterator<Item = &f32>| {
+        let (mut count, mut used) = (0, 0.);
+        for advance in iter {
+            if used + advance > half {
+                break;
+            }
+            used += advance;
+            count += 1;
+        }
+        (count, used)
+    };
+    let (left, left_width) = fit(&mut advances.iter());
+    let (right, right_width) = fit(&mut advances.iter().rev());
+    Some(MiddleElided {
+        start: chars.iter().take(left).collect(),
+        end: chars
+            .iter()
+            .skip(chars.len().saturating_sub(right))
+            .collect(),
+        start_width: left_width,
+        end_width: right_width,
+        ellipsis_width: ellipsis,
+    })
+}
+
+/// A text cut in the middle by [`middle_elision`].
+pub(in crate::ui) struct MiddleElided {
+    pub start: String,
+    pub end: String,
+    pub start_width: f32,
+    pub end_width: f32,
+    pub ellipsis_width: f32,
+}
+
 #[cfg(test)]
 mod tests;

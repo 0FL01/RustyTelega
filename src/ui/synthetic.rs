@@ -147,6 +147,9 @@ pub(crate) struct BubbleLook {
     /// (Telegram Desktop's grouping): its top corner on the avatar side is
     /// small.
     pub joined_above: bool,
+    /// The next bubble is the same sender's: the bottom corner on the
+    /// sender's side is small instead of carrying the tail.
+    pub joined_below: bool,
     /// The chat's emoji theme: fill of outgoing bubbles.
     pub out_fill: Option<super::bubble_theme::OutgoingFill>,
     /// "Adaptive layout for wide screens" is in effect (`chat_wide`):
@@ -167,8 +170,14 @@ impl BubbleLook {
     /// Text on an outgoing bubble: white, unless a light theme fill needs
     /// dark text.
     pub(crate) fn outgoing_text(&self) -> Hsla {
-        self.out_fill
-            .map_or_else(|| Hsla::from(text_on_fill()), |fill| fill.text())
+        self.out_fill.map_or_else(
+            || {
+                Hsla::from(super::td::td(
+                    quill::app_theme::PaletteKey::HistoryTextOutFg,
+                ))
+            },
+            |fill| fill.text(),
+        )
     }
 }
 
@@ -184,6 +193,7 @@ impl BubbleLook {
             plain: false,
             text: Hsla::from(rgb(0xffffff)),
             joined_above: false,
+            joined_below: false,
             out_fill: None,
             wide: false,
             history: quill::bubble_layout::HistoryWidth::WIDE,
@@ -191,27 +201,58 @@ impl BubbleLook {
     }
 }
 
-/// Grouped corners: on the side facing the sender's avatar the bottom
-/// corner is small (the tail of the last bubble, the join of the others)
-/// and so is the top corner when the bubble continues the one above.
+/// tdesktop `Message::countMessageRounding`: on the side facing the
+/// sender's photo the top corner is small when the bubble continues the one
+/// above, and the bottom corner is small when the next one continues it;
+/// the last bubble of a group carries the tail there instead (square
+/// corner, `bubble_tail` outside it), unless media ends the bubble.
 fn bubble_corners(
     content: component::bubble::BubbleContent,
     right: bool,
+    tail: bool,
     look: BubbleLook,
 ) -> component::bubble::BubbleContent {
     if look.plain {
         return content;
     }
     let small = px(JOINED_RADIUS);
+    let bottom = if look.joined_below {
+        small
+    } else if tail {
+        px(0.)
+    } else {
+        px(super::td::st::chat::BUBBLE_RADIUS_LARGE)
+    };
     if right {
         content
             .when(look.joined_above, |this| this.rounded_tr(small))
-            .rounded_br(small)
+            .rounded_br(bottom)
     } else {
         content
             .when(look.joined_above, |this| this.rounded_tl(small))
-            .rounded_bl(small)
+            .rounded_bl(bottom)
     }
+}
+
+/// The `bubble_tail` mask at the bubble's bottom corner, just outside it.
+fn bubble_tail(right: bool, fill: Rgba) -> AnyElement {
+    let tail = super::td::icon::icon_size(super::td::TdIcon::BubbleTail);
+    div()
+        .absolute()
+        .bottom_0()
+        .map(|this| {
+            if right {
+                this.right(-tail.width)
+            } else {
+                this.left(-tail.width)
+            }
+        })
+        .child(super::td::icon::td_icon_mirrored(
+            super::td::TdIcon::BubbleTail,
+            fill,
+            right,
+        ))
+        .into_any_element()
 }
 
 fn row(
@@ -291,6 +332,9 @@ pub(crate) struct MessageChrome {
     pub footer_rebuild: Option<std::rc::Rc<dyn Fn() -> Option<AnyElement>>>,
     /// Media-led bubble: thin inset instead of text padding.
     pub media_led: bool,
+    /// The media runs edge to edge under a header: the bubble is as wide
+    /// as the media, not the media plus the padding.
+    pub media_bleed: bool,
     /// The media stands on its own (`quill::media_bubble`): no fill,
     /// border or gradient, and the media carries its own time pill
     /// (`media_footer_pill`).
@@ -318,15 +362,25 @@ pub(crate) fn media_footer_pill(
     footer: AnyElement,
     rebuild: Option<std::rc::Rc<dyn Fn() -> Option<AnyElement>>>,
 ) -> AnyElement {
+    // tdesktop `Message::drawInfo` with `InfoDisplayType::Image`: a
+    // `msgDateImgBg` pill `msgDateImgDelta` in from the corner, padded by
+    // `msgDateImgPadding`, rounded by half its height.
+    use super::td::st::{chat::info, font};
     let pill = |footer: AnyElement| {
         div()
-            .px_1p5()
-            .rounded_full()
-            .bg(gpui_kit::black().opacity(0.45))
-            .text_color(gpui_kit::white())
+            .px(px(info::IMG_PADDING_X))
+            .py(px(info::IMG_PADDING_Y))
+            .rounded(px(font::HEIGHT / 2. + info::IMG_PADDING_Y))
+            .bg(super::td::td(quill::app_theme::PaletteKey::MsgDateImgBg))
+            .text_color(super::td::td(quill::app_theme::PaletteKey::MsgDateImgFg))
             .child(footer)
     };
-    let pill_at = |footer| pill(footer).absolute().right(px(10.)).bottom(px(10.));
+    let pill_at = |footer| {
+        pill(footer)
+            .absolute()
+            .right(px(info::IMG_DELTA))
+            .bottom(px(info::IMG_DELTA))
+    };
     match rebuild {
         // Over an inline video the history's animation layer draws: it
         // draws the pill again, above the video.
@@ -429,6 +483,7 @@ fn message_bubble_with_quote(
         footer_overlay,
         footer_rebuild,
         media_led,
+        media_bleed,
         bubbleless,
         actions,
         actions_span,
@@ -461,8 +516,23 @@ fn message_bubble_with_quote(
         .out_fill
         .filter(|_| row.outgoing && !look.plain && !bubbleless)
         .and_then(|fill| super::bubble_theme::gradient_layer(fill, look.joined_above));
+    // tdesktop `skipBubbleTail`: media at the bubble's bottom keeps a
+    // rounded corner.
+    let tail = !look.plain && !bubbleless && !look.joined_below && !footer_overlay;
+    let tail_fill = if row.outgoing {
+        look.outgoing_fill()
+    } else {
+        bg_bubble_incoming()
+    };
     let bubble_content = component::bubble::BubbleContent::new()
         .relative()
+        // The tail hangs outside the bubble: nothing in a bubble that has
+        // one needs clipping to its corners.
+        .when(tail, |mut this| {
+            this.style().overflow.x = Some(gpui_kit::Overflow::Visible);
+            this.style().overflow.y = Some(gpui_kit::Overflow::Visible);
+            this.child(bubble_tail(right, tail_fill))
+        })
         .when(!look.plain && !bubbleless, |this| {
             // `chat.style`: msgPadding and bubbleRadiusLarge. Override the
             // component defaults, including its extra one-pixel border.
@@ -486,10 +556,10 @@ fn message_bubble_with_quote(
         } else if row.outgoing {
             look.outgoing_text()
         } else {
-            Hsla::from(text_bright())
+            Hsla::from(super::td::td(quill::app_theme::PaletteKey::HistoryTextInFg))
         })
         .when(rtl, |this| this.text_right())
-        .map(|this| bubble_corners(this, right, look))
+        .map(|this| bubble_corners(this, right, tail, look))
         // Telegram Desktop names a group sender inside the bubble, on its
         // first line, in the sender's color. Bubble-less rows (stickers,
         // round videos, big emoji) keep the name above instead.
@@ -559,17 +629,39 @@ fn message_bubble_with_quote(
         .when_some(media_width, |this, width| {
             this.w(super::message_media::bubble_outer_width(
                 width,
-                media_led,
+                media_led || media_bleed,
                 look.plain || bubbleless,
             ))
         })
-        .map(|this| match footer {
-            Some(footer) if footer_overlay => this.child(media_footer_pill(footer, footer_rebuild)),
-            Some(footer) if footer_inline => {
-                this.child(div().absolute().right(px(12.)).bottom(px(7.)).child(footer))
+        .map(|this| {
+            // tdesktop `Message::drawInfo`: the info's bottom-right sits
+            // `msgPadding - msgDateDelta` in from the bubble's, over the last
+            // line when it fits there, else on a line the bubble grows by
+            // (`msgDateFont.height - msgDateDelta.y`).
+            use super::td::st::{chat::info, font};
+            let date_fg = super::td::td(if row.outgoing {
+                quill::app_theme::PaletteKey::MsgOutDateFg
+            } else {
+                quill::app_theme::PaletteKey::MsgInDateFg
+            });
+            let placed = |footer: AnyElement| {
+                div()
+                    .absolute()
+                    .right(px(info::RIGHT))
+                    .bottom(px(info::BOTTOM))
+                    .when(!look.plain, |this| this.text_color(date_fg))
+                    .child(footer)
+            };
+            match footer {
+                Some(footer) if footer_overlay => {
+                    this.child(media_footer_pill(footer, footer_rebuild))
+                }
+                Some(footer) if footer_inline => this.child(placed(footer)),
+                Some(footer) => this
+                    .child(div().h(px(font::HEIGHT - info::DATE_DELTA_Y)))
+                    .child(placed(footer)),
+                None => this,
             }
-            Some(footer) => this.child(div().flex().justify_end().mt_0p5().child(footer)),
-            None => this,
         })
         .when_some(bottom_bar, |this, bar| {
             this.child(div().when(media_led, |bar| bar.px_2()).child(bar))
@@ -625,6 +717,12 @@ fn message_bubble_with_quote(
         );
     }
     if let Some(avatar) = avatar {
+        // `historyPhotoLeft` and `msgMargin.left + msgPhotoSkip`: the bubble
+        // starts that far right of the photo's left.
+        use super::td::st::chat;
+        message = message.avatar_gap(px(chat::MSG_PHOTO_BUBBLE_LEFT
+            - chat::HISTORY_PHOTO_LEFT
+            - chat::MSG_PHOTO_SIZE));
         // Transparent slot: real avatars paint their own background, and
         // the in-run spacer must stay invisible.
         message = message.avatar_slot(
@@ -633,10 +731,12 @@ fn message_bubble_with_quote(
                 .child(avatar),
         );
     }
+    // `msgMargin.bottom`; the top margin comes with the start of a group
+    // (`render_history_row_body`).
     div()
         .id(("row", row.id))
         .w_full()
-        .py_0p5()
+        .pb(px(super::td::st::chat::MSG_MARGIN_BOTTOM))
         .child(message)
         .into_any_element()
 }

@@ -409,6 +409,23 @@ pub fn scrim() -> Rgba {
 /// or the server palette's colors for ids 7+ (`updateAccentColors`), else
 /// the id folded onto the built-ins.
 pub fn peer_name_color(accent_color_id: i32) -> gpui_kit::Hsla {
+    // The seven built-in colours are the theme's `historyPeerNNameFg`, in
+    // tdesktop's order (`ColorIndexToPaletteIndex`).
+    const PEER_KEYS: [K; 7] = [
+        K::HistoryPeer1NameFg,
+        K::HistoryPeer8NameFg,
+        K::HistoryPeer5NameFg,
+        K::HistoryPeer2NameFg,
+        K::HistoryPeer7NameFg,
+        K::HistoryPeer4NameFg,
+        K::HistoryPeer6NameFg,
+    ];
+    if let Some(&key) = usize::try_from(accent_color_id)
+        .ok()
+        .and_then(|index| PEER_KEYS.get(index))
+    {
+        return super::td::td(key).into();
+    }
     let dark = dark() || high_contrast();
     hex(quill::telegram::name_accent::name_color_rgb(
         accent_color_id,

@@ -25,3 +25,10 @@ pub(crate) mod compose;
 pub(crate) mod dialogs;
 pub(crate) mod top_bar;
 pub(crate) mod window;
+
+/// Text heights of `basic.style` fonts in Open Sans at 13px, as Qt rounds
+/// them (`style::font->height`).
+pub(crate) mod font {
+    /// `normalFont` and `semiboldFont` height: one text line.
+    pub(crate) const HEIGHT: f32 = 18.;
+}

@@ -149,7 +149,17 @@ pub(in crate::ui) fn session_history_row(
     // picture: inside the border when it leads the bubble, inside the
     // padding under a header.
     let room = bubble_width::BubbleRoom::new(look.history, sender_avatar.is_some(), look.plain);
-    let media_max = room.media(header.is_none());
+    // A picture, video or GIF under a reply or a forward runs edge to edge
+    // in the bubble, as in Telegram Desktop (`Message::draw`: the media
+    // takes the bubble's whole width and its bottom corners).
+    let media_bleed = header.is_some()
+        && !look.plain
+        && leads_with_media(effective_content(
+            &message.content,
+            message.ephemeral.as_ref(),
+        ))
+        && !caption_above_media(&message.content);
+    let media_max = room.media(header.is_none() || media_bleed);
     let chat_id = message.chat_id;
     let message_id = message.id;
     let mut actions_span = Pixels::default();
@@ -338,8 +348,8 @@ pub(in crate::ui) fn session_history_row(
             cx,
             message.is_outgoing,
             look.plain,
-            media_led,
-            sender.is_none() && !caption_above,
+            media_led || media_bleed,
+            sender.is_none() && !caption_above && !media_bleed,
             !caption_below && !badges && !has_chips,
         )
     };
@@ -422,7 +432,7 @@ pub(in crate::ui) fn session_history_row(
         )),
         // Voice and audio rows always get a seek view above.
         MessageContent::VoiceNote(note) => seek_bar.as_ref().map(|seek_bar| {
-            voice_note_row(
+            file_block(header.is_some(), voice_note_row(
                 message.chat_id,
                 message.id,
                 message.is_outgoing,
@@ -433,10 +443,10 @@ pub(in crate::ui) fn session_history_row(
                 room,
                 f32::from(info_width).ceil() as i32,
                 cx,
-            )
+            ))
         }),
         MessageContent::Audio(audio) => seek_bar.as_ref().map(|seek_bar| {
-            audio_row(
+            file_block(header.is_some(), audio_row(
                 message.id,
                 message.is_outgoing,
                 audio,
@@ -446,7 +456,7 @@ pub(in crate::ui) fn session_history_row(
                 seek_bar,
                 room,
                 cx,
-            )
+            ))
         }),
         MessageContent::Animation(animation) => Some(animation_attachment(
             message.id,
@@ -787,7 +797,7 @@ pub(in crate::ui) fn session_history_row(
         ));
     // Media with nothing under it shows its time on the picture.
     // Bubble-less media keeps it there even with reactions under it.
-    let footer_overlay = media_led
+    let footer_overlay = (media_led || media_bleed)
         && caption_below_el.is_none()
         && (reserve_footer || (bubbleless && message.date > 0));
     let caption_below_el = caption_below_el.map(|caption| {
@@ -797,8 +807,33 @@ pub(in crate::ui) fn session_history_row(
             caption
         }
     });
+    // Voice and music rows place themselves (`file_block`).
+    let file_row = matches!(
+        content,
+        MessageContent::VoiceNote(_) | MessageContent::Audio(_)
+    );
     let extra_media = extra_media.map(|media| {
-        crate::ui::forward_drag_source::media_block(session, message, media, media_led)
+        crate::ui::forward_drag_source::media_block(
+            session,
+            message,
+            media,
+            media_led || file_row || media_bleed,
+        )
+    });
+    // The bleeding picture: `mediaInBubbleSkip` under the header, over the
+    // bubble's padding at the sides and, when nothing follows, at the bottom.
+    let media_at_bottom = caption_below_el.is_none() && tail_empty && keyboard.is_none();
+    let extra_media = extra_media.map(|media| {
+        if !media_bleed {
+            return media;
+        }
+        use crate::ui::td::st::chat;
+        div()
+            .mx(px(-chat::MSG_PADDING_X))
+            .mt(px(chat::MEDIA_IN_BUBBLE_SKIP))
+            .when(media_at_bottom, |this| this.mb(px(-chat::MSG_PADDING_Y)))
+            .child(media)
+            .into_any_element()
     });
     // Bubble-less media carries its time itself, so reactions under it
     // don't push the pill off the picture.
@@ -900,6 +935,7 @@ pub(in crate::ui) fn session_history_row(
             chrome.footer_rebuild = Some(std::rc::Rc::new(move || message_footer_meta(&meta)));
         }
         chrome.media_led = media_led;
+        chrome.media_bleed = media_bleed;
         chrome.bubbleless = bubbleless;
         chrome.media_width = media_width;
         chrome.max_width = max_width;
@@ -983,4 +1019,23 @@ pub(in crate::ui) fn session_history_row(
         // Settings → Appearance: font size + bubble/plain style.
         look,
     )
+}
+
+/// A voice or music row where tdesktop puts a file in a bubble
+/// (`Message::countOptimalSize`): at the bubble's top with no padding above
+/// it, or `mediaInBubbleSkip` under a reply or a name, where the row also
+/// moves up by `msgFileTopMinus`; and at the bottom, where the time is drawn
+/// over it instead of under it.
+fn file_block(under_header: bool, row: AnyElement) -> AnyElement {
+    use crate::ui::td::st::chat;
+    let top = if under_header {
+        chat::MEDIA_IN_BUBBLE_SKIP - chat::file::TOP_MINUS
+    } else {
+        -chat::MSG_PADDING_Y
+    };
+    div()
+        .mt(px(top))
+        .mb(px(-chat::MSG_PADDING_Y))
+        .child(row)
+        .into_any_element()
 }

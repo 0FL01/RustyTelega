@@ -76,6 +76,7 @@ pub struct Message {
     header: Option<MessageHeader>,
     content: Option<MessageContent>,
     footer: Option<MessageFooter>,
+    avatar_gap: Option<gpui::Pixels>,
 }
 
 impl Message {
@@ -91,6 +92,7 @@ impl Message {
             header: None,
             content: None,
             footer: None,
+            avatar_gap: None,
         }
     }
 
@@ -153,6 +155,12 @@ impl Message {
         self.footer = Some(footer);
         self
     }
+
+    /// Space between the avatar and the content column (default `gap_2`).
+    pub fn avatar_gap(mut self, gap: impl Into<gpui::Pixels>) -> Self {
+        self.avatar_gap = Some(gap.into());
+        self
+    }
 }
 
 impl Default for Message {
@@ -199,6 +207,7 @@ impl RenderOnce for Message {
                     .min_w_0()
                     .items_end()
                     .gap_2()
+                    .when_some(self.avatar_gap, |this, gap| this.gap(gap))
                     .when(alignment == MessageAlignment::End, |this| {
                         this.flex_row_reverse()
                     })

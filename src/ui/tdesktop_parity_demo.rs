@@ -266,7 +266,7 @@ fn seed(sink: Arc<MemorySink>) -> Session {
         6 * STEP,
         ME,
         at(11, 12),
-        voice(6503, 78, 338739),
+        voice(6503, 78, 338750),
         Some(STEP),
     ));
     updates.push(message(
@@ -281,15 +281,15 @@ fn seed(sink: Arc<MemorySink>) -> Session {
         "mime_type":"audio/mpeg","album_cover_minithumbnail":null,"album_cover_thumbnail":null,"external_album_covers":[],
         "audio":file(6505,"demo-voice.ogg",24000)},"caption":{"@type":"formattedText","text":"","entities":[]}}), None));
     updates.push(message(9*STEP, CHAT, at(11,18), json!({"@type":"messageAnimation","animation":{"@type":"animation",
-        "duration":1,"width":240,"height":140,"file_name":"demo-gif.gif","mime_type":"image/gif","has_stickers":false,
+        "duration":1,"width":480,"height":270,"file_name":"demo-gif.gif","mime_type":"image/gif","has_stickers":false,
         "minithumbnail":null,"thumbnail":{"@type":"thumbnail","format":{"@type":"thumbnailFormatJpeg"},
-        "width":240,"height":140,"file":file(6506,"demo-gif-1.png",24)},"animation":file(6507,"demo-gif.gif",24)},
+        "width":480,"height":270,"file":file(6506,"demo-gif-1.png",24)},"animation":file(6507,"demo-gif.gif",24)},
         "caption":{"@type":"formattedText","text":"","entities":[]},"show_caption_above_media":false,
         "has_spoiler":false,"is_secret":false}), Some(7*STEP)));
     for (id, name, size) in [
         (6500, "showcase/p5.jpg", 24),
         (6502, "showcase/p6.jpg", 24),
-        (6503, "demo-voice.ogg", 338739),
+        (6503, "demo-voice.ogg", 338750),
         (6504, "demo-voice.ogg", 144282),
         (6505, "demo-voice.ogg", 24000),
         (6506, "demo-gif-1.png", 24),

@@ -43,6 +43,9 @@ pub struct ReplyHeader {
     /// Formatting of `text` when it is a quote.
     pub entities: Vec<crate::text::TextEntity>,
     pub is_quote: bool,
+    /// `text` names the replied media ("Voice message") rather than
+    /// quoting it (`MessageContent::preview_is_label`).
+    pub text_is_label: bool,
     /// Title of the other chat for replies from elsewhere ("Name › Chat").
     pub external_chat: Option<String>,
     /// Candidate files for the media thumbnail (best first).
@@ -308,6 +311,7 @@ impl Session {
             name,
             accent,
             text: "Story".to_string(),
+            text_is_label: true,
             entities: Vec::new(),
             is_quote: false,
             external_chat: None,
@@ -416,6 +420,11 @@ impl Session {
             accent,
             text,
             entities: quote_entities,
+            text_is_label: quote.is_none()
+                && state == ReplyState::Ready
+                && original.is_some_and(|found| {
+                    effective_content(&found.content, found.ephemeral.as_ref()).preview_is_label()
+                }),
             is_quote: quote.is_some(),
             external_chat,
             thumb,

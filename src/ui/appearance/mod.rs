@@ -309,6 +309,7 @@ impl QuillApp {
                 cx.theme().foreground
             },
             joined_above: false,
+            joined_below: false,
             out_fill: self
                 .chat_look(self.open_chat_id().map(|c| c.0), cx)
                 .outgoing,

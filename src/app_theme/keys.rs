@@ -170,6 +170,14 @@ palette_keys! {
     MsgDateImgFg = "msgDateImgFg", Messages, "Time over media text";
     HistoryLinkInFg = "historyLinkInFg", Messages, "Links, incoming";
     HistoryLinkOutFg = "historyLinkOutFg", Messages, "Links, outgoing";
+    HistoryPeer1NameFg = "historyPeer1NameFg", Messages, "Sender name colour 1";
+    HistoryPeer2NameFg = "historyPeer2NameFg", Messages, "Sender name colour 2";
+    HistoryPeer3NameFg = "historyPeer3NameFg", Messages, "Sender name colour 3";
+    HistoryPeer4NameFg = "historyPeer4NameFg", Messages, "Sender name colour 4";
+    HistoryPeer5NameFg = "historyPeer5NameFg", Messages, "Sender name colour 5";
+    HistoryPeer6NameFg = "historyPeer6NameFg", Messages, "Sender name colour 6";
+    HistoryPeer7NameFg = "historyPeer7NameFg", Messages, "Sender name colour 7";
+    HistoryPeer8NameFg = "historyPeer8NameFg", Messages, "Sender name colour 8";
 }
 
 impl PaletteKey {
@@ -228,6 +236,7 @@ impl PaletteKey {
             PaletteKey::MsgDateImgFg => Some(PaletteKey::MsgServiceFg),
             PaletteKey::HistoryLinkInFg => Some(PaletteKey::WindowActiveTextFg),
             PaletteKey::HistoryLinkOutFg => Some(PaletteKey::WindowActiveTextFg),
+            PaletteKey::HistoryPeer4NameFg => Some(PaletteKey::WindowActiveTextFg),
             _ => None,
         }
     }

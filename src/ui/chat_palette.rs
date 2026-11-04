@@ -158,6 +158,14 @@ impl super::app::QuillApp {
             .and_then(|chat| self.session()?.chat_theme_settings(chat.0, dark))
         {
             Some(theme) => (Some(theme), dark),
+            // A Telegram Desktop palette already names every colour inside
+            // outgoing bubbles (`msgFileOutBg`, `msgOutReplyBarColor`…);
+            // tdesktop recolours them only for a chat's own theme.
+            None if super::app_theme::installed(quill::app_theme::PaletteKey::MsgFileOutBg)
+                .is_some() =>
+            {
+                (None, dark)
+            }
             None => match self.default_chat_theme() {
                 Some((theme, fill_dark)) => (Some(theme), fill_dark),
                 None => (None, dark),

@@ -176,6 +176,7 @@ impl QuillApp {
                     // grouping from the neighbouring rows.
                     BubbleLook {
                         joined_above: inputs.joined_above,
+                        joined_below: inputs.spot.next_same_sender,
                         ..look
                     },
                     corner,
@@ -218,7 +219,9 @@ impl QuillApp {
                 let element = div()
                     .relative()
                     .child(super::vanish::row_tracker(row_msg.0))
-                    .when(run_start, |this| this.pt_2())
+                    .when(run_start, |this| {
+                        this.pt(px(crate::ui::td::st::chat::MSG_MARGIN_TOP))
+                    })
                     // Jump target, forward selection and failed sends tint
                     // the whole row instead of outlining it: no border or
                     // padding, so the row never shifts as the state flips.

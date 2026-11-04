@@ -281,6 +281,24 @@ impl From<String> for TextContent {
 }
 
 impl MessageContent {
+    /// Whether [`Self::preview`] names the kind of media ("Voice message",
+    /// "Photo") rather than quoting the sender's words. tdesktop draws such
+    /// a preview in the accent colour in a reply (`HistoryItem::toPreview`
+    /// marks it as a link).
+    pub fn preview_is_label(&self) -> bool {
+        match self {
+            MessageContent::Text(_) | MessageContent::RichMessage(_) => false,
+            MessageContent::Photo(photo) => photo.caption.is_empty(),
+            MessageContent::Document(doc) => doc.caption.is_empty(),
+            MessageContent::Animation(animation) => animation.caption.is_empty(),
+            MessageContent::Video(video) => video.caption.is_empty(),
+            MessageContent::VoiceNote(note) => note.caption.is_empty(),
+            MessageContent::Audio(audio) => audio.caption.is_empty(),
+            MessageContent::Sticker(_) | MessageContent::VideoNote(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn preview(&self) -> String {
         match self {
             MessageContent::Text(text) => text.text.chars().take(80).collect(),

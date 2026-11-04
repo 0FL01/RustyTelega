@@ -6,7 +6,7 @@ impl AvatarLink {
     pub(super) fn wrap(self, avatar: AnyElement) -> AnyElement {
         div()
             .id(("sender-avatar", self.id))
-            .size(px(32.))
+            .size(px(crate::ui::td::st::chat::MSG_PHOTO_SIZE))
             .flex_none()
             .cursor_pointer()
             .child(avatar)

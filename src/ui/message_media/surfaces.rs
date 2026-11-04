@@ -80,15 +80,24 @@ pub(super) fn live_tile(
 
 /// The "GIF" badge in a GIF tile's top-left corner.
 pub(super) fn gif_badge() -> Div {
+    // tdesktop `PaintVideoCornerStatus`: `msgDateImgDelta` from the corner,
+    // `msgDateImgPadding` around `normalFont`, rounded by half its height.
+    use crate::ui::td::st::{chat::info, font};
     div()
         .absolute()
-        .top_1()
-        .left_1()
-        .px_1p5()
-        .rounded_md()
-        .bg(gpui_kit::black().opacity(0.5))
-        .text_xs()
-        .text_color(gpui_kit::white())
+        .top(px(info::IMG_DELTA))
+        .left(px(info::IMG_DELTA))
+        .px(px(info::IMG_PADDING_X))
+        .py(px(info::IMG_PADDING_Y))
+        .rounded(px(font::HEIGHT / 2. + info::IMG_PADDING_Y))
+        .bg(crate::ui::td::td(
+            quill::app_theme::PaletteKey::MsgDateImgBg,
+        ))
+        .text_size(px(crate::ui::td::st::basic::FSIZE))
+        .line_height(px(font::HEIGHT))
+        .text_color(crate::ui::td::td(
+            quill::app_theme::PaletteKey::MsgDateImgFg,
+        ))
         .child("GIF")
 }
 

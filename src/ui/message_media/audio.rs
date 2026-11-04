@@ -244,85 +244,99 @@ pub(in crate::ui) fn voice_note_row(
     let status_width = crate::ui::history::bubble_width::longest_line_width(
         cx,
         &widest_status,
-        px(12.),
+        px(crate::ui::td::st::chat::info::FONT),
         FontWeight::NORMAL,
         0,
     );
     let width = crate::ui::history::bubble_width::voice_row_width(status_width, info_width, room);
-    div()
-        .id(("voice-note", row_key))
-        .mt_1()
-        .flex()
-        .flex_col()
-        .gap_1()
-        .w(width)
+    // tdesktop `Document::draw` for a voice note (`msgFileLayout`): the
+    // play button, the waveform with the transcribe button after it, and the
+    // status under the waveform, laid out over the bubble's whole width.
+    use crate::ui::td::st::{chat::file, font};
+    let full = width + px(2. * crate::ui::td::st::chat::MSG_PADDING_X);
+    let status_color = crate::ui::td::td(if outgoing {
+        quill::app_theme::PaletteKey::MsgOutDateFg
+    } else {
+        quill::app_theme::PaletteKey::MsgInDateFg
+    });
+    let wave_width = full
+        - px(file::NAME_LEFT + file::PADDING_RIGHT)
+        - px(crate::ui::td::st::chat::HISTORY_TRANSCRIBE_WIDTH
+            + crate::ui::td::st::chat::HISTORY_TRANSCRIBE_SKIP);
+    let block = div()
+        .relative()
+        .w(full)
+        .h(px(file::HEIGHT))
+        .child(
+            action_disc(("voice-play", row_key), outgoing, icon, ring, label, cx)
+                .absolute()
+                .left(px(file::PADDING_LEFT))
+                .top(px(file::PADDING_TOP))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.press_media(file_id, cx, |this, cx| {
+                        this.toggle_voice_playback(
+                            chat_id,
+                            message_id,
+                            file_id,
+                            listened,
+                            note_duration,
+                            cx,
+                        );
+                    });
+                })),
+        )
         .child(
             div()
+                .absolute()
+                .left(px(file::NAME_LEFT))
+                .top(px(file::PADDING_TOP))
+                .w(wave_width)
+                .child(match &seek.slider {
+                    Some(slider) => AudioScrubber::new(
+                        ("voice-scrubber", row_key),
+                        slider,
+                        ScrubberFace::Waveform(bars),
+                        accent,
+                        QuillApp::seek_hover_handler(SeekSite::Row, cx),
+                    )
+                    .progress(progress)
+                    .hover(seek.hover)
+                    .dragging(seek.dragging)
+                    .into_any_element(),
+                    None => waveform_canvas(bars, wave_color, 1.).into_any_element(),
+                }),
+        )
+        .child(
+            div()
+                .absolute()
+                .right(px(file::PADDING_RIGHT))
+                .top(px(file::PADDING_TOP))
+                .child(transcribe_button(chat_id, message_id, outgoing, cx)),
+        )
+        .child(
+            div()
+                .absolute()
+                .left(px(file::NAME_LEFT))
+                .top(px(file::STATUS_TOP))
                 .flex()
                 .items_center()
-                .gap_3()
-                .child(
-                    action_disc(("voice-play", row_key), outgoing, icon, ring, label, cx).on_click(
-                        cx.listener(move |this, _, _, cx| {
-                            this.press_media(file_id, cx, |this, cx| {
-                                this.toggle_voice_playback(
-                                    chat_id,
-                                    message_id,
-                                    file_id,
-                                    listened,
-                                    note_duration,
-                                    cx,
-                                );
-                            });
-                        }),
-                    ),
-                )
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .gap_0p5()
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(10.))
-                                .child(
-                                    div().flex_1().min_w_0().child(match &seek.slider {
-                                        Some(slider) => AudioScrubber::new(
-                                            ("voice-scrubber", row_key),
-                                            slider,
-                                            ScrubberFace::Waveform(bars),
-                                            accent,
-                                            QuillApp::seek_hover_handler(SeekSite::Row, cx),
-                                        )
-                                        .progress(progress)
-                                        .hover(seek.hover)
-                                        .dragging(seek.dragging)
-                                        .into_any_element(),
-                                        None => {
-                                            waveform_canvas(bars, wave_color, 1.).into_any_element()
-                                        }
-                                    }),
-                                )
-                                .child(transcribe_button(chat_id, message_id, outgoing, cx)),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .text_xs()
-                                .child(div().opacity(0.7).child(meta))
-                                // Unheard incoming note: a small accent dot.
-                                .when(unheard, |this| {
-                                    this.child(div().size(px(6.)).rounded_full().bg(accent))
-                                }),
-                        ),
-                ),
-        )
+                .gap_1()
+                .text_size(px(crate::ui::td::st::chat::info::FONT))
+                .line_height(px(font::HEIGHT))
+                .text_color(status_color)
+                .child(meta)
+                // Unheard incoming note: a small accent dot.
+                .when(unheard, |this| {
+                    this.child(div().size(px(6.)).rounded_full().bg(accent))
+                }),
+        );
+    div()
+        .id(("voice-note", row_key))
+        .flex()
+        .flex_col()
+        .w(full)
+        .mx(px(-crate::ui::td::st::chat::MSG_PADDING_X))
+        .child(block)
         // MED1: speed + mute on the active row.
         .when(active, |this| {
             this.child(row_playback_controls(row_key, "voice", seek, accent, cx))
@@ -450,28 +464,96 @@ pub(in crate::ui) fn audio_row(
             action_disc(("audio-play", row_key), outgoing, icon, ring, label, cx).on_click(play)
         }
     };
-    // `msgFileMinWidth` to `msgMaxWidth`; the title widens the row between.
+    // tdesktop `Document::draw` for a named file (`msgFileLayout`): the
+    // button, the name in semibold cut in the middle, the status under it,
+    // over the bubble's whole width (`msgFileMinWidth` to `msgMaxWidth`).
+    use crate::ui::td::st::{chat::file, font};
     let (min_width, max_width) = crate::ui::history::bubble_width::file_row_bounds(room);
+    let chrome = px(2. * crate::ui::td::st::chat::MSG_PADDING_X);
+    let name_size = px(crate::ui::td::st::basic::FSIZE);
+    let name_width = crate::ui::history::bubble_width::longest_line_width(
+        cx,
+        &title,
+        name_size,
+        FontWeight::SEMIBOLD,
+        0,
+    ) as f32;
+    let full = px(file::NAME_LEFT + name_width + file::PADDING_RIGHT)
+        .clamp(min_width + chrome, max_width + chrome);
+    let name_room = f32::from(full) - file::NAME_LEFT - file::PADDING_RIGHT;
+    let name_color = crate::ui::td::td(if outgoing {
+        quill::app_theme::PaletteKey::HistoryTextOutFg
+    } else {
+        quill::app_theme::PaletteKey::HistoryTextInFg
+    });
+    let status_color = crate::ui::td::td(if outgoing {
+        quill::app_theme::PaletteKey::MsgOutDateFg
+    } else {
+        quill::app_theme::PaletteKey::MsgInDateFg
+    });
+    let name = match crate::ui::history::text_measure::middle_elision(
+        cx,
+        &title,
+        name_size,
+        FontWeight::SEMIBOLD,
+        name_room,
+    ) {
+        None => div().child(title).into_any_element(),
+        Some(cut) => {
+            let gap = name_room - cut.start_width - cut.end_width;
+            div()
+                .relative()
+                .w(px(name_room))
+                .h(px(font::HEIGHT))
+                .child(div().absolute().left_0().child(cut.start))
+                .child(
+                    div()
+                        .absolute()
+                        .left(px(cut.start_width + (gap - cut.ellipsis_width) / 2.))
+                        .child("..."),
+                )
+                .child(div().absolute().right_0().child(cut.end))
+                .into_any_element()
+        }
+    };
+    let block = div()
+        .relative()
+        .w(full)
+        .h(px(file::HEIGHT))
+        .text_size(name_size)
+        .line_height(px(font::HEIGHT))
+        .child(
+            disc.absolute()
+                .left(px(file::PADDING_LEFT))
+                .top(px(file::PADDING_TOP)),
+        )
+        .child(
+            div()
+                .absolute()
+                .left(px(file::NAME_LEFT))
+                .top(px(file::NAME_TOP))
+                .w(px(name_room))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(name_color)
+                .child(name),
+        )
+        .child(
+            div()
+                .absolute()
+                .left(px(file::NAME_LEFT))
+                .top(px(file::STATUS_TOP))
+                .w(px(name_room))
+                .truncate()
+                .text_color(status_color)
+                .child(meta),
+        );
     div()
         .id(("audio", row_key))
-        .mt_1()
         .flex()
         .flex_col()
-        .gap_1()
-        .min_w(min_width)
-        .max_w(max_width)
-        .child(
-            div().flex().items_center().gap_3().child(disc).child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .gap_0p5()
-                    .child(div().text_sm().font_medium().truncate().child(title))
-                    .child(div().text_xs().opacity(0.7).truncate().child(meta)),
-            ),
-        )
+        .w(full)
+        .mx(px(-crate::ui::td::st::chat::MSG_PADDING_X))
+        .child(block)
         .when_some(seek.slider.as_ref(), |this, slider| {
             this.child(
                 AudioScrubber::new(

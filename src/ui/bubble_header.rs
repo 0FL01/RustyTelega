@@ -35,21 +35,40 @@ pub(super) fn reply_header_strip(
     on_fill: bool,
     cx: &mut Context<QuillApp>,
 ) -> AnyElement {
-    let color = if on_fill {
-        super::td::td(quill::app_theme::PaletteKey::MsgOutReplyBarColor).into()
+    use quill::app_theme::PaletteKey as K;
+    // `Reply::paint`: the bar and the fill take the replied sender's colour
+    // in incoming bubbles and the outgoing reply colour in outgoing ones;
+    // the name takes the sender's colour or the bubble's service colour.
+    let peer = header
+        .accent
+        .filter(|_| !on_fill)
+        .map(super::chat_theme::peer_name_color);
+    let color: Hsla = peer.unwrap_or_else(|| {
+        super::td::td(if on_fill {
+            K::MsgOutReplyBarColor
+        } else {
+            K::MsgInReplyBarColor
+        })
+        .into()
+    });
+    let name_color: Hsla = peer.unwrap_or_else(|| {
+        super::td::td(if on_fill {
+            K::MsgOutServiceFg
+        } else {
+            K::MsgInServiceFg
+        })
+        .into()
+    });
+    let text_color: Hsla = super::td::td(if on_fill {
+        K::HistoryTextOutFg
     } else {
-        header
-            .accent
-            .map(super::chat_theme::peer_name_color)
-            .unwrap_or_else(|| accent().into())
-    };
-    let (body, muted): (Hsla, Hsla) = if on_fill {
-        (
-            text_on_fill().into(),
-            Hsla::from(text_on_fill()).opacity(0.75),
-        )
+        K::HistoryTextInFg
+    })
+    .into();
+    let (body, muted): (Hsla, Hsla) = if header.text_is_label {
+        (color, color)
     } else {
-        (text_primary().into(), text_muted().into())
+        (text_color, text_color.opacity(0.75))
     };
     let name = header.name_line();
     let story = header.story;
@@ -82,23 +101,40 @@ pub(super) fn reply_header_strip(
         ),
         None => tr_with(keys::Q_MISC_REPLY_2, &[("text", &text.to_string())]),
     };
+    use super::td::st::{chat::reply as st, font};
+    let text_left = st::PADDING_LEFT
+        + if thumb.is_some() {
+            st::PREVIEW_SKIP
+        } else {
+            0.
+        };
     div()
         .id(("reply-quote", row_id.0 as u64))
         .role(if clickable { Role::Button } else { Role::Group })
         .aria_label(aria)
-        .mt_1()
-        .mb_1()
-        .px_2()
-        .py_1()
-        .gap_2()
+        .mt(px(st::TOP))
+        .mb(px(st::BOTTOM))
+        .pl(px(text_left))
+        .pr(px(st::PADDING_RIGHT))
+        .pt(px(st::PADDING_TOP))
+        .pb(px(st::PADDING_BOTTOM))
         .flex()
-        .items_center()
+        .flex_col()
         .relative()
         .overflow_hidden()
-        .rounded_md()
-        .border_l_2()
-        .border_color(color)
-        .bg(color.opacity(0.1))
+        .rounded(px(st::RADIUS))
+        .bg(color.opacity(st::BG_OPACITY))
+        .text_size(px(super::td::st::basic::FSIZE))
+        .line_height(px(font::HEIGHT))
+        .child(
+            div()
+                .absolute()
+                .left_0()
+                .top_0()
+                .bottom_0()
+                .w(px(st::OUTLINE))
+                .bg(color.opacity(st::OUTLINE_OPACITY)),
+        )
         .when_some(pattern, |this, (path, rgb)| {
             this.child(super::reply_pattern::layer(path, rgb, header.is_quote))
         })
@@ -129,61 +165,57 @@ pub(super) fn reply_header_strip(
                     None,
                     super::image_budget::Fit::Cover,
                 ))
+                .absolute()
+                .left(px(st::PREVIEW_LEFT))
+                .top(px(st::PREVIEW_TOP))
                 .w(px(REPLY_THUMB))
                 .h(px(REPLY_THUMB))
-                .rounded_sm()
-                .object_fit(ObjectFit::Cover)
-                .flex_shrink_0(),
+                .rounded(px(super::td::st::basic::ROUND_RADIUS_SMALL))
+                .object_fit(ObjectFit::Cover),
+            )
+        })
+        .when_some(name, |this, name| {
+            this.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .h(px(font::HEIGHT))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(name_color)
+                            .child(name),
+                    )
+                    .when(header.is_quote, |this| {
+                        this.child(
+                            Icon::new(gpui_kit::assets::IconName::Quote)
+                                .size(px(10.))
+                                .text_color(color)
+                                .flex_none(),
+                        )
+                    }),
             )
         })
         .child(
             div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .when_some(name, |this, name| {
-                    this.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_xs()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(color)
-                                    .child(name),
-                            )
-                            .when(header.is_quote, |this| {
-                                this.child(
-                                    Icon::new(gpui_kit::assets::IconName::Quote)
-                                        .size(px(10.))
-                                        .text_color(color)
-                                        .flex_none(),
-                                )
-                            }),
-                    )
+                .h(px(font::HEIGHT))
+                .truncate()
+                .text_color(if state == ReplyState::Ready {
+                    body
+                } else {
+                    muted
                 })
-                .child(
-                    div()
-                        .text_xs()
-                        .truncate()
-                        .text_color(if state == ReplyState::Ready {
-                            body
-                        } else {
-                            muted
+                .when(state != ReplyState::Ready, |this| this.italic())
+                .child(quote_line.unwrap_or_else(|| {
+                    super::emoji_sprites::one_line(&text, px(super::td::st::basic::FSIZE))
+                        .unwrap_or_else(|| {
+                            super::bidi_line::one_line_plain(text).into_any_element()
                         })
-                        .when(state != ReplyState::Ready, |this| this.italic())
-                        .child(quote_line.unwrap_or_else(|| {
-                            super::emoji_sprites::one_line(&text, px(12.)).unwrap_or_else(|| {
-                                super::bidi_line::one_line_plain(text).into_any_element()
-                            })
-                        })),
-                ),
+                })),
         )
         .into_any_element()
 }
