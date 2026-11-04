@@ -10,9 +10,11 @@ pub(crate) const FAMILY: &str = "Open Sans";
 /// tdesktop `fsize`: the interface text size, in px (`basic.style`).
 pub(crate) const FSIZE: f32 = 13.;
 
-/// Register the embedded faces with the text system. Call once at startup,
-/// before the first window.
-pub(crate) fn register(cx: &App) {
+/// Register the embedded faces with the text system and draw text with
+/// greyscale antialiasing, as tdesktop does. Call once at startup, before
+/// the first window.
+pub(crate) fn register(cx: &mut App) {
+    cx.set_text_rendering_mode(gpui_kit::TextRenderingMode::Grayscale);
     let faces: Vec<Cow<'static, [u8]>> = vec![
         Cow::Borrowed(include_bytes!("../../../assets/fonts/OpenSans-Regular.ttf")),
         Cow::Borrowed(include_bytes!(

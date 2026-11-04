@@ -637,16 +637,21 @@ pub(super) fn session_chat_row(
                     cx,
                 ))
                 .child(
+                    // `defaultDialogRow`: the name line at `nameTop`, the
+                    // preview at `textTop`, each one text line high.
                     div()
                         .flex()
                         .flex_col()
-                        .gap_0p5()
+                        .gap(px(crate::ui::td::st::dialogs::TEXT_TOP
+                            - crate::ui::td::st::dialogs::NAME_TOP
+                            - crate::ui::td::st::font::HEIGHT))
                         .min_w_0()
                         .flex_1()
                         .child(
                             div()
                                 .flex()
                                 .items_center()
+                                .h(px(crate::ui::td::st::font::HEIGHT))
                                 .gap_2()
                                 .child(
                                     div()
@@ -755,7 +760,7 @@ pub(super) fn session_chat_row(
                             div()
                                 .flex()
                                 .items_center()
-                                .gap_2()
+                                .h(px(crate::ui::td::st::font::HEIGHT))
                                 .child({
                                     let message = div()
                                         .when(jump.is_none(), |this| this.flex_1())
@@ -778,7 +783,7 @@ pub(super) fn session_chat_row(
                                                 this.child(
                                                     div()
                                                         .flex_none()
-                                                        .text_xs()
+                                                        .text_size(px(crate::ui::td::st::basic::FSIZE))
                                                         .text_color(if selected {
                                                             muted_fg
                                                         } else {

@@ -479,6 +479,18 @@ impl QuillApp {
                             ))
                             .rounded(px(crate::ui::td::st::dialogs::DIALOGS_FILTER_RADIUS))
                             .px(px(crate::ui::td::st::dialogs::DIALOGS_FILTER_TEXT_LEFT))
+                            // `dialogsFilter.textMargins`: the text's top;
+                            // the field's own sides are the padding above.
+                            .editor_padding(gpui_kit::Edges {
+                                top: px(crate::ui::td::st::dialogs::DIALOGS_FILTER_TEXT_TOP),
+                                right: px(0.),
+                                bottom: px(0.),
+                                left: px(0.),
+                            })
+                            .text_size(px(crate::ui::td::st::basic::FSIZE))
+                            .placeholder_color(crate::ui::td::td(
+                                quill::app_theme::PaletteKey::PlaceholderFg,
+                            ))
                             .h(px(crate::ui::td::st::dialogs::DIALOGS_FILTER_HEIGHT)),
                     ),
             )

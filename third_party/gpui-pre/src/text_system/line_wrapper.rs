@@ -385,11 +385,11 @@ impl LineWrapper {
                     "{truncation_affix}{}",
                     &line[line.ceil_char_boundary(truncate_ix + 1)..]
                 )),
-                TruncateFrom::End => SharedString::from(format!(
-                    "{}{truncation_affix}",
-                    line[..truncate_ix]
-                        .trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation())
-                )),
+                // Quill: keep what fits as it is, spaces and stops included,
+                // as Telegram Desktop elides ("Astra 6.2 ...").
+                TruncateFrom::End => {
+                    SharedString::from(format!("{}{truncation_affix}", &line[..truncate_ix]))
+                }
                 TruncateFrom::Middle => unreachable!("Middle truncation is handled above"),
             };
             let mut runs = runs.to_vec();

@@ -105,9 +105,10 @@ impl QuillApp {
                 .h(px(super::td::st::compose::HISTORY_REPLY_HEIGHT))
                 .flex_none()
                 .pl(px(11.))
-                .border_b_1()
-                .border_color(super::td::td(quill::app_theme::PaletteKey::ShadowFg))
+                .relative()
                 .bg(super::td::td(quill::app_theme::PaletteKey::HistoryPinnedBg))
+                // The top bar's shadow falls on the bar's first row.
+                .child(super::td::shadow_line())
                 .child(
                     div()
                         .id("pinned-message-jump")

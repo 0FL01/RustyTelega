@@ -428,6 +428,8 @@ impl QuillApp {
             )
             .children(self.wallpaper_fade(&look, cx))
             .child(self.landing_scroll_watch(cx))
+            // The shadow of the bar above falls on the history's first row.
+            .child(super::td::shadow_line())
             .child(super::history_fx::reveal_viewport(
                 reveal,
                 MessageScroller::new(id, self.history.scroller.clone(), move |ix, window, cx| {

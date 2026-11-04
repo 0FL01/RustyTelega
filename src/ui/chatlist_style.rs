@@ -79,7 +79,8 @@ pub(crate) fn chat_list_preview_line_layered(
             None => text,
         };
         return div()
-            .text_xs()
+            .text_size(px(crate::ui::td::st::basic::FSIZE))
+            .line_height(px(crate::ui::td::st::font::HEIGHT))
             .truncate()
             .text_color(muted)
             .child(super::bidi_line::one_line(text, highlights, Vec::new()))
@@ -147,7 +148,8 @@ pub(crate) fn chat_list_preview_line_layered(
                 }
             }
             return div()
-                .text_xs()
+                .text_size(px(crate::ui::td::st::basic::FSIZE))
+                .line_height(px(crate::ui::td::st::font::HEIGHT))
                 .truncate()
                 .text_color(muted)
                 .child(super::bidi_line::one_line(text, highlights, mono))
@@ -239,7 +241,8 @@ pub(crate) fn chat_list_preview_line_layered(
     // before it keeps its width.
     let last_text = parts.iter().rposition(|(is_text, _)| *is_text);
     let mut line = div()
-        .text_xs()
+        .text_size(px(crate::ui::td::st::basic::FSIZE))
+        .line_height(px(crate::ui::td::st::font::HEIGHT))
         .overflow_hidden()
         .whitespace_nowrap()
         .text_color(muted)

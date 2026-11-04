@@ -293,8 +293,6 @@ impl QuillApp {
             .h(px(super::td::st::top_bar::HEIGHT))
             .flex_none()
             .pl(px(17.))
-            .border_b_1()
-            .border_color(super::td::td(quill::app_theme::PaletteKey::ShadowFg))
             .bg(super::td::td(quill::app_theme::PaletteKey::TopBarBg))
             .flex()
             .items_center()

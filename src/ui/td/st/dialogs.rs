@@ -15,7 +15,12 @@ pub(crate) const DIALOGS_MINI_PREVIEW_SIZE: f32 = 16.;
 pub(crate) const DIALOGS_FILTER_RADIUS: f32 = 18.;
 /// `dialogsFilter.textMargins.left` plus placeholder left margin.
 pub(crate) const DIALOGS_FILTER_TEXT_LEFT: f32 = 17.;
+/// `dialogsFilter.textMargins.top`.
+pub(crate) const DIALOGS_FILTER_TEXT_TOP: f32 = 8.;
 /// `dialogsMiniPreviewRadius`.
 pub(crate) const DIALOGS_MINI_PREVIEW_RADIUS: f32 = 2.;
 /// `dialogsMiniPreviewRight`.
 pub(crate) const DIALOGS_MINI_PREVIEW_RIGHT: f32 = 3.;
+/// `defaultDialogRow.nameTop` and `textTop`.
+pub(crate) const NAME_TOP: f32 = 10.;
+pub(crate) const TEXT_TOP: f32 = 34.;
