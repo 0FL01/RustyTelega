@@ -197,6 +197,10 @@ pub struct AppearancePrefs {
     /// Windows): the operating system draws the title bar. Off by default.
     #[serde(default)]
     pub native_window_frame: bool,
+    /// Quill's in-window menu bar (Linux/Windows): off by default, as
+    /// Telegram Desktop shows no menu bar there. macOS uses the native one.
+    #[serde(default)]
+    pub show_menu_bar: bool,
 }
 
 fn default_night_start() -> u16 {
@@ -257,6 +261,7 @@ impl Default for AppearancePrefs {
             show_taskbar_icon: true,
             tray_icon_monochrome: true,
             native_window_frame: false,
+            show_menu_bar: false,
         }
     }
 }
@@ -376,6 +381,7 @@ mod tests {
         assert_eq!(defaults.auto_night, AutoNight::Off);
         assert_eq!(defaults.font_size_px, FONT_SIZE_DEFAULT);
         assert!(defaults.bubbles);
+        assert!(!defaults.show_menu_bar);
 
         let prefs = AppearancePrefs {
             theme: ThemeChoice::Dark,
@@ -413,6 +419,7 @@ mod tests {
             show_taskbar_icon: false,
             tray_icon_monochrome: false,
             native_window_frame: true,
+            show_menu_bar: true,
         };
         save_appearance_prefs(&paths, &prefs);
         assert_eq!(load_appearance_prefs(&paths), prefs);
@@ -428,6 +435,14 @@ mod tests {
         let off: AppearancePrefs =
             serde_json::from_str(r#"{"tray_icon_monochrome":false}"#).unwrap();
         assert!(!off.tray_icon_monochrome);
+    }
+
+    #[test]
+    fn menu_bar_hidden_by_default_in_old_prefs() {
+        let old: AppearancePrefs = serde_json::from_str("{}").unwrap();
+        assert!(!old.show_menu_bar);
+        let on: AppearancePrefs = serde_json::from_str(r#"{"show_menu_bar":true}"#).unwrap();
+        assert!(on.show_menu_bar);
     }
 
     /// Settings → Appearance: a corrupt prefs file falls back to

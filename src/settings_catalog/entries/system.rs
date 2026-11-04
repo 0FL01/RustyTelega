@@ -34,6 +34,9 @@ pub(super) const ENTRIES: &[Entry] = &[
         keys::Q_PREFS_WHEN_THE_WINDOW_IS_CLOSED,
     )
     .keywords(&["close button", "quit", "background"]),
+    Entry::new("system.menu_bar", P, keys::Q_PREFS_SHOW_MENU_BAR)
+        .keywords(&["menubar", "file", "title bar"])
+        .only(Platforms::LINUX.or(Platforms::WINDOWS)),
     Entry::new("system.window_frame", P, keys::SETTINGS_NATIVE_FRAME)
         .keywords(&["title bar", "native window"])
         .only(Platforms::LINUX.or(Platforms::WINDOWS)),

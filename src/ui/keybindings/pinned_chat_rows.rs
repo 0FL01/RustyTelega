@@ -182,7 +182,7 @@ pub(super) fn composer_extra_rows() -> Vec<ShortcutRow> {
 /// every item wired to a working action. `setup_app_menus` installs them
 /// twice from this one definition: `cx.set_menus` drives the native menu bar
 /// on macOS, and `GlobalState::set_app_menus` feeds kit's `AppMenuBar`,
-/// rendered in-window on Linux/Windows.
+/// rendered in-window on Linux/Windows only when the user enables it.
 pub(super) fn app_menus() -> Vec<Menu> {
     app_menus_with(crate::ui::os_menus::WindowMenuState::default())
 }

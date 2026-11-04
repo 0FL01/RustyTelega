@@ -18,9 +18,9 @@ pub struct QuillApp {
     pub(super) settings: super::settings_state::SettingsUi,
     pub(super) chat: Entity<SyntheticChat>,
     pub(super) composer: Entity<TextareaState>,
-    /// kit Phase 7: the in-window menu bar (Linux/Windows; macOS uses the
-    /// native menu bar via `cx.set_menus`). Entity-owned so it survives
-    /// re-renders.
+    /// kit Phase 7: the in-window menu bar, shown only when Settings → System →
+    /// Show menu bar is on (Linux/Windows). macOS uses the native menu bar via
+    /// `cx.set_menus`. Entity-owned so it survives re-renders.
     pub(super) menu_bar: Entity<AppMenuBar>,
     /// Chat list: rows, filter, menus, pinning, preview and side tabs (`ui/chat_list_state.rs`).
     pub(super) chat_list: super::chat_list_state::ChatListUi,
@@ -212,6 +212,11 @@ impl Focusable for QuillApp {
 }
 
 impl QuillApp {
+    pub(super) fn title_menu_bar(&self) -> Option<Entity<AppMenuBar>> {
+        (cfg!(not(target_os = "macos")) && self.appearance.show_menu_bar)
+            .then(|| self.menu_bar.clone())
+    }
+
     pub fn new(
         window: &mut Window,
         cx: &mut Context<Self>,

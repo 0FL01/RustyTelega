@@ -25,7 +25,8 @@ Quill feature, so the GPUI Kit Design Guides decide the details.
   (`tooltip_with_action`). The View menu has the same command: "Hide
   Sidebar" / "Show Sidebar" on macOS (the native menu is rebuilt when it
   changes), "Toggle Sidebar" in the in-window menu bar on Linux and
-  Windows, which Kit builds once.
+  Windows, which Kit builds once, when the menu bar is shown (Settings →
+  System → Show menu bar).
 - **Shortcut.** Rebindable action `toggle-sidebar` (Settings > Keyboard
   Shortcuts and the shortcuts reference). macOS: Cmd+Ctrl+S, the system's
   Show/Hide Sidebar chord in Finder, Mail and Xcode. Linux and Windows:

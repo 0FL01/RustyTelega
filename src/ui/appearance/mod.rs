@@ -526,8 +526,36 @@ impl QuillApp {
                 cx,
             ));
         }
+        body.extend(this.menu_bar_section(super::window_frame::supported(), cx));
         body.extend(this.native_frame_section(super::window_frame::supported(), cx));
         body
+    }
+
+    /// Quill's in-window menu bar (Linux and Windows only).
+    pub(crate) fn menu_bar_section(
+        &self,
+        supported: bool,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        supported.then(|| {
+            let row = self.appearance_toggle_section(
+                cx,
+                tr(keys::Q_PREFS_SHOW_MENU_BAR),
+                tr(keys::Q_PREFS_SHOW_FILE_EDIT_VIEW_WINDOW),
+                div()
+                    .debug_selector(|| "general-show-menu-bar".into())
+                    .child(
+                        Switch::new("general-show-menu-bar")
+                            .checked(self.appearance.show_menu_bar)
+                            .accessibility_label(tr(keys::Q_PREFS_SHOW_MENU_BAR))
+                            .on_click(cx.listener(|this, &on, _, cx| {
+                                this.set_appearance(cx, |a| a.show_menu_bar = on)
+                            })),
+                    )
+                    .into_any_element(),
+            );
+            self.setting_spot(&["system.menu_bar"], row, cx)
+        })
     }
 
     /// tdesktop "Use system window frame" (Linux and Windows only);

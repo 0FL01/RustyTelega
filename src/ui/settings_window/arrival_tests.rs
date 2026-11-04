@@ -16,6 +16,7 @@ fn new_app(cx: &mut TestAppContext) -> (Entity<QuillApp>, VisualTestContext) {
     quill::settings::use_isolated_app_root(root);
     cx.update(gpui_kit::init);
     cx.update(crate::ui::bind_keys);
+    cx.update(crate::ui::setup_app_menus);
     let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
     let slot_in = slot.clone();
     let handle = cx.open_window(size(px(1100.), px(800.)), move |window, cx| {
@@ -78,6 +79,37 @@ fn reopening_settings_starts_at_the_top(cx: &mut TestAppContext) {
     app.read_with(vcx, |app, _| {
         assert_eq!(app.settings.page_scroll.offset().y, px(0.));
     });
+}
+
+#[cfg(not(target_os = "macos"))]
+#[gpui_kit::test]
+fn the_menu_bar_switch_hides_and_shows_the_title_row_menu(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    vcx.run_until_parked();
+    land(&app, vcx, "system.menu_bar");
+    assert!(app.read_with(vcx, |app, _| app.title_menu_bar().is_none()));
+    assert!(vcx.debug_bounds("window-chrome-menu").is_none());
+
+    let bounds = vcx
+        .debug_bounds("general-show-menu-bar")
+        .expect("the switch is on the page");
+    vcx.simulate_click(bounds.center(), gpui_kit::Modifiers::none());
+    for _ in 0..3 {
+        vcx.update(|window, cx| window.render_frame(cx));
+    }
+    assert!(app.read_with(vcx, |app, _| app.title_menu_bar().is_some()));
+    assert!(vcx.debug_bounds("window-chrome-menu").is_some());
+
+    let bounds = vcx
+        .debug_bounds("general-show-menu-bar")
+        .expect("the switch is still on the page");
+    vcx.simulate_click(bounds.center(), gpui_kit::Modifiers::none());
+    for _ in 0..3 {
+        vcx.update(|window, cx| window.render_frame(cx));
+    }
+    assert!(app.read_with(vcx, |app, _| app.title_menu_bar().is_none()));
+    assert!(vcx.debug_bounds("window-chrome-menu").is_none());
 }
 
 #[gpui_kit::test]

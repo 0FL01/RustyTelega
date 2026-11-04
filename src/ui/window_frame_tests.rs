@@ -162,6 +162,25 @@ fn the_switch_is_offered_only_where_the_platform_allows_it(cx: &mut TestAppConte
     });
 }
 
+#[gpui_kit::test]
+fn the_menu_bar_switch_is_offered_only_where_the_platform_allows_it(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    let slot = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let slot_in = slot.clone();
+    let demo = ScreenshotDemo::named("ready-chats");
+    let handle = cx.open_window(size(px(900.), px(600.)), move |window, cx| {
+        let view = cx.new(|cx| QuillApp::new_with_demo(window, cx, None, Some(demo)));
+        *slot_in.borrow_mut() = Some(view.clone());
+        Root::new(view, window, cx)
+    });
+    let app = slot.borrow().clone().unwrap();
+    let mut vcx = VisualTestContext::from_window(handle.into(), cx);
+    app.update_in(&mut vcx, |app, _, cx| {
+        assert!(app.menu_bar_section(false, cx).is_none());
+        assert!(app.menu_bar_section(true, cx).is_some());
+    });
+}
+
 /// One test: the choice is a process-wide static.
 #[test]
 fn native_choice_follows_the_saved_value_where_the_platform_allows_it() {

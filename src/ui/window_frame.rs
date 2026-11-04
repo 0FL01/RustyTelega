@@ -249,6 +249,7 @@ impl RenderOnce for FrameTitleBar {
                 .child(
                     div()
                         .id("window-chrome-menu")
+                        .debug_selector(|| "window-chrome-menu".into())
                         .a11y_tag(WINDOW_CHROME_CONTENT)
                         .child(menu),
                 )

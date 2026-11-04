@@ -13,8 +13,11 @@ window frame:
 
 Telegram Desktop on Linux has no menu bar. Its own frame shows the title and
 the window buttons in one row, and its commands are in the main menu.
-Quill keeps its menus for keyboard users and for discoverability, but now
-puts them in the title row:
+Quill keeps its menus for keyboard users and for discoverability, but makes
+the in-window menu bar opt-in on Linux and Windows: Settings → System →
+"Show menu bar", off by default. The default title row shows the "Quill"
+caption, search and the window buttons, with no menu strip. When enabled,
+the menus stay in the title row:
 
 - `FrameTitleBar::menu` (`src/ui/window_frame.rs`) takes the in-window menu
   bar and puts it at the start of the row, in place of the "Quill" caption.
@@ -27,11 +30,12 @@ puts them in the title row:
   moving the window.
 - macOS is unchanged: it uses the native menu bar.
 
-This was checked with captures under xfwm4 with its compositor, which gives
-GPUI client-side decorations as Cinnamon does. The menus open from the row
-and a double-click maximizes. Synthetic drags don't move windows under Xvfb,
-whether the build has this change or not, so dragging is checked in code
-only: it uses the same title-bar handlers as the double-click.
+The earlier title-row layout was checked with captures under xfwm4 with its
+compositor, which gives GPUI client-side decorations as Cinnamon does. Those
+captures predate the opt-in setting: the menus open from the row and a
+double-click maximizes. Synthetic drags don't move windows under Xvfb,
+whether the build has the title-row change or not, so dragging was checked in
+code only: it uses the same title-bar handlers as the double-click.
 
 ## Colour emoji
 

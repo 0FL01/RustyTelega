@@ -685,6 +685,8 @@
 "qll_prefs_show_a_message_of_one" = "Show a message of one to three emoji as big glyphs.";
 "qll_prefs_show_a_photo_video_or" = "Show a photo, video or file icon before the preview text.";
 "qll_prefs_show_bold_italic_and_other" = "Show bold, italic and other formatting in the chat-list preview.";
+"qll_prefs_show_file_edit_view_window" = "Show File, Edit, View, Window and Help in the title bar.";
+"qll_prefs_show_menu_bar" = "Show menu bar";
 "qll_prefs_show_message_preview" = "Show message preview";
 "qll_prefs_show_message_preview_in_notifications" = "Show message preview in notifications";
 "qll_prefs_show_message_text" = "Show message text";

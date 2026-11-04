@@ -595,10 +595,10 @@ impl Render for QuillApp {
                 self.live.is_some(),
                 self.search_is_open(),
                 self.title_bar_update_button(cx),
-                // kit Phase 7: the in-window menu bar on Linux/Windows leads
-                // the title row (macOS uses the native menu bar installed by
-                // `setup_app_menus`).
-                cfg!(not(target_os = "macos")).then(|| self.menu_bar.clone()),
+                // The in-window menu bar on Linux/Windows leads the title row
+                // only when enabled (hidden by default). macOS uses the native
+                // menu bar installed by `setup_app_menus`.
+                self.title_menu_bar(),
                 cx,
             ))
             .children(self.frozen_banner(cx))
