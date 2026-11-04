@@ -444,6 +444,8 @@ mod paid_messages_tests;
 mod paid_reaction_chip;
 mod paid_reaction_state;
 mod paid_reaction_ui;
+mod panel_reveal;
+mod panel_slide_tests;
 mod passcode;
 mod payments;
 mod peer_qr;

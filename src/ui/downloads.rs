@@ -178,7 +178,8 @@ impl QuillApp {
     }
 
     pub(super) fn downloads_panel(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.downloads_panel_open() {
+        // Also while it slides out after closing (`panel_reveal`).
+        if !self.drawn_panels().downloads {
             return None;
         }
         self.downloads_panel_body(cx)
@@ -190,7 +191,7 @@ impl QuillApp {
     /// The outer function repeats this body's first check; keep the two in step.
     #[inline(never)]
     fn downloads_panel_body(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.downloads_panel_open() {
+        if !self.drawn_panels().downloads {
             return None;
         }
         let session = self.session()?;

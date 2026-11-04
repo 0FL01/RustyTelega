@@ -69,6 +69,8 @@ pub(crate) struct FrameUi {
     pub(super) sidebar_width: Pixels,
     /// Whether the chat list column is hidden, and its slide and peek.
     pub(super) sidebar: super::sidebar_reveal::SidebarReveal,
+    /// The side panel column's slide (`panel_reveal`).
+    pub(super) panels: super::panel_reveal::PanelReveal,
     /// The main window's content width as last drawn (`shell_layout`).
     pub(super) main_width: Pixels,
     /// A debounced `window_state.json` save is scheduled.
@@ -124,6 +126,7 @@ impl FrameUi {
                 stored.is_some_and(|state| state.sidebar_hidden),
                 std::time::Instant::now(),
             ),
+            panels: super::panel_reveal::PanelReveal::new(std::time::Instant::now()),
             main_width: px(0.),
             window_state_save_pending: false,
             capture_blocked: false,

@@ -10,6 +10,7 @@ fn input(width: f32) -> ShellInput {
         topic_open: false,
         panels: None,
         docked: 1.,
+        panels_shown: 1.,
     }
 }
 
@@ -370,4 +371,33 @@ fn one_column_ignores_a_hidden_list_column() {
     assert_eq!(layout.list_column(0.), narrow);
     assert!(!layout.sidebar_toggle());
     assert!(!layout.list_column_hidden());
+}
+
+#[test]
+fn a_sliding_panel_column_narrows_and_the_chat_takes_the_rest() {
+    let input = ShellInput {
+        panels: Some(INFO_PANEL_WIDTH),
+        panels_shown: 0.25,
+        ..input(1400.)
+    };
+    let layout = shell_layout(input);
+    assert_eq!(layout.panels, PanelPane::Column(INFO_PANEL_WIDTH));
+    assert_eq!(layout.panel_column(), INFO_PANEL_WIDTH * 0.25);
+    assert_eq!(layout.chat_insets(0.), (300., INFO_PANEL_WIDTH * 0.25));
+    assert_eq!(
+        chat_pane_width(input, &layout),
+        1400. - 300. - INFO_PANEL_WIDTH * 0.25
+    );
+}
+
+#[test]
+fn a_panel_filling_the_chat_place_does_not_slide() {
+    let layout = shell_layout(ShellInput {
+        panels: Some(INFO_PANEL_WIDTH),
+        panels_shown: 0.25,
+        ..input(900.)
+    });
+    assert_eq!(layout.panels, PanelPane::Fill);
+    assert_eq!(layout.panels_shown, 1.);
+    assert_eq!(layout.panel_column(), 0.);
 }

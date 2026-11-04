@@ -62,6 +62,10 @@ pub(crate) struct ShellInput {
     /// 1 shown, 0 hidden, between while it slides (`sidebar_reveal`).
     /// One column ignores it.
     pub(crate) docked: f32,
+    /// Share of the side panel column in the layout, `0..=1`, while it
+    /// slides in or out (`panel_reveal`). A panel filling the window in
+    /// the chat's place ignores it.
+    pub(crate) panels_shown: f32,
 }
 
 /// The forum topic column.
@@ -103,6 +107,9 @@ pub(crate) struct ShellLayout {
     /// The conversation pane (the open chat, or the empty placeholder).
     pub(crate) chat: bool,
     pub(crate) panels: PanelPane,
+    /// Share of a [`PanelPane::Column`] on screen beside the chat (1 for
+    /// the other panes).
+    pub(crate) panels_shown: f32,
 }
 
 impl ShellLayout {
@@ -134,6 +141,15 @@ impl ShellLayout {
         !self.one_column && self.list.is_some() && self.docked > 0.
     }
 
+    /// The side panel column's width on screen: narrowed while it slides
+    /// in or out, the panels keeping their full width inside it.
+    pub(crate) fn panel_column(&self) -> f32 {
+        match self.panels {
+            PanelPane::Column(width) => width * self.panels_shown,
+            PanelPane::Hidden | PanelPane::Fill => 0.,
+        }
+    }
+
     /// The space the conversation pane leaves at the window's left and
     /// right edges (the list, rail and topics before it; the side panels
     /// after it), where a toast centres over the conversation. Zero both
@@ -147,11 +163,7 @@ impl ShellLayout {
             ForumPane::Column { .. } => FORUM_COLUMN_WIDTH,
             ForumPane::Hidden | ForumPane::Fill => 0.,
         };
-        let panels = match self.panels {
-            PanelPane::Column(width) => width,
-            PanelPane::Hidden | PanelPane::Fill => 0.,
-        };
-        (list + forum, panels)
+        (list + forum, self.panel_column())
     }
 }
 
@@ -225,6 +237,10 @@ pub(crate) fn shell_layout(input: ShellInput) -> ShellLayout {
         forum,
         chat: panels != PanelPane::Fill,
         panels,
+        panels_shown: match panels {
+            PanelPane::Column(_) => input.panels_shown.clamp(0., 1.),
+            PanelPane::Hidden | PanelPane::Fill => 1.,
+        },
     }
 }
 
@@ -240,11 +256,7 @@ pub(crate) fn chat_pane_width(input: ShellInput, layout: &ShellLayout) -> f32 {
         ForumPane::Column { .. } => FORUM_COLUMN_WIDTH,
         ForumPane::Hidden | ForumPane::Fill => 0.,
     };
-    let panels = match layout.panels {
-        PanelPane::Column(width) => width,
-        PanelPane::Hidden | PanelPane::Fill => 0.,
-    };
-    (input.width - list - forum - panels).max(0.)
+    (input.width - list - forum - layout.panel_column()).max(0.)
 }
 
 fn list_width(input: ShellInput, forum_beside: bool) -> f32 {
@@ -264,6 +276,7 @@ fn one_column(input: ShellInput) -> ShellLayout {
         forum: ForumPane::Hidden,
         chat: false,
         panels: PanelPane::Hidden,
+        panels_shown: 1.,
     };
     if input.panels.is_some() {
         return ShellLayout {

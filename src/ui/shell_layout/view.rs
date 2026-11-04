@@ -8,6 +8,7 @@ use super::{
 };
 use crate::ui::app::{PaneMode, QuillApp};
 use crate::ui::navigation::SidebarResize;
+use crate::ui::panel_reveal::PanelSet;
 use gpui_kit::component::button::*;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;
@@ -15,6 +16,7 @@ use gpui_kit::*;
 use quill::auth::AuthView;
 use quill::lang::{keys, tr};
 use quill::state::ForumColumn;
+use std::time::Instant;
 
 impl QuillApp {
     /// The main window's columns this frame.
@@ -45,12 +47,13 @@ impl QuillApp {
                 s.forum_column(width, self.chat_list.forum_chats_peek)
             }),
             topic_open: session.is_some_and(|s| s.open_topic.is_some()),
-            panels: self.side_panels_width(),
+            panels: side_panels_width(self.drawn_panels()),
             docked: if self.pane_mode() == PaneMode::Ready {
-                self.frame.sidebar.docked(std::time::Instant::now())
+                self.frame.sidebar.docked(Instant::now())
             } else {
                 1.
             },
+            panels_shown: self.frame.panels.shown(self.frame.panels.now()),
         }
     }
 
@@ -79,15 +82,38 @@ impl QuillApp {
         px(max_list_width(input.width, input.rail, forum_beside))
     }
 
-    /// Summed preferred width of the open side panels.
-    fn side_panels_width(&self) -> Option<f32> {
-        let widths = [
-            self.info_panel_open().then_some(INFO_PANEL_WIDTH),
-            self.downloads_panel_open().then_some(DOWNLOADS_PANEL_WIDTH),
-            self.shared_media_panel_open()
-                .then_some(SHARED_MEDIA_PANEL_WIDTH),
-        ];
-        widths.into_iter().flatten().reduce(|a, b| a + b)
+    /// The panels open in the side column, from state.
+    fn open_panels(&self) -> PanelSet {
+        PanelSet {
+            info: self
+                .info_panel_open()
+                .then(|| self.session()?.users_state.open_info_panel)
+                .flatten(),
+            downloads: self.downloads_panel_open(),
+            shared_media: self.shared_media_panel_open(),
+        }
+    }
+
+    /// The panels the side column draws this frame: the open ones, or the
+    /// ones sliding out after they closed.
+    pub(in crate::ui) fn drawn_panels(&self) -> PanelSet {
+        self.frame
+            .panels
+            .drawn(self.open_panels(), self.frame.panels.now())
+    }
+
+    /// Once per frame, before the layout: the side column follows the open
+    /// panels, and the clock runs while it slides. Filling the window in
+    /// the chat's place, it has nowhere to slide.
+    fn settle_panels(&mut self, layout: &ShellLayout, cx: &mut Context<Self>) {
+        let now = self.frame.panels.now();
+        let slides = layout.panels != PanelPane::Fill
+            && self.frame.panels.may_slide()
+            && super::sidebar_view::animate();
+        self.frame.panels.settle(self.open_panels(), slides, now);
+        if self.frame.panels.moving(now) {
+            self.request_animation_tick(60, cx);
+        }
     }
 
     /// The row under the title bar: chat list, forum topics, conversation
@@ -108,6 +134,7 @@ impl QuillApp {
         self.keep_shared_media_search_field(window, cx);
         let layout = self.shell_layout();
         self.settle_sidebar(&layout, window, cx);
+        self.settle_panels(&layout, cx);
         let input = self.shell_input();
         let layout = shell_layout(input);
         self.seed_history_width(chat_pane_width(input, &layout));
@@ -137,30 +164,23 @@ impl QuillApp {
         .into_iter()
         .flatten()
         .collect();
+        let row = div()
+            .id("side-panels")
+            .role(gpui_kit::Role::Group)
+            .a11y_tag(quill::agent::ui_driver::redact::REGION_PANELS)
+            .flex()
+            .h_full()
+            .children(panels);
         let panels = match layout.panels {
             PanelPane::Hidden => None,
-            PanelPane::Column(width) => Some(
-                div()
-                    .id("side-panels")
-                    .role(gpui_kit::Role::Group)
-                    .a11y_tag(quill::agent::ui_driver::redact::REGION_PANELS)
-                    .flex()
-                    .flex_none()
-                    .w(px(width))
-                    .h_full(),
-            ),
-            PanelPane::Fill => Some(
-                div()
-                    .id("side-panels")
-                    .role(gpui_kit::Role::Group)
-                    .a11y_tag(quill::agent::ui_driver::redact::REGION_PANELS)
-                    .flex()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full(),
-            ),
-        }
-        .map(|row| row.children(panels));
+            PanelPane::Column(width) if layout.panel_column() >= width => {
+                Some(row.flex_none().w(px(width)).into_any_element())
+            }
+            PanelPane::Column(width) => {
+                Some(self.sliding_panels(row, width, layout.panel_column()))
+            }
+            PanelPane::Fill => Some(row.flex_1().min_w_0().into_any_element()),
+        };
         let forum = match layout.forum {
             ForumPane::Hidden => None,
             pane => Some(self.forum_column_view(open, pane, cx)),
@@ -196,6 +216,38 @@ impl QuillApp {
             .children(panels)
             .children(peek)
             .children(self.forward_drag_banner(&layout, cx))
+            .into_any_element()
+    }
+
+    /// The side column while it slides: `visible` of its width, the panels
+    /// at their full `width` inside it with their left edge leading in
+    /// from the window's right edge. Sliding out after they closed, they
+    /// take no clicks.
+    fn sliding_panels(&self, row: Stateful<Div>, width: f32, visible: f32) -> AnyElement {
+        let leaving = self
+            .frame
+            .panels
+            .leaving(self.open_panels(), self.frame.panels.now());
+        div()
+            .id("side-panels-sliding")
+            .test_support()
+            .relative()
+            .flex_none()
+            .h_full()
+            .w(px(visible))
+            .overflow_hidden()
+            .child(row.absolute().top_0().bottom_0().left_0().w(px(width)))
+            .when(leaving, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .top_0()
+                        .bottom_0()
+                        .left_0()
+                        .right_0()
+                        .block_mouse_except_scroll(),
+                )
+            })
             .into_any_element()
     }
 
@@ -259,4 +311,14 @@ impl QuillApp {
                 })),
         )
     }
+}
+
+/// Summed preferred width of `panels`, if any.
+fn side_panels_width(panels: PanelSet) -> Option<f32> {
+    let widths = [
+        panels.info.map(|_| INFO_PANEL_WIDTH),
+        panels.downloads.then_some(DOWNLOADS_PANEL_WIDTH),
+        panels.shared_media.then_some(SHARED_MEDIA_PANEL_WIDTH),
+    ];
+    widths.into_iter().flatten().reduce(|a, b| a + b)
 }

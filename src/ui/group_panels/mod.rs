@@ -375,7 +375,7 @@ impl QuillApp {
         let counts = session
             .open_chat
             .filter(|chat_id| {
-                let open = session.users_state.open_info_panel;
+                let open = self.shown_info_target();
                 session.chat_info_target(*chat_id) == open
                     || session.info_panel_target_for_chat(*chat_id) == open
             })
@@ -476,10 +476,17 @@ impl QuillApp {
                 .is_some_and(|s| s.users_state.open_info_panel.is_some())
     }
 
+    /// The info panel target on screen: the open one, or the one sliding
+    /// out with the side column after it closed (`panel_reveal`).
+    pub(super) fn shown_info_target(&self) -> Option<InfoPanelTarget> {
+        self.session()?
+            .users_state
+            .open_info_panel
+            .or_else(|| self.drawn_panels().info)
+    }
+
     pub(super) fn info_panel(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.info_panel_open() {
-            return None;
-        }
+        self.drawn_panels().info?;
         self.info_panel_body(cx)
     }
 
@@ -492,9 +499,7 @@ impl QuillApp {
         // A profile opened from a sender avatar is presented as a modal
         // layer (`profile_modal_overlay`), not in the right column.
         // Earn pages open in their own layer (`earn_layer`).
-        if !self.info_panel_open() {
-            return None;
-        }
+        self.drawn_panels().info?;
         let (title, content) = self.info_panel_parts(cx)?;
         // Its width is the shell's (`shell_layout`).
         Some(
@@ -550,7 +555,7 @@ impl QuillApp {
         &self,
         cx: &mut Context<Self>,
     ) -> Option<(&'static str, AnyElement)> {
-        let target = self.session()?.users_state.open_info_panel?;
+        let target = self.shown_info_target()?;
         let (title, content) = match target {
             InfoPanelTarget::User(user_id) => (
                 tr(person_info_title(self.session()?, user_id)),
