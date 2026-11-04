@@ -485,6 +485,36 @@ impl QuillApp {
             )
             .child(
                 self.setting_spot(
+                    &["about.share"],
+                    Button::new("about-share-quill")
+                        .label(tr(keys::Q_SETTINGS_ABOUT_SHARE_QUILL))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(
+                                quill::about::WEBSITE_URL.to_string(),
+                            ));
+                            this.set_status_note(
+                                StatusNote::info(tr(keys::Q_SETTINGS_ABOUT_LINK_COPIED)),
+                                cx,
+                            );
+                        }))
+                        .into_any_element(),
+                    cx,
+                ),
+            )
+            .child(
+                self.setting_spot(
+                    &["about.source_code"],
+                    Button::new("about-source-code")
+                        .label(tr(keys::Q_SETTINGS_ABOUT_SOURCE_CODE))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.open_link(quill::about::SOURCE_URL, cx)
+                        }))
+                        .into_any_element(),
+                    cx,
+                ),
+            )
+            .child(
+                self.setting_spot(
                     &["about.licenses"],
                     Button::new("open-source-licenses")
                         .label(tr(keys::Q_OPS_OPEN_SOURCE_LICENSES))
