@@ -19,6 +19,8 @@ pub struct Textarea {
     style: StyleRefinement,
     size: Size,
     height: Option<DefiniteLength>,
+    editor_padding: Option<gpui::Edges<gpui::Pixels>>,
+    placeholder_color: Option<gpui::Hsla>,
     appearance: bool,
     bordered: bool,
     disabled: bool,
@@ -73,6 +75,8 @@ impl Textarea {
             style: StyleRefinement::default(),
             size: Size::default(),
             height: None,
+            editor_padding: None,
+            placeholder_color: None,
             appearance: true,
             bordered: true,
             disabled: false,
@@ -91,6 +95,18 @@ impl Textarea {
 
     pub fn h(mut self, height: impl Into<DefiniteLength>) -> Self {
         self.height = Some(height.into());
+        self
+    }
+
+    /// Override the multiline editor's internal text padding.
+    pub fn editor_padding(mut self, padding: gpui::Edges<gpui::Pixels>) -> Self {
+        self.editor_padding = Some(padding);
+        self
+    }
+
+    /// Override the placeholder colour without changing other inputs.
+    pub fn placeholder_color(mut self, color: impl Into<gpui::Hsla>) -> Self {
+        self.placeholder_color = Some(color.into());
         self
     }
 
@@ -197,6 +213,8 @@ impl Textarea {
                 this.on_token_hover(move |event, window, cx| listener(event, window, cx))
             })
             .appearance(self.appearance)
+            .when_some(self.editor_padding, |this, padding| this.editor_padding(padding))
+            .when_some(self.placeholder_color, |this, color| this.placeholder_color(color))
             .bordered(self.bordered)
             .disabled(self.disabled)
             .readonly(self.readonly)

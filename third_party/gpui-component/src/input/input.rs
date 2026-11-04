@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    AnyElement, App, DefiniteLength, Edges, ElementId, Entity, Global, Hsla,
+    AnyElement, App, DefiniteLength, Edges, ElementId, Entity, Global, Hsla, Pixels,
     InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Rems, RenderOnce, Role,
     SharedString, StyleRefinement, Styled, TextAlign, TouchPhase, Window, div, px, relative,
 };
@@ -140,6 +140,8 @@ pub struct Input {
     prefix: Option<AnyElement>,
     suffix: Option<AnyElement>,
     height: Option<DefiniteLength>,
+    editor_padding: Option<Edges<Pixels>>,
+    placeholder_color: Option<Hsla>,
     appearance: bool,
     cleanable: bool,
     mask_toggle: bool,
@@ -252,6 +254,8 @@ impl Input {
             prefix: None,
             suffix: None,
             height: None,
+            editor_padding: None,
+            placeholder_color: None,
             appearance: true,
             cleanable: false,
             mask_toggle: false,
@@ -313,6 +317,16 @@ impl Input {
     /// Set height of the input (Multi-line only).
     pub fn h(mut self, height: impl Into<DefiniteLength>) -> Self {
         self.height = Some(height.into());
+        self
+    }
+
+    pub(crate) fn editor_padding(mut self, padding: Edges<Pixels>) -> Self {
+        self.editor_padding = Some(padding);
+        self
+    }
+
+    pub(crate) fn placeholder_color(mut self, color: Hsla) -> Self {
+        self.placeholder_color = Some(color);
         self
     }
 
@@ -562,7 +576,7 @@ impl RenderOnce for Input {
         state.set_editor_style(
             gpui_base::input::InputEditorStyle {
                 foreground: cx.theme().foreground,
-                muted_foreground: cx.theme().muted_foreground,
+                muted_foreground: self.placeholder_color.unwrap_or(cx.theme().muted_foreground),
                 background: cx.theme().editor_background(),
                 border: cx.theme().border,
                 selection: cx.theme().selection,
@@ -595,7 +609,7 @@ impl RenderOnce for Input {
             cx,
         );
         state.set_editor_paddings(
-            if state.presentation(cx).is_multi_line() {
+            self.editor_padding.unwrap_or_else(|| if state.presentation(cx).is_multi_line() {
                 Edges {
                     top: self.size.input_py(),
                     right: self.size.input_px(),
@@ -608,7 +622,7 @@ impl RenderOnce for Input {
                 }
             } else {
                 Edges::default()
-            },
+            }),
             cx,
         );
         state.set_disabled(self.disabled, cx);

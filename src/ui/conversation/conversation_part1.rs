@@ -188,8 +188,6 @@ impl QuillApp {
                                     .child(super::anim_layer::occluder(circle)),
                             )
                         })
-                        .border_t_1()
-                        .border_color(super::td::td(quill::app_theme::PaletteKey::ShadowFg))
                         .bg(super::td::td(quill::app_theme::PaletteKey::HistoryComposeAreaBg))
                         .flex()
                         .flex_col()
@@ -367,6 +365,9 @@ impl QuillApp {
                                         .relative()
                                         .flex_1()
                                         .min_w_0()
+                                        .mb(px(super::td::st::compose::HISTORY_SEND_PADDING))
+                                        .relative()
+                                        .top(px(-4.))
                                         .map(|field| self.emoji_words_hover(field, cx))
                                         // tdesktop hides the field behind a
                                         // rich draft's preview.
@@ -381,6 +382,8 @@ impl QuillApp {
                                                 .text_size(px(13.))
                                                 .appearance(false)
                                                 .bordered(false)
+                                                .editor_padding(gpui_kit::Edges { top: px(0.), right: px(5.), bottom: px(0.), left: px(5.) })
+                                                .placeholder_color(super::td::td(quill::app_theme::PaletteKey::PlaceholderFg))
                                                 .aria_label(tr(keys::SR_CHAT_COLUMN_MESSAGE))
                                                 // Custom emoji drawn inline
                                                 // (codex:composer-input).
@@ -418,7 +421,9 @@ impl QuillApp {
                                 .when(show_attach, |row| {
                                     row.child(
                                         Button::new("composer-emoji")
-                                            .child(super::td::td_icon(super::td::TdIcon::InputSmileFace, super::td::td(quill::app_theme::PaletteKey::HistoryComposeIconFg)))
+                                            .child(div().relative().size(px(40.))
+                                                .child(div().absolute().left(px(9.25)).top(px(9.25)).size(px(21.5)).rounded_full().border(px(1.5)).border_color(super::td::td(quill::app_theme::PaletteKey::HistoryComposeIconFg)))
+                                                .child(super::td::td_icon(super::td::TdIcon::InputSmileFace, super::td::td(quill::app_theme::PaletteKey::HistoryComposeIconFg))))
                                             .w(px(44.))
                                             .h(px(46.))
                                             .p_0()

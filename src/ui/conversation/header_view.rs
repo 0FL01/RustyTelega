@@ -40,6 +40,8 @@ impl QuillApp {
             info_target,
         } = identity;
         let title_row = div()
+            .relative()
+            .top(px(1.))
             .flex()
             .items_center()
             .gap_1()
@@ -71,6 +73,8 @@ impl QuillApp {
             }));
         div()
             .id("conversation-identity")
+            .relative()
+            .left(px(-1.))
             .flex()
             .items_center()
             .gap_3()

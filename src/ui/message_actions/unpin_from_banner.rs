@@ -91,22 +91,7 @@ impl QuillApp {
             .chats
             .get(&chat_id.0)
             .is_some_and(|chat| chat.can_pin_messages());
-        // Up to four segments, oldest on top; the window follows the
-        // shown message.
-        let shown = count.min(4);
-        let position = count - 1 - index;
-        let start = position.saturating_sub(shown - 1).min(count - shown);
-        let segments = (0..shown).map(|segment| {
-            div()
-                .flex_1()
-                .w(px(2.))
-                .rounded_full()
-                .bg(if start + segment == position {
-                    accent()
-                } else {
-                    accent().opacity(0.35)
-                })
-        });
+        let segments = pinned_bar_segments(count, count - 1 - index);
         let right = if count == 1 {
             pinned_bar_close_button(can_pin, chat_id, message_id, newest, cx)
         } else {
@@ -128,7 +113,7 @@ impl QuillApp {
                         .id("pinned-message-jump")
                         .flex()
                         .items_center()
-                        .gap(px(8.))
+                        .gap(px(6.))
                         .min_w_0()
                         .flex_1()
                         .role(gpui_kit::Role::Button)
@@ -142,14 +127,7 @@ impl QuillApp {
                                 .insert(chat_id.0, (index + 1) % count);
                             cx.notify();
                         }))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(2.))
-                                .h(px(super::td::st::compose::MSG_REPLY_BAR_HEIGHT))
-                                .children(segments),
-                        )
+                        .child(segments)
                         .child(
                             div()
                                 .flex()
@@ -157,6 +135,8 @@ impl QuillApp {
                                 .min_w_0()
                                 .child(
                                     div()
+                                        .relative()
+                                        .top(px(1.))
                                         .text_size(px(13.))
                                         .font_semibold()
                                         .text_color(super::td::td(
@@ -166,6 +146,8 @@ impl QuillApp {
                                 )
                                 .child(
                                     div()
+                                        .relative()
+                                        .top(px(-2.))
                                         .text_size(px(13.))
                                         .truncate()
                                         .text_color(text_primary())
@@ -384,6 +366,100 @@ fn pinned_bar_close_button(
                 confirm_hide_pinned(window, cx, app, chat_id, newest);
             }
         }))
+        .into_any_element()
+}
+
+/// MessageBar::countBarState: at most four segments fit in the bar, and
+/// the viewport follows the selected pin. The full widget clips the ends.
+fn pinned_bar_segments(count: usize, position: usize) -> AnyElement {
+    use super::td::st::compose as st;
+    let line = st::MSG_REPLY_BAR_WIDTH;
+    let height = st::MSG_REPLY_BAR_HEIGHT;
+    let shown = count.min(4) as f32;
+    let size = (height - (shown - 1.) * line) / shown;
+    let step = size + line;
+    let full_height = count as f32 * size + (count - 1) as f32 * line;
+    let offset = position as f32 * step;
+    let scroll = if count < 5 || position < 2 {
+        0.
+    } else if position >= count - 2 {
+        full_height - height
+    } else {
+        offset - (height - size) / 2.
+    };
+    let bar_color = super::td::td(quill::app_theme::PaletteKey::MsgInReplyBarColor);
+    let background = super::td::td(quill::app_theme::PaletteKey::HistoryPinnedBg);
+    let fade_size = (size * 2.5).ceil();
+    let first_scroll = 2. * step - (height - size) / 2.;
+    let last_scroll = if count > 4 {
+        (count - 3) as f32 * step - (height - size) / 2.
+    } else {
+        0.
+    };
+    let gradient_top = if scroll >= first_scroll {
+        0.
+    } else {
+        -fade_size + fade_size * scroll / first_scroll
+    };
+    let gradient_bottom = if scroll <= last_scroll {
+        st::HISTORY_REPLY_HEIGHT
+    } else {
+        st::HISTORY_REPLY_HEIGHT
+            + fade_size * (scroll - last_scroll) / (full_height - height - last_scroll)
+    };
+    div()
+        .relative()
+        .top(px(1.))
+        .w(px(line))
+        .h(px(st::HISTORY_REPLY_HEIGHT))
+        .overflow_hidden()
+        .children((0..count).map(|i| {
+            div()
+                .absolute()
+                .left_0()
+                .top(px(st::MSG_REPLY_PADDING_TOP + i as f32 * step - scroll))
+                .w(px(line))
+                .h(px(size))
+                .rounded_full()
+                .bg(if i == position {
+                    bar_color
+                } else {
+                    bar_color.opacity(1. / 3.)
+                })
+        }))
+        .when(count > 4 && gradient_top > -fade_size, |bar| {
+            bar.child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .top(px(gradient_top))
+                    .w(px(line))
+                    .h(px(fade_size))
+                    .bg(linear_gradient(
+                        180.,
+                        linear_color_stop(background, 0.),
+                        linear_color_stop(background.opacity(0.), 1.),
+                    )),
+            )
+        })
+        .when(
+            count > 4 && gradient_bottom < st::HISTORY_REPLY_HEIGHT + fade_size,
+            |bar| {
+                bar.child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .top(px(gradient_bottom - fade_size))
+                        .w(px(line))
+                        .h(px(fade_size))
+                        .bg(linear_gradient(
+                            180.,
+                            linear_color_stop(background.opacity(0.), 0.),
+                            linear_color_stop(background, 1.),
+                        )),
+                )
+            },
+        )
         .into_any_element()
 }
 

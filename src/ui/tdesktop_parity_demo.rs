@@ -234,6 +234,16 @@ fn seed(sink: Arc<MemorySink>) -> Session {
         "has_large_media":true,"show_large_media":true,"show_media_above_description":false,
         "skip_confirmation":true,"show_above_text":false,"instant_view_version":0}));
     }
+    for id in (1..=4).rev() {
+        updates.push(message(
+            STEP - id,
+            ME,
+            at(8, 0),
+            text("Earlier pinned message"),
+            None,
+        ));
+        updates.push(json!({"@type":"updateMessageIsPinned","chat_id":CHAT,"message_id":STEP-id,"is_pinned":true}));
+    }
     updates.push(message(STEP, ME, at(9, 0), link, None));
     updates.push(message(2 * STEP, ME, at(9, 5), voice(6501, 5, 10000), None));
     updates.push(message(
