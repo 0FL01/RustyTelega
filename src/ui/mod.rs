@@ -576,6 +576,7 @@ mod suggested_posts_state;
 mod suggested_posts_ui;
 mod suggestions_block;
 mod system_unlock;
+pub(crate) mod td;
 mod tdesktop_parity_demo;
 mod text_rows;
 mod threads;

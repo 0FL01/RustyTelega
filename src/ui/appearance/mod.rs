@@ -205,6 +205,8 @@ impl QuillApp {
             // zooms whole windows instead (below), so scaling rems too
             // would apply it twice.
             theme.font_size = px(BASE_REM_PX);
+            // Text that sets no size of its own is tdesktop's `fsize`.
+            theme.text_size = Some(px(super::td::fonts::FSIZE));
             theme.font_family = family.into();
         });
         // Interface scale: every window is drawn `zoom` times larger

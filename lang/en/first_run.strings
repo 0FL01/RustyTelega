@@ -6,7 +6,7 @@
 "qll_first_run_notice_risk" = "It is provided as is, without warranty of any kind. You use it at your own risk, and its developers accept no responsibility for any loss or damage.";
 "qll_first_run_welcome" = "Welcome to Quill";
 "qll_first_run_open_title" = "Open source";
-"qll_first_run_open_body" = "All of Quill's code is public, under the MIT License.";
+"qll_first_run_open_body" = "All of Quill's code is public, under the GNU GPL v3.0.";
 "qll_first_run_native_title" = "Native on every desktop";
 "qll_first_run_native_body" = "Written in Rust and drawn on the GPU, for macOS, Windows and Linux.";
 "qll_first_run_telegram_title" = "Chats, calls and stories";

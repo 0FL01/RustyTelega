@@ -67,9 +67,10 @@ pub fn display_icon_name(icon_name: &str) -> &str {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum FolderTabsView {
     /// A strip above the chat list.
-    #[default]
     Top,
-    /// A column of tabs left of the chat list ("Tabs on the left").
+    /// A column of tabs left of the chat list ("Tabs on the left"), the
+    /// default: tdesktop shows its folders there on a wide window.
+    #[default]
     Left,
 }
 

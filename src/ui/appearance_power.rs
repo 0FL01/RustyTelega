@@ -6,7 +6,7 @@
 use super::QuillApp;
 use crate::ui::status_note::StatusNote;
 use gpui_kit::component::select::{SearchableVec, Select, SelectEvent, SelectState};
-use gpui_kit::component::theme::{ActiveTheme, Theme, installed_font_names};
+use gpui_kit::component::theme::{ActiveTheme, installed_font_names};
 use gpui_kit::component::{IndexPath, StyledExt as _};
 use gpui_kit::*;
 use quill::lang::{keys, tr};
@@ -23,10 +23,10 @@ fn installed_fonts(cx: &App) -> &'static [String] {
 }
 
 /// The family to draw the interface in: the stored choice when it is still
-/// installed, else the platform default the theme started with.
+/// installed, else Open Sans, the face tdesktop draws in (embedded, so it
+/// is always there).
 pub(super) fn interface_font(stored: &str, cx: &App) -> String {
-    static DEFAULT: OnceLock<String> = OnceLock::new();
-    let default = DEFAULT.get_or_init(|| cx.global::<Theme>().font_family.to_string());
+    let default = super::td::fonts::FAMILY.to_string();
     if stored.trim().is_empty() {
         return default.clone();
     }

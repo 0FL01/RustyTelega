@@ -717,12 +717,14 @@ impl gpui_base::RootPlugin for WindowState {
 
     fn style(&self, surface: &mut gpui::Stateful<gpui::Div>, _window: &mut Window, cx: &mut App) {
         use gpui::Refineable as _;
-        surface.style().refine(
-            &gpui::StyleRefinement::default()
-                .font_family(cx.theme().font_family.clone())
-                .bg(cx.theme().tokens.background)
-                .text_color(cx.theme().foreground),
-        );
+        let mut refinement = gpui::StyleRefinement::default()
+            .font_family(cx.theme().font_family.clone())
+            .bg(cx.theme().tokens.background)
+            .text_color(cx.theme().foreground);
+        if let Some(size) = cx.theme().text_size {
+            refinement = refinement.text_size(size);
+        }
+        surface.style().refine(&refinement);
     }
 
     fn decorate(

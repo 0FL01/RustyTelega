@@ -165,7 +165,14 @@ impl OmarchyTheme {
         };
         let link = readable(accent, bg, 3.0);
         let out_bubble = mix(bg, accent, if self.dark { 0.28 } else { 0.18 });
-        let mut colors = [0xff; PaletteKey::COUNT];
+        // Keys Omarchy has no colour for start from tdesktop's own dark or
+        // light palette and follow the keys they are defined by below.
+        let base = if self.dark {
+            super::BuiltinTheme::Tinted
+        } else {
+            super::BuiltinTheme::Classic
+        };
+        let mut colors = *base.palette().colors();
         let mut put = |key: PaletteKey, rgb: u32| {
             if let Some(slot) = colors.get_mut(key.index()) {
                 *slot = (rgb << 8) | 0xff;
@@ -199,6 +206,17 @@ impl OmarchyTheme {
         put(K::MsgInBg, lighter);
         put(K::MsgOutBg, out_bubble);
         put(K::MsgOutServiceFg, readable(accent, out_bubble, 3.0));
+        // Two passes: a fallback can name a key that follows it.
+        for _ in 0..2 {
+            for &key in PaletteKey::ALL {
+                let value = key
+                    .fallback()
+                    .and_then(|from| colors.get(from.index()).copied());
+                if let (Some(value), Some(slot)) = (value, colors.get_mut(key.index())) {
+                    *slot = value;
+                }
+            }
+        }
         let wallpaper = self.pick(&["darker_background", "dark_background"], darker);
         Palette::from_colors(colors, Some(ThemeBackground::Solid(wallpaper)))
     }

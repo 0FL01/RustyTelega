@@ -142,9 +142,28 @@ impl ThemeFile {
     /// `background` is the theme image's colour, when known.
     pub fn palette(&self, fallback: &Palette, background: Option<u32>) -> Palette {
         let mut palette = fallback.clone();
+        let mut set = [false; PaletteKey::COUNT];
         for &key in PaletteKey::ALL {
             if let Some(rgba) = self.color(key.name(), fallback) {
                 palette.set(key, rgba);
+                if let Some(flag) = set.get_mut(key.index()) {
+                    *flag = true;
+                }
+            }
+        }
+        // A key the file leaves out follows the key tdesktop defines it by,
+        // when the file sets that one (an older theme without the folder
+        // sidebar keys keeps its own window colours there). Two passes: a
+        // fallback can name a key that follows it.
+        for _ in 0..2 {
+            for &key in PaletteKey::ALL {
+                let Some(from) = key.fallback() else { continue };
+                if set.get(key.index()) == Some(&false) && set.get(from.index()) == Some(&true) {
+                    palette.set(key, palette.rgba(from));
+                    if let Some(flag) = set.get_mut(key.index()) {
+                        *flag = true;
+                    }
+                }
             }
         }
         palette.background = background

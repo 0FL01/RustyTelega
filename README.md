@@ -3,7 +3,7 @@
 [![Release](https://github.com/0FL01/RustyTelega/actions/workflows/release.yml/badge.svg)](https://github.com/0FL01/RustyTelega/actions/workflows/release.yml)
 ![Rust 1.92](https://img.shields.io/badge/rust-1.92-orange)
 ![TDLib 1.8.69](https://img.shields.io/badge/TDLib-1.8.69-blue)
-![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 Quill is a free, open-source Telegram desktop client written from scratch in Rust. You sign in with your normal Telegram account and get your real chats, groups, channels and calls. It talks to Telegram through [TDLib](https://core.telegram.org/tdlib), Telegram's own client library, and draws its whole interface on the GPU with [GPUI](https://www.gpui.rs), the UI framework from the Zed editor. There's no browser engine or web view inside.
 
@@ -14,7 +14,7 @@ On the same Mac, Quill used about a third of Telegram Desktop's memory and put i
 > [!WARNING]
 > Quill is an independent project. It isn't affiliated with, endorsed by, or sponsored by Telegram (Telegram FZ-LLC or Telegram Messenger Inc.). "Telegram" is a trademark of its owner, and Quill uses the name only to say which service it works with.
 >
-> Quill is early, experimental software. It is made and tested day to day on a Mac; the Windows and Linux builds pass automated tests but have had little use on real computers so far. Use it at your own risk. It comes with no warranty, as the [MIT license](LICENSE) states, and the maintainers are not responsible for lost data, account restrictions or bans, missed messages, or any other damage. Keep an official Telegram app installed.
+> Quill is early, experimental software. It is made and tested day to day on a Mac; the Windows and Linux builds pass automated tests but have had little use on real computers so far. Use it at your own risk. It comes with no warranty, as the [GPL-3.0 license](LICENSE) states, and the maintainers are not responsible for lost data, account restrictions or bans, missed messages, or any other damage. Keep an official Telegram app installed.
 
 <p align="center"><img src="docs/screenshots/demo.gif" width="880" alt="A short recording of Quill opening chats and typing a reply in the dark theme"/></p>
 
@@ -134,13 +134,13 @@ Toolchain: Rust 1.99.1, pinned in `rust-toolchain.toml` (the minimum supported v
 
 **Can my account get banned for using it?** Quill follows Telegram's rules for third-party apps as closely as it can, but Telegram decides what it allows and nobody can promise anything. Keep an official app installed.
 
-**Is it free?** Yes. Quill is free software under the MIT license.
+**Is it free?** Yes. Quill is free software under the GPL-3.0 license.
 
 **Which systems does it run on?** macOS 14 or later on Apple Silicon, Windows 10 or later on x64, and Linux on x86_64 or arm64 with glibc, a Vulkan driver and GTK 3.
 
 ## License
 
-Quill is released under the [MIT License](LICENSE). The packages also contain third-party components under their own licenses, among them TDLib (BSL-1.0), OpenSSL (Apache-2.0), FFmpeg (LGPL-2.1 or later, Linux and Windows only), Telegram's tgcalls call engine (LGPL-3.0) and the ThorVG sticker renderer (MIT). [THIRD_PARTY.md](THIRD_PARTY.md) lists every component. The license texts are in [licenses/](licenses), and the licenses of the Rust crates are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). In the app, Settings → Appearance → About Quill → Open-source licenses opens the same list.
+Quill is released under the [GNU General Public License v3.0](LICENSE). It draws Telegram Desktop's interface icons, which are GPL-3.0, so the whole app is; the code that came from upstream Quill keeps its MIT notice in [licenses/quill-upstream-MIT.txt](licenses/quill-upstream-MIT.txt). The packages also contain third-party components under their own licenses, among them TDLib (BSL-1.0), OpenSSL (Apache-2.0), FFmpeg (LGPL-2.1 or later, Linux and Windows only), Telegram's tgcalls call engine (LGPL-3.0) and the ThorVG sticker renderer (MIT). [THIRD_PARTY.md](THIRD_PARTY.md) lists every component. The license texts are in [licenses/](licenses), and the licenses of the Rust crates are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). In the app, Settings → Appearance → About Quill → Open-source licenses opens the same list.
 
 ## Contributing
 

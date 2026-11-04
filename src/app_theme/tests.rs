@@ -73,14 +73,14 @@ fn accent_recolours_the_palette_like_tdesktop() {
 }
 
 #[test]
-fn quill_themes_are_the_defaults_and_keep_their_look() {
+fn quill_light_and_tdesktop_night_are_the_defaults_and_quill_keeps_its_look() {
     assert_eq!(
         ThemeId::default_day(),
         ThemeId::Builtin(BuiltinTheme::QuillLight)
     );
     assert_eq!(
         ThemeId::default_night(),
-        ThemeId::Builtin(BuiltinTheme::QuillDark)
+        ThemeId::Builtin(BuiltinTheme::Tinted)
     );
     assert_eq!(
         BuiltinTheme::ALL[..2],

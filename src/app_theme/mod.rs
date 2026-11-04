@@ -41,9 +41,9 @@ impl ThemeId {
         ThemeId::Builtin(BuiltinTheme::QuillLight)
     }
 
-    /// The night default: Quill Dark.
+    /// The night default: tdesktop's own night theme ("Tinted").
     pub fn default_night() -> Self {
-        ThemeId::Builtin(BuiltinTheme::QuillDark)
+        ThemeId::Builtin(BuiltinTheme::Tinted)
     }
 
     pub fn builtin(&self) -> Option<BuiltinTheme> {

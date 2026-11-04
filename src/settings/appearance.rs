@@ -38,11 +38,10 @@ pub enum AutoNight {
     Scheduled,
 }
 
-/// Message text size bounds, in px. The default 14px matches the
-/// previous hardcoded `text_sm()` at the 16px rem base.
+/// Message text size bounds, in px. The default is tdesktop's `fsize`.
 pub const FONT_SIZE_MIN: u8 = 12;
 pub const FONT_SIZE_MAX: u8 = 20;
-pub const FONT_SIZE_DEFAULT: u8 = 14;
+pub const FONT_SIZE_DEFAULT: u8 = 13;
 
 /// Clamp a font size into the supported range (the stepper can't
 /// produce out-of-range values, but prefs files are user-editable).
@@ -125,9 +124,8 @@ pub struct AppearancePrefs {
     pub wallpaper_tile_night: bool,
     /// tdesktop `adaptiveForWide` ("Adaptive layout for wide screens"):
     /// in a chat at least `chat_wide::ADAPTIVE_CHAT_WIDE_WIDTH` wide, every
-    /// message sits on the left in one column. tdesktop turns it on by
-    /// default; Quill keeps it off so its default look is unchanged.
-    #[serde(default)]
+    /// message sits on the left in one column. On by default, as in tdesktop.
+    #[serde(default = "default_true")]
     pub adaptive_for_wide: bool,
     /// On Omarchy, take Omarchy's current theme and follow its switches.
     /// Choosing another theme turns this off.
@@ -201,6 +199,12 @@ pub struct AppearancePrefs {
     /// Telegram Desktop shows no menu bar there. macOS uses the native one.
     #[serde(default)]
     pub show_menu_bar: bool,
+    /// Whether these prefs were moved to the Telegram Desktop look
+    /// (`docs/decisions/tdesktop-pixel-contract.md`). Prefs saved before it
+    /// keep any value a user changed, and take the new defaults where they
+    /// still hold the old ones (see [`load_appearance_prefs`]).
+    #[serde(default)]
+    pub tdesktop_look: bool,
 }
 
 fn default_night_start() -> u16 {
@@ -242,7 +246,7 @@ impl Default for AppearancePrefs {
             telegram_wallpaper: false,
             wallpaper_tile_day: false,
             wallpaper_tile_night: false,
-            adaptive_for_wide: false,
+            adaptive_for_wide: true,
             follow_omarchy: true,
             interface_scale_pct: INTERFACE_SCALE_DEFAULT,
             font_size_px: FONT_SIZE_DEFAULT,
@@ -253,7 +257,7 @@ impl Default for AppearancePrefs {
             archive_collapsed: false,
             archive_in_main_menu: false,
             swipe_action: crate::chat_swipe::SwipeAction::Disabled,
-            folder_tabs_view: crate::folder_icons::FolderTabsView::Top,
+            folder_tabs_view: crate::folder_icons::FolderTabsView::Left,
             folder_tabs_mode: crate::folder_icons::FolderTabsMode::Default,
             start_in_tray: false,
             minimize_to_tray: false,
@@ -262,6 +266,7 @@ impl Default for AppearancePrefs {
             tray_icon_monochrome: true,
             native_window_frame: false,
             show_menu_bar: false,
+            tdesktop_look: true,
         }
     }
 }
@@ -318,7 +323,29 @@ pub fn load_appearance_prefs(paths: &AccountPaths) -> AppearancePrefs {
     prefs.preview_lines = crate::chatlist_style::clamp_preview_lines(prefs.preview_lines);
     prefs.night_start_minutes %= 24 * 60;
     prefs.night_end_minutes %= 24 * 60;
+    move_to_tdesktop_look(&mut prefs);
     prefs
+}
+
+/// Prefs saved before the Telegram Desktop look: the settings that still
+/// hold the old defaults take the new ones (night theme, message text size,
+/// folders on the left, the wide layout). A value a user picked stays.
+fn move_to_tdesktop_look(prefs: &mut AppearancePrefs) {
+    use crate::app_theme::{BuiltinTheme, ThemeId};
+    if prefs.tdesktop_look {
+        return;
+    }
+    if prefs.night_theme == ThemeId::Builtin(BuiltinTheme::QuillDark) {
+        prefs.night_theme = ThemeId::default_night();
+    }
+    if prefs.font_size_px == 14 {
+        prefs.font_size_px = FONT_SIZE_DEFAULT;
+    }
+    if prefs.folder_tabs_view == crate::folder_icons::FolderTabsView::Top {
+        prefs.folder_tabs_view = crate::folder_icons::FolderTabsView::Left;
+    }
+    prefs.adaptive_for_wide = true;
+    prefs.tdesktop_look = true;
 }
 
 /// Persist appearance prefs.
@@ -420,6 +447,7 @@ mod tests {
             tray_icon_monochrome: false,
             native_window_frame: true,
             show_menu_bar: true,
+            tdesktop_look: true,
         };
         save_appearance_prefs(&paths, &prefs);
         assert_eq!(load_appearance_prefs(&paths), prefs);
@@ -567,6 +595,36 @@ mod theme_choice_tests {
         assert_eq!(legacy.theme, ThemeChoice::Light);
     }
 
+    /// Prefs saved before the Telegram Desktop look take its defaults where
+    /// they still hold the old ones; a value a user picked stays.
+    #[test]
+    fn old_prefs_move_to_the_tdesktop_look() {
+        use crate::app_theme::{BuiltinTheme, ThemeId};
+        use crate::folder_icons::FolderTabsView;
+        let mut old: AppearancePrefs = serde_json::from_str(
+            r#"{"night_theme":"quill_dark","font_size_px":14,"folder_tabs_view":"Top"}"#,
+        )
+        .unwrap();
+        assert!(!old.tdesktop_look);
+        super::move_to_tdesktop_look(&mut old);
+        assert_eq!(old.night_theme, ThemeId::Builtin(BuiltinTheme::Tinted));
+        assert_eq!(old.font_size_px, FONT_SIZE_DEFAULT);
+        assert_eq!(old.folder_tabs_view, FolderTabsView::Left);
+        assert!(old.adaptive_for_wide && old.tdesktop_look);
+
+        let mut picked: AppearancePrefs =
+            serde_json::from_str(r#"{"night_theme":"night","font_size_px":16}"#).unwrap();
+        super::move_to_tdesktop_look(&mut picked);
+        assert_eq!(picked.night_theme, ThemeId::Builtin(BuiltinTheme::Night));
+        assert_eq!(picked.font_size_px, 16);
+
+        // Moved once: a later choice of the old values is kept.
+        let mut again = AppearancePrefs::default();
+        again.folder_tabs_view = FolderTabsView::Top;
+        super::move_to_tdesktop_look(&mut again);
+        assert_eq!(again.folder_tabs_view, FolderTabsView::Top);
+    }
+
     /// Prefs saved before themes keep loading: Classic by day, Tinted at
     /// night, and an old single accent still colours built-in themes until
     /// one gets its own.
@@ -579,10 +637,7 @@ mod theme_choice_tests {
             old.theme_for(false),
             &ThemeId::Builtin(BuiltinTheme::QuillLight)
         );
-        assert_eq!(
-            old.theme_for(true),
-            &ThemeId::Builtin(BuiltinTheme::QuillDark)
-        );
+        assert_eq!(old.theme_for(true), &ThemeId::Builtin(BuiltinTheme::Tinted));
         // The old accent stays on Quill's themes only.
         assert_eq!(old.accent_for(BuiltinTheme::QuillDark), Some(0x2f6ff7));
         assert_eq!(old.accent_for(BuiltinTheme::Night), None);

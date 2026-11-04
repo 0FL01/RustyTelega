@@ -171,6 +171,9 @@ pub struct Theme {
     pub font_family: SharedString,
     /// The base font size for the application, default is 16px.
     pub font_size: Pixels,
+    /// The size of text that sets none of its own, default is the base
+    /// font size. An app can draw its body text smaller than its rem.
+    pub text_size: Option<Pixels>,
     /// The monospace font family for the application.
     ///
     /// Defaults to:
@@ -776,6 +779,7 @@ impl From<&ThemeColor> for Theme {
             transparent: Hsla::transparent_black(),
             font_family: ".SystemUIFont".into(),
             font_size: px(16.),
+            text_size: None,
             mono_font_family: mono_font::default_mono_font_family(),
             mono_font_size: px(13.),
             radius: px(6.),

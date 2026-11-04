@@ -14,7 +14,7 @@ pub const INTRO_NOTICE: &str =
 pub const DISCLAIMER: &str = "Quill is an independent, unofficial Telegram client. It is not \
 affiliated with, endorsed by, or sponsored by Telegram. \"Telegram\" is a trademark of its \
 owner and is used here only to describe compatibility. Quill is early, experimental \
-software provided under the MIT License, without warranty of any kind. Keep an official \
+software provided under the GNU GPL v3.0, without warranty of any kind. Keep an official \
 Telegram app installed and back up anything important.";
 
 /// The notices index shipped next to the executable by the package scripts

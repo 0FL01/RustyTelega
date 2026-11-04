@@ -1,6 +1,8 @@
 # Third-party notices
 
-Quill is MIT-licensed (`LICENSE`). This file lists the third-party components
+Quill is licensed under GPL-3.0 (`LICENSE`), because it compiles in Telegram
+Desktop's GPL-3.0 icon masks; the upstream Quill code keeps its MIT notice
+(`licenses/quill-upstream-MIT.txt`). This file lists the third-party components
 that Quill compiles in or ships next to its executable, with their licenses.
 The license texts are in `licenses/` and, for Rust crates, in
 `THIRD_PARTY_LICENSES.md`. Every package (macOS app, Linux tarball, Windows zip)
@@ -79,7 +81,8 @@ the exact commits and a written offer in `LGPL-SOURCES.txt`
 | Built-in US keyboard map `third_party/gpui-pre-linux/src/linux/wayland/default_keymap.xkb` (compiled in, Linux) | xkeyboard-config's MIT/X11-style notices (`licenses/xkeyboard-config-COPYING.txt`, the 2.41 `COPYING`) | Compiled by libxkbcommon from xkeyboard-config 2.41 (https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config). Used on Wayland only when the compositor sends no usable keymap and the system has none. |
 | App and tray icons (`assets/icons/`) | Quill project | Quill's own design, a "Q" with a quill feather (`docs/decisions/codex-app-icon.md`). It is not the Telegram logo. |
 | Call tones | Quill project | Synthesized in code (`src/ui/call_tones.rs`); no audio files and none of Telegram's GPL sounds. |
-| Fonts | none bundled | Quill uses the operating system's fonts. |
+| Fonts `assets/fonts/OpenSans-*.ttf` (compiled in) | Apache-2.0 (`licenses/open-sans-Apache-2.0.txt`) | Open Sans 1.10 by Google, the copy Telegram Desktop ships in `lib_ui/fonts`. The interface face. |
+| Interface icon masks `assets/tdesktop-icons/` (compiled in) | GPL-3.0 (`licenses/GPL-3.0.txt`) | Telegram Desktop's icons (`Telegram/Resources/icons`, `lib_ui/icons`), copied unchanged so the main window matches Telegram Desktop pixel for pixel. Their licence makes the whole app GPL-3.0. |
 
 ## Source not used
 
