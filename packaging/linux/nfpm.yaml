@@ -1,0 +1,73 @@
+name: quill
+arch: amd64
+platform: linux
+version: ${VERSION}
+version_schema: none
+release: "1"
+maintainer: Andrey Bash <bash8de@proton.me>
+description: Independent, unofficial Telegram desktop client built with GPUI and TDLib
+homepage: https://github.com/0FL01/RustyTelega
+license: MIT AND LGPL-3.0-only AND LGPL-2.1-or-later AND BSL-1.0
+
+contents:
+  - src: stage/quill/
+    dst: /usr/lib/quill
+    type: tree
+  - src: stage/share/
+    dst: /usr/share
+    type: tree
+  - src: /usr/lib/quill/quill
+    dst: /usr/bin/quill
+    type: symlink
+
+overrides:
+  deb:
+    depends:
+      - libc6 (>= 2.35)
+      - libgcc-s1
+      - libstdc++6
+      - zlib1g
+      - libasound2t64
+      - libpulse0
+      - libgtk-3-0t64
+      - libx11-xcb1
+      - libxcb1
+      - libxcb-xkb1
+      - libxcomposite1
+      - libxdamage1
+      - libxrandr2
+      - libxtst6
+      - libxkbcommon-x11-0
+      - libwayland-client0
+      - libvulkan1
+      - libfontconfig1
+      - libfreetype6
+      - libwebkit2gtk-4.1-0
+      - libsoup-3.0-0
+      - hicolor-icon-theme
+  rpm:
+    # The package names really differ between Fedora and Leap. package.sh sets
+    # these to the corresponding native names for each of the two RPMs.
+    depends:
+      - glibc >= 2.35
+      - ${RPM_GCC}
+      - ${RPM_CXX}
+      - ${RPM_ZLIB}
+      - ${RPM_ALSA}
+      - ${RPM_PULSE}
+      - ${RPM_GTK}
+      - ${RPM_X11_XCB}
+      - ${RPM_XCB}
+      - ${RPM_XCB_XKB}
+      - ${RPM_XCOMPOSITE}
+      - ${RPM_XDAMAGE}
+      - ${RPM_XRANDR}
+      - ${RPM_XTST}
+      - ${RPM_XKB}
+      - ${RPM_WAYLAND}
+      - ${RPM_VULKAN}
+      - ${RPM_FONTCONFIG}
+      - ${RPM_FREETYPE}
+      - ${RPM_WEBKIT}
+      - ${RPM_SOUP}
+      - hicolor-icon-theme

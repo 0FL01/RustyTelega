@@ -1,5 +1,5 @@
-# Categories for GitHub's generated release notes (used by .github/workflows/release.yml
-# through the generate-notes API). PRs without a matching label land in "Other changes".
+# Categories for GitHub's generated release notes. PRs without a matching
+# label land in "Other changes".
 changelog:
   exclude:
     labels:

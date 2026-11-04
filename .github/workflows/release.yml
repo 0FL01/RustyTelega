@@ -1,221 +1,1194 @@
 name: release
-# Builds the three platform packages, the LGPL source archives, the release
-# notes and latest.json, then creates a DRAFT GitHub release.
-# docs/decisions/codex-release-pipeline.md
-#
-#   gh workflow run release.yml -f release=true   -> draft release (owner publishes it)
-#   gh workflow run release.yml -f release=true -f prerelease=true
-#                                                 -> draft flagged as a pre-release (beta)
-#   gh workflow run release.yml                   -> dry run: same build, artifacts only
-#
-# The version is computed, never chosen: YEAR.MONTHDAY.COMMITS from the
-# commit being built, e.g. 2026.1009.1187 = committed 2026-10-09 (UTC), the
-# 1187th commit on main. It is valid semver, it only goes up, and the same
-# commit always gets the same version. The workflow stamps it into the
-# binaries (QUILL_RELEASE_VERSION, src/version.rs), so Cargo.toml never
-# changes. Pushing a vYEAR.MONTHDAY.COMMITS tag by hand also works.
-#
-# A beta is the same build with GitHub's pre-release flag. "Install beta
-# versions" in Quill's Advanced settings reads the releases list and takes the
-# newest published release; /releases/latest, the product page and everyone
-# without the switch only ever see stable releases.
-#
-# The release is ALWAYS created as a draft. Nothing here publishes it: the
-# owner reviews the draft and clicks Publish, which creates the tag and fires
-# release-published.yml (the site-refresh hook).
-#
-# Telegram credentials: releases compile the TELEGRAM_API_ID /
-# TELEGRAM_API_HASH secrets into the binaries (src/credentials.rs). Missing
-# secrets give a credential-free build, which the release notes call out. Dry
-# runs embed nothing unless embed_credentials is set.
+
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
-  workflow_dispatch:
-    inputs:
-      release:
-        description: 'Create a draft release (otherwise a dry run that only uploads artifacts)'
-        required: false
-        default: false
-        type: boolean
-      prerelease:
-        description: 'Flag the draft release as a pre-release (a beta for "Install beta versions")'
-        required: false
-        default: false
-        type: boolean
-      embed_credentials:
-        description: 'Dry runs only: embed the Telegram credential secrets'
-        required: false
-        default: false
-        type: boolean
-
-run-name: ${{ github.ref_type == 'tag' && format('release {0}', github.ref_name) || (inputs.release && format('release ({0})', github.ref_name) || format('release dry run ({0})', github.ref_name)) }}
-
-# Releases queue behind each other; dry runs have their own queue, so a slow
-# dry run never holds up a release.
-concurrency:
-  group: release-${{ (github.ref_type == 'tag' || inputs.release) && 'publish' || format('dry-run-{0}', github.ref) }}
-  cancel-in-progress: false
+    branches: [main]
 
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
 jobs:
   prepare:
-    name: prepare
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
-      version: ${{ steps.v.outputs.version }}
-      tag: ${{ steps.v.outputs.tag }}
-      embed: ${{ steps.v.outputs.embed }}
-      credentials: ${{ steps.v.outputs.credentials }}
-      publish: ${{ steps.v.outputs.publish }}
-      prerelease: ${{ steps.v.outputs.prerelease }}
+      build: ${{ steps.changes.outputs.build }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      credentials: ${{ steps.version.outputs.credentials }}
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
-      - id: v
-        name: version, tag and credential mode
+          persist-credentials: false
+      - name: Detect non-Markdown changes in the entire push
+        id: changes
         env:
-          GH_TOKEN: ${{ github.token }}
-          INPUT_RELEASE: ${{ inputs.release }}
-          INPUT_PRERELEASE: ${{ inputs.prerelease }}
-          INPUT_EMBED: ${{ inputs.embed_credentials }}
-          # Only "true"/"false" leave this step; the values never do.
-          HAVE_SECRETS: ${{ secrets.TELEGRAM_API_ID != '' && secrets.TELEGRAM_API_HASH != '' }}
+          BEFORE: ${{ github.event.before }}
+        shell: bash
         run: |
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
-            version="${GITHUB_REF_NAME#v}"
-            embed=true
-            publish=true
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          [[ "$BEFORE" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::invalid before SHA'; exit 1; }
+          if [[ "$BEFORE" =~ ^0{40}$ ]]; then
+            base="$(git hash-object -w -t tree --stdin </dev/null)"
           else
-            # YEAR.MONTHDAY.COMMITS of the commit being built (UTC).
-            day="$(TZ=UTC git log -1 --format=%cd --date=format-local:'%Y.%-m%d' HEAD)"
-            version="$day.$(git rev-list --count HEAD)"
-            if [ "$INPUT_RELEASE" = true ]; then
-              [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::releases are cut from main, not $GITHUB_REF"; exit 1; }
-              embed=true
-              publish=true
-            else
-              embed="${INPUT_EMBED:-false}"
-              publish=false
+            # A force-push can make the old tip unreachable from the new one.
+            if ! git cat-file -e "$BEFORE^{commit}"; then
+              git fetch --no-tags origin "$BEFORE"
             fi
+            git cat-file -e "$BEFORE^{commit}"
+            base="$BEFORE"
           fi
-          python3 - "$version" <<'PY' || exit 1
-          import datetime, re, sys
-          v = sys.argv[1]
-          m = re.fullmatch(r"(\d{4})\.([1-9]\d?)(\d{2})\.(0|[1-9]\d*)", v)
-          if not m:
-              sys.exit(f"::error::version must be YEAR.MONTHDAY.COMMITS (e.g. 2026.1009.1187), got '{v}'")
-          try:
-              datetime.date(int(m[1]), int(m[2]), int(m[3]))
-          except ValueError:
-              sys.exit(f"::error::version {v} does not start with a real date")
+          # Do not put git in a pipeline where an error can look like no changes.
+          git diff --no-renames --name-only -z "$base" "$GITHUB_SHA" -- > "$RUNNER_TEMP/changed"
+          python3 - "$RUNNER_TEMP/changed" >> "$GITHUB_OUTPUT" <<'PY'
+          import pathlib, sys
+          names = pathlib.Path(sys.argv[1]).read_bytes().split(b'\0')
+          build = any(name and not name.endswith(b'.md') for name in names)
+          print(f'build={str(build).lower()}')
           PY
-          if [ "$publish" = true ] && gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::release v$version already exists (this commit was released); delete its draft to rebuild it"
-            exit 1
+      - name: Deterministic version and existing tag check
+        id: version
+        if: steps.changes.outputs.build == 'true'
+        env:
+          HAVE_SECRETS: ${{ secrets.TELEGRAM_API_ID != '' && secrets.TELEGRAM_API_HASH != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          day="$(TZ=UTC git log -1 --format=%cd --date=format-local:'%Y.%-m%d' "$GITHUB_SHA")"
+          version="$day.$(git rev-list --count "$GITHUB_SHA")"
+          python3 - "$version" <<'PY'
+          import datetime, re, sys
+          m = re.fullmatch(r'(\d{4})\.([1-9]\d?)(\d{2})\.(0|[1-9]\d*)', sys.argv[1])
+          if not m:
+              sys.exit(f'::error::invalid release version {sys.argv[1]}')
+          datetime.date(int(m[1]), int(m[2]), int(m[3]))
+          PY
+          tag="v$version"
+          # ls-remote failing is an error, never evidence that a tag is absent.
+          git ls-remote --refs origin "refs/tags/$tag" > "$RUNNER_TEMP/tag-ref"
+          if [[ -s "$RUNNER_TEMP/tag-ref" ]]; then
+            git fetch --no-tags origin "refs/tags/$tag"
+            actual="$(git rev-parse 'FETCH_HEAD^{commit}')"
+            [[ "$actual" == "$GITHUB_SHA" ]] || { echo "::error::$tag already points to $actual, not $GITHUB_SHA"; exit 1; }
           fi
           credentials=none
-          if [ "$embed" = true ] && [ "$HAVE_SECRETS" = true ]; then credentials=embedded; fi
-          if [ "$embed" = true ] && [ "$HAVE_SECRETS" != true ]; then
-            echo "::warning::TELEGRAM_API_ID / TELEGRAM_API_HASH secrets are not set: this is a credential-free build"
+          if [[ "$HAVE_SECRETS" == true ]]; then
+            credentials=embedded
+          else
+            echo '::warning::Telegram credential pair is incomplete; building credential-free'
           fi
           {
             echo "version=$version"
-            echo "tag=v$version"
-            echo "publish=$publish"
-            echo "prerelease=$([ "$INPUT_PRERELEASE" = true ] && [ "$publish" = true ] && echo true || echo false)"
-            echo "embed=$embed"
+            echo "tag=$tag"
             echo "credentials=$credentials"
           } >> "$GITHUB_OUTPUT"
-          echo "Quill $version, tag v$version, credentials: $credentials, draft release: $publish"
 
-  # Each package builds the call library it ships for its own targets
-  # (quill-calls.yml), so no platform waits on another's. The library's Rust
-  # tests run here beside the packages, and the release waits for them.
-  calls-tests:
-    name: calls-tests
+  linux-checks:
+    name: Linux fmt, clippy and tests
     needs: prepare
-    uses: ./.github/workflows/quill-calls.yml
-    with:
-      mode: test
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test Flatpak manifest preparation
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s packaging/flatpak -p 'test_bump.py'
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: fmt
+        run: cargo fmt --all -- --check
+      - name: clippy (core)
+        run: cargo clippy --no-default-features --all-targets --locked -- -D warnings
+      - name: tests (core + replay)
+        timeout-minutes: 30
+        run: cargo test --no-default-features --locked -- --nocapture
+      - name: tests (network watcher, Linux namespace)
+        timeout-minutes: 10
+        run: |
+          key=kernel.apparmor_restrict_unprivileged_userns
+          if sysctl -n "$key" >/dev/null 2>&1; then sudo sysctl -w "$key=0"; fi
+          cargo test --no-default-features --locked --lib net_watch -- --ignored --nocapture
+      - name: apt dependencies (UI build)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config nasm \
+            zlib1g-dev libssl-dev libgtk-3-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libxcb1-dev libx11-xcb-dev libxcb-xkb-dev libfontconfig-dev \
+            libfreetype-dev libasound2-dev libvulkan-dev libdbus-1-dev libclang-dev dbus
+      - name: tests (UI, headless)
+        run: cargo test --features demo-capture --locked --bin quill
+      - name: tests (UI library, vendored Linux backend)
+        run: >-
+          cargo test -p gpui-pre-linux -p quill --lib --features quill/demo-capture --locked --
+          battery_signal tray_sni present_retry recovery_timers wayland::client::tests wayland::clipboard::tests
+      - name: clippy (UI)
+        run: cargo clippy --features demo-capture --all-targets --locked -p quill -p quill-calls-sys -p quill-webview-protocol -- -D warnings
 
-  linux:
-    name: linux
+  # Build and test the call library once per shipped target. The package jobs
+  # consume the exact library tested here, instead of building it a second time.
+  calls:
+    name: quill-calls (${{ matrix.target }})
     needs: prepare
-    uses: ./.github/workflows/package-linux.yml
-    with:
-      version: ${{ needs.prepare.outputs.version }}
-      embed_credentials: ${{ needs.prepare.outputs.embed == 'true' }}
-    secrets:
-      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+    if: needs.prepare.outputs.build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x86_64, runner: ubuntu-22.04, lib: libquill_calls.so }
+          - { target: linux-aarch64, runner: ubuntu-22.04-arm, lib: libquill_calls.so }
+          - { target: macos-arm64, runner: macos-15, lib: libquill_calls.dylib }
+          - { target: windows-x86_64, runner: windows-2022, lib: quill_calls.dll }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build git pkg-config nasm yasm \
+            zlib1g-dev libssl-dev libpulse-dev libasound2-dev \
+            libx11-dev libxcomposite-dev libxdamage-dev libxext-dev libxfixes-dev \
+            libxrandr-dev libxrender-dev libxtst-dev libdrm-dev libgbm-dev \
+            libepoxy-dev libglib2.0-dev libpipewire-0.3-dev
+      - name: macOS build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew list ninja >/dev/null 2>&1 || brew install ninja
+          brew list nasm >/dev/null 2>&1 || brew install nasm
+      - name: restore OpenSSL build
+        id: openssl-cache
+        if: runner.os == 'macOS'
+        uses: actions/cache/restore@v6
+        with:
+          path: native/openssl/prefix
+          key: openssl-macos-${{ runner.arch }}-${{ hashFiles('scripts/build-openssl.sh') }}
+      - name: build OpenSSL
+        if: runner.os == 'macOS' && steps.openssl-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build-openssl.sh
+      - name: save OpenSSL build
+        if: runner.os == 'macOS' && steps.openssl-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: native/openssl/prefix
+          key: openssl-macos-${{ runner.arch }}-${{ hashFiles('scripts/build-openssl.sh') }}
+      - name: use the built OpenSSL
+        if: runner.os == 'macOS'
+        run: echo "OPENSSL_ROOT_DIR=$PWD/native/openssl/prefix" >> "$GITHUB_ENV"
+      - name: Windows build dependencies
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            git make diffutils perl which
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-zlib
+      - name: restore FFmpeg build
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: vendor/ffmpeg/prefix
+          key: ffmpeg-${{ runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || 'linux' }}-${{ runner.arch }}-${{ hashFiles('scripts/build-ffmpeg.sh', 'native/quillvideo/*') }}
+      - name: build FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
+        run: bash scripts/build-ffmpeg.sh
+      - name: build FFmpeg (MSYS2 UCRT64)
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        shell: msys2 {0}
+        run: bash scripts/build-ffmpeg.sh
+      - name: save FFmpeg build
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: vendor/ffmpeg/prefix
+          key: ffmpeg-${{ runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || 'linux' }}-${{ runner.arch }}-${{ hashFiles('scripts/build-ffmpeg.sh', 'native/quillvideo/*') }}
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
+      - name: restore tg_owt and codecs
+        id: deps-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: vendor/quill-calls/work/deps
+          key: quill-calls-deps-${{ matrix.target }}-${{ hashFiles('scripts/build-tgcalls.sh', 'scripts/build-ffmpeg.sh', 'native/quill-calls/patches/libvpx-*') }}
+      - name: build libquill_calls
+        if: runner.os != 'Windows'
+        run: bash scripts/build-tgcalls.sh
+      - name: build quill_calls.dll (MSVC)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          MSYS2_PATH_TYPE: inherit
+        run: bash scripts/build-tgcalls.sh
+      - name: save tg_owt and codecs
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: vendor/quill-calls/work/deps
+          key: quill-calls-deps-${{ matrix.target }}-${{ hashFiles('scripts/build-tgcalls.sh', 'scripts/build-ffmpeg.sh', 'native/quill-calls/patches/libvpx-*') }}
+      - name: load the library and read its protocol versions
+        env:
+          LD_LIBRARY_PATH: vendor/ffmpeg/prefix/lib
+        run: |
+          lib="vendor/quill-calls/lib/${{ matrix.lib }}"
+          python=python3
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            dir="$RUNNER_TEMP/quill-calls"
+            mkdir -p "$dir"
+            cp -L "$lib" vendor/ffmpeg/prefix/lib/*.dylib \
+              "$OPENSSL_ROOT_DIR"/lib/libssl.3.dylib "$OPENSSL_ROOT_DIR"/lib/libcrypto.3.dylib "$dir/"
+            lib="$dir/${{ matrix.lib }}"
+          elif [[ "$RUNNER_OS" == Windows ]]; then
+            dir="$(cygpath -u "$RUNNER_TEMP")/quill-calls"
+            mkdir -p "$dir"
+            cp "$lib" vendor/ffmpeg/prefix/bin/*.dll "$dir/"
+            lib="$(cygpath -w "$dir/${{ matrix.lib }}")"
+            python=python
+          fi
+          "$python" - "$lib" <<'EOF'
+          import ctypes, sys
+          lib = ctypes.CDLL(sys.argv[1])
+          lib.qc_api_version.restype = ctypes.c_uint32
+          lib.qc_library_versions.restype = ctypes.c_char_p
+          lib.qc_max_layer.restype = ctypes.c_int32
+          versions = lib.qc_library_versions().decode().split("\n")
+          print("api", lib.qc_api_version(), "max layer", lib.qc_max_layer(), "versions", versions)
+          assert lib.qc_api_version() == 4
+          assert lib.qc_max_layer() >= 92, "tgcalls max layer"
+          assert len(versions) >= 3 and all(versions), "tgcalls registered no protocol versions"
+          EOF
+      - name: exported symbols are only the C API
+        run: |
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            syms="$(nm -gU vendor/quill-calls/lib/${{ matrix.lib }} | awk '{print $NF}')"
+          elif [[ "$RUNNER_OS" == Windows ]]; then
+            syms="$(dumpbin -nologo -exports vendor/quill-calls/lib/${{ matrix.lib }} | tr -d '\r' \
+              | awk 'NF == 4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9A-Fa-f]+$/ && length($3) == 8 { print $4 }')"
+            grep -qx qc_api_version <<<"$syms" || { echo 'error: qc_api_version is not exported' >&2; exit 1; }
+          else
+            syms="$(nm -D --defined-only vendor/quill-calls/lib/${{ matrix.lib }} | awk '{print $NF}')"
+          fi
+          other="$(echo "$syms" | grep -v -E '^_?qc_' || true)"
+          if [[ -n "$other" ]]; then echo "$other" | head -20; echo 'error: symbols other than qc_* are exported' >&2; exit 1; fi
+          echo "$syms"
+      - name: the Rust bindings against the library
+        run: |
+          export LD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib"
+          export DYLD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib${OPENSSL_ROOT_DIR:+:$OPENSSL_ROOT_DIR/lib}"
+          export PATH="$PWD/vendor/ffmpeg/prefix/bin:$PATH"
+          if [[ "$RUNNER_OS" == Windows ]]; then cldir="$(dirname "$(command -v cl)")"; export PATH="$cldir:$PATH"; fi
+          cargo test -p quill-calls-sys --locked
+      - name: the 1:1 engine against the library
+        run: |
+          export LD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib"
+          export DYLD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib${OPENSSL_ROOT_DIR:+:$OPENSSL_ROOT_DIR/lib}"
+          export PATH="$PWD/vendor/ffmpeg/prefix/bin:$PATH"
+          if [[ "$RUNNER_OS" == Windows ]]; then cldir="$(dirname "$(command -v cl)")"; export PATH="$cldir:$PATH"; fi
+          root="$PWD"
+          [[ "$RUNNER_OS" == Windows ]] && root="$(cygpath -m "$PWD")"
+          export QUILL_CALLS_LIB="$root/vendor/quill-calls/lib/${{ matrix.lib }}"
+          cargo test --no-default-features --lib --locked calls::engine::tgcalls
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quill-calls-${{ matrix.target }}
+          overwrite: true
+          retention-days: 3
+          path: |
+            vendor/quill-calls/lib/
+            vendor/quill-calls/include/
+            vendor/quill-calls/share/
+          if-no-files-found: error
 
-  windows:
-    name: windows
+  linux-package:
+    name: linux-package (${{ matrix.arch }})
+    needs: [prepare, calls]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-22.04 }
+          - { arch: aarch64, runner: ubuntu-22.04-arm }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # target/ includes dep-info containing compile-time env values.
+          save-if: ${{ needs.prepare.outputs.credentials != 'embedded' }}
+      - name: apt dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake gperf git patchelf pkg-config curl unzip file \
+            zlib1g-dev libssl-dev libgtk-3-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libwebkit2gtk-4.1-dev libsoup-3.0-dev \
+            libwayland-dev libxcb1-dev libx11-xcb-dev libxcb-xkb-dev libfontconfig-dev \
+            libfreetype-dev libasound2-dev libpulse-dev libvulkan-dev libdbus-1-dev libclang-dev nasm \
+            libxcomposite1 libxdamage1 libxrandr2 libxtst6
+      - name: restore TDLib build
+        id: tdlib-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: native/prefix
+          key: tdlib-linux-${{ runner.arch }}-${{ hashFiles('src/pins.rs', 'scripts/build-tdlib.sh', 'native/patches/*') }}
+      - name: build TDLib
+        if: steps.tdlib-cache.outputs.cache-hit != 'true'
+        env:
+          TDLIB_BUILD_TARGET: tdjson tdjson_static
+        run: bash scripts/build-tdlib.sh
+      - name: save TDLib build
+        if: steps.tdlib-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: native/prefix
+          key: tdlib-linux-${{ runner.arch }}-${{ hashFiles('src/pins.rs', 'scripts/build-tdlib.sh', 'native/patches/*') }}
+      - name: restore FFmpeg build
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: vendor/ffmpeg/prefix
+          key: ffmpeg-linux-${{ runner.arch }}-${{ hashFiles('scripts/build-ffmpeg.sh', 'native/quillvideo/*') }}
+      - name: build FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build-ffmpeg.sh
+      - name: save FFmpeg build
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: vendor/ffmpeg/prefix
+          key: ffmpeg-linux-${{ runner.arch }}-${{ hashFiles('scripts/build-ffmpeg.sh', 'native/quillvideo/*') }}
+      - name: BGRA picture layout against the built swscale
+        run: bash scripts/test-bgra-layout.sh
+      - name: decoder tests against the built FFmpeg
+        run: QUILL_REQUIRE_VIDEO_LIB=1 QUILL_VIDEO_LIB="$PWD/vendor/ffmpeg/prefix/lib/libquillvideo.so" cargo test --no-default-features --locked --lib video_decode -- --nocapture
+      - name: hub tests against the built TDLib
+        run: QUILL_TDJSON_PATH="$PWD/native/prefix/lib/libtdjson.so" QUILL_TEST_HUB_EXIT_RUNS=50 cargo test --no-default-features --locked --lib -- --ignored --nocapture blocked_receive live_exit
+      - name: download libquill_calls
+        uses: actions/download-artifact@v8
+        with:
+          name: quill-calls-linux-${{ matrix.arch }}
+          path: vendor/quill-calls
+      - name: build release ui
+        env:
+          QUILL_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          QUILL_BUILD_TELEGRAM_API_ID: ${{ needs.prepare.outputs.credentials == 'embedded' && secrets.TELEGRAM_API_ID || '' }}
+          QUILL_BUILD_TELEGRAM_API_HASH: ${{ needs.prepare.outputs.credentials == 'embedded' && secrets.TELEGRAM_API_HASH || '' }}
+        run: cargo build --release --features ui --locked
+      - name: build mini-app helper (WebKitGTK)
+        run: cargo build --release --locked -p quill-webview
+      - name: package
+        run: bash scripts/linux-package.sh
+      - name: check package (ELF dependencies)
+        run: bash scripts/check-bundle-elf.sh dist/linux/quill-linux-${{ matrix.arch }}
+      - name: checker negative test (unbundled OpenSSL must fail)
+        run: |
+          cp -a dist/linux/quill-linux-${{ matrix.arch }} "$RUNNER_TEMP/neg"
+          rm "$RUNNER_TEMP/neg/lib/libssl.so.3"
+          if bash scripts/check-bundle-elf.sh "$RUNNER_TEMP/neg"; then echo 'checker accepted a package missing libssl' >&2; exit 1; fi
+      - name: run from package (no env vars)
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          env -u LD_LIBRARY_PATH -u QUILL_TDJSON_PATH dist/linux/quill-linux-${{ matrix.arch }}/quill --version
+          test "$(env -u LD_LIBRARY_PATH -u QUILL_TDJSON_PATH dist/linux/quill-linux-${{ matrix.arch }}/quill --version)" = "Quill $VERSION"
+          test "$(dist/linux/quill-linux-${{ matrix.arch }}/quill --build-info)" = ui
+          python3 scripts/check-bundle-dlopen.py dist/linux/quill-linux-${{ matrix.arch }}
+          env -u LD_LIBRARY_PATH dist/linux/quill-linux-${{ matrix.arch }}/quill --video-probe tests/fixtures/clip-h264-aac.mp4
+          env -u LD_LIBRARY_PATH dist/linux/quill-linux-${{ matrix.arch }}/quill --video-probe tests/fixtures/clip-vp9.webm
+      - name: embedded credentials match the request
+        env:
+          WANT_EMBED: ${{ needs.prepare.outputs.credentials == 'embedded' }}
+        run: |
+          got="$(dist/linux/quill-linux-${{ matrix.arch }}/quill --embedded-credentials)"
+          want=none; [ "$WANT_EMBED" = true ] && want=embedded
+          echo "embedded credentials: $got"
+          test "$got" = "$want"
+      - name: smoke the extracted tarball
+        run: |
+          mkdir -p "$RUNNER_TEMP/extract"
+          tar -C "$RUNNER_TEMP/extract" -xzf dist/linux/quill-linux-${{ matrix.arch }}-bundle.tar.gz
+          "$RUNNER_TEMP/extract/quill-linux-${{ matrix.arch }}/quill" --version
+          bash "$RUNNER_TEMP/extract/quill-linux-${{ matrix.arch }}/install.sh" "$RUNNER_TEMP/prefix"
+          "$RUNNER_TEMP/prefix/bin/quill" --version
+          bash scripts/check-ffmpeg-tools.sh "$RUNNER_TEMP/extract/quill-linux-${{ matrix.arch }}" \
+            --expect-encoder mpeg4 --expect-encoder aac --expect-encoder mjpeg --expect-encoder png
+          grep -q "^Exec=$RUNNER_TEMP/prefix/opt/quill/quill" "$RUNNER_TEMP/prefix/share/applications/org.shinycake.quill.desktop"
+          grep -qx "Exec=$RUNNER_TEMP/prefix/opt/quill/quill --quit" "$RUNNER_TEMP/prefix/share/applications/org.shinycake.quill.desktop"
+      - name: updater binary
+        run: |
+          mkdir -p dist/update
+          cp dist/linux/quill-linux-${{ matrix.arch }}/quill dist/update/quill-linux-${{ matrix.arch }}
+          test "$(dist/update/quill-linux-${{ matrix.arch }} --release-asset-name)" = quill-linux-${{ matrix.arch }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quill-linux-${{ matrix.arch }}-bundle
+          overwrite: true
+          retention-days: 3
+          path: |
+            dist/linux/quill-linux-${{ matrix.arch }}-bundle.tar.gz
+            dist/linux/quill-linux-${{ matrix.arch }}-bundle.tar.gz.sha256
+            dist/update/quill-linux-${{ matrix.arch }}
+          if-no-files-found: error
+
+  macos-package:
+    name: macos-package
+    needs: [prepare, calls]
+    runs-on: macos-15
+    timeout-minutes: 150
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ needs.prepare.outputs.credentials != 'embedded' }}
+      - name: build tools
+        run: brew list gperf >/dev/null 2>&1 || brew install gperf
+      - name: restore OpenSSL build
+        id: openssl-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: native/openssl/prefix
+          key: openssl-macos-${{ runner.arch }}-${{ hashFiles('scripts/build-openssl.sh') }}
+      - name: build OpenSSL
+        if: steps.openssl-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build-openssl.sh
+      - name: save OpenSSL build
+        if: steps.openssl-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: native/openssl/prefix
+          key: openssl-macos-${{ runner.arch }}-${{ hashFiles('scripts/build-openssl.sh') }}
+      - name: use the built OpenSSL
+        run: echo "OPENSSL_ROOT_DIR=$PWD/native/openssl/prefix" >> "$GITHUB_ENV"
+      - name: restore TDLib build
+        id: tdlib-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: native/prefix
+          key: tdlib-macos-${{ runner.arch }}-${{ hashFiles('src/pins.rs', 'scripts/build-tdlib.sh', 'scripts/build-openssl.sh', 'native/patches/*') }}
+      - name: build TDLib
+        if: steps.tdlib-cache.outputs.cache-hit != 'true'
+        env:
+          TDLIB_BUILD_TARGET: tdjson tdjson_static
+          JOBS: '2'
+        run: bash scripts/build-tdlib.sh
+      - name: save TDLib build
+        if: steps.tdlib-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: native/prefix
+          key: tdlib-macos-${{ runner.arch }}-${{ hashFiles('src/pins.rs', 'scripts/build-tdlib.sh', 'scripts/build-openssl.sh', 'native/patches/*') }}
+      - name: restore FFmpeg build
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: vendor/ffmpeg/prefix
+          key: ffmpeg-macos-${{ runner.arch }}-${{ hashFiles('scripts/build-ffmpeg.sh', 'native/quillvideo/*') }}
+      - name: build FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build-ffmpeg.sh
+      - name: save FFmpeg build
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: vendor/ffmpeg/prefix
+          key: ffmpeg-macos-${{ runner.arch }}-${{ hashFiles('scripts/build-ffmpeg.sh', 'native/quillvideo/*') }}
+      - name: download libquill_calls
+        uses: actions/download-artifact@v8
+        with:
+          name: quill-calls-macos-arm64
+          path: vendor/quill-calls
+      - name: Metal toolchain
+        run: bash scripts/ensure-metal-toolchain.sh
+      - name: build release ui
+        env:
+          QUILL_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          QUILL_BUILD_TELEGRAM_API_ID: ${{ needs.prepare.outputs.credentials == 'embedded' && secrets.TELEGRAM_API_ID || '' }}
+          QUILL_BUILD_TELEGRAM_API_HASH: ${{ needs.prepare.outputs.credentials == 'embedded' && secrets.TELEGRAM_API_HASH || '' }}
+          QUILL_REQUIRE_METALLIB: '1'
+        run: cargo build --release --features ui --locked
+      - name: build mini-app helper
+        run: cargo build --release --locked -p quill-webview
+      - name: import signing identity
+        env:
+          P12: ${{ secrets.MACOS_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then
+            echo '::warning::MACOS_SIGNING_P12 is not set: Quill.app is ad-hoc signed'
+            exit 0
+          fi
+          kc="$RUNNER_TEMP/signing.keychain-db"
+          kcpass="$(uuidgen)"
+          security create-keychain -p "$kcpass" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpass" "$kc"
+          printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security import "$RUNNER_TEMP/signing.p12" -k "$kc" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/signing.p12"
+          for ca in AppleWWDRCAG3 DeveloperIDG2CA; do
+            curl -fsSL "https://www.apple.com/certificateauthority/$ca.cer" -o "$RUNNER_TEMP/$ca.cer"
+            security import "$RUNNER_TEMP/$ca.cer" -k "$kc" || true
+          done
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpass" "$kc" >/dev/null
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          identity="$(security find-identity -v -p codesigning "$kc" | awk '$1 ~ /^[0-9]+\)$/ {print $2; exit}')"
+          [ -n "$identity" ] || { echo '::error::MACOS_SIGNING_P12 holds no valid code signing identity'; exit 1; }
+          echo "QUILL_CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+      - name: package Quill.app
+        env:
+          QUILL_QR_SELF_TEST: warn
+        run: |
+          QUILL_BIN="$PWD/target/release/quill" QUILL_TDJSON_PATH="$PWD/native/prefix/lib/libtdjson.dylib" \
+            bash scripts/macos-package-smoke.sh
+          for lib in libtdjson.dylib libquill_calls.dylib libssl.3.dylib libcrypto.3.dylib; do
+            test -f "dist/Quill.app/Contents/Frameworks/$lib" || { echo "missing Frameworks/$lib" >&2; exit 1; }
+          done
+          ls dist/Quill.app/Contents/Frameworks/libavcodec.*.dylib
+          env -u DYLD_LIBRARY_PATH python3 - dist/Quill.app/Contents/Frameworks/libquill_calls.dylib <<'EOF'
+          import ctypes, sys
+          lib = ctypes.CDLL(sys.argv[1])
+          lib.qc_max_layer.restype = ctypes.c_int32
+          assert lib.qc_max_layer() >= 92, "libquill_calls did not load"
+          print("libquill_calls loads from the bundle, max layer", lib.qc_max_layer())
+          EOF
+          codesign --verify --deep --strict --verbose=2 dist/Quill.app
+          if [ -n "${QUILL_CODESIGN_IDENTITY:-}" ]; then
+            codesign -dv dist/Quill.app 2>&1 | grep -E '^TeamIdentifier=[A-Z0-9]{10}$' \
+              || { echo '::error::Quill.app is not signed by the identity team' >&2; exit 1; }
+          fi
+      - name: notarize
+        env:
+          NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          if ! codesign -dvv dist/Quill.app 2>&1 | grep -q '^Authority=Developer ID Application: '; then
+            echo '::warning::Quill.app is not signed with a Developer ID Application identity: not notarized'
+            exit 0
+          fi
+          if [ -z "$NOTARY_KEY" ] || [ -z "$NOTARY_KEY_ID" ] || [ -z "$NOTARY_ISSUER_ID" ]; then
+            echo '::error::Quill.app is signed with Developer ID but the MACOS_NOTARY_* secrets are not set'
+            exit 1
+          fi
+          ditto -c -k --keepParent dist/Quill.app "$RUNNER_TEMP/notarize.zip"
+          bash scripts/macos-notarize.sh "$RUNNER_TEMP/notarize.zip"
+          echo 'QUILL_NOTARIZE=1' >> "$GITHUB_ENV"
+          bash scripts/macos-staple.sh dist/Quill.app
+          spctl --assess --type execute --verbose=4 dist/Quill.app
+      - name: run from the bundle
+        env:
+          WANT_EMBED: ${{ needs.prepare.outputs.credentials == 'embedded' }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          exe=dist/Quill.app/Contents/MacOS/quill
+          "$exe" --version
+          test "$("$exe" --version)" = "Quill $VERSION"
+          test "$("$exe" --build-info)" = ui
+          test "$("$exe" --release-asset-name)" = quill-macos-aarch64
+          got="$("$exe" --embedded-credentials)"
+          want=none; [ "$WANT_EMBED" = true ] && want=embedded
+          echo "embedded credentials: $got"
+          test "$got" = "$want"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/Quill.app/Contents/Info.plist
+      - name: zip
+        run: |
+          mkdir -p dist/macos
+          ditto -c -k --sequesterRsrc --keepParent dist/Quill.app dist/macos/quill-macos-aarch64.zip
+          (cd dist/macos && shasum -a 256 quill-macos-aarch64.zip > quill-macos-aarch64.zip.sha256)
+          du -h dist/macos/quill-macos-aarch64.zip
+      - name: disk image
+        env:
+          NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmgbuild"
+          "$RUNNER_TEMP/dmgbuild/bin/pip" install --quiet dmgbuild==1.6.7
+          dmg=dist/macos/quill-macos-aarch64.dmg
+          DMGBUILD="$RUNNER_TEMP/dmgbuild/bin/dmgbuild" bash scripts/macos-dmg.sh dist/Quill.app "$dmg"
+          if [ "${QUILL_NOTARIZE:-}" = 1 ]; then
+            bash scripts/macos-notarize.sh "$dmg"
+            bash scripts/macos-staple.sh "$dmg"
+            spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg"
+          fi
+          (cd dist/macos && shasum -a 256 quill-macos-aarch64.dmg > quill-macos-aarch64.dmg.sha256)
+          mnt="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+          test -L "$mnt/Applications"
+          test -f "$mnt/.background.tiff"
+          test -f "$mnt/.DS_Store"
+          codesign --verify --deep --strict "$mnt/Quill.app"
+          "$mnt/Quill.app/Contents/MacOS/quill" --version
+          hdiutil detach "$mnt" >/dev/null
+      - name: smoke the extracted zip
+        run: |
+          mkdir -p "$RUNNER_TEMP/extract"
+          ditto -x -k dist/macos/quill-macos-aarch64.zip "$RUNNER_TEMP/extract"
+          codesign --verify --deep --strict "$RUNNER_TEMP/extract/Quill.app"
+          bash scripts/check-bundle-macho.sh "$RUNNER_TEMP/extract/Quill.app"
+          "$RUNNER_TEMP/extract/Quill.app/Contents/MacOS/quill" --version
+      - name: smoke the installer script
+        run: |
+          zip="$RUNNER_TEMP/quarantined.zip"
+          cp dist/macos/quill-macos-aarch64.zip "$zip"
+          xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$zip"
+          QUILL_ZIP_URL="file://$zip" \
+          QUILL_SHA256="$(awk '{print $1}' dist/macos/quill-macos-aarch64.zip.sha256)" \
+          QUILL_INSTALL_DIR="$RUNNER_TEMP/apps" QUILL_NO_OPEN=1 bash scripts/macos-install.sh
+          app="$RUNNER_TEMP/apps/Quill.app"
+          xattr -r "$app" > "$RUNNER_TEMP/xattrs.txt"
+          if grep -q com.apple.quarantine "$RUNNER_TEMP/xattrs.txt"; then echo 'installed app is quarantined' >&2; exit 1; fi
+          codesign --verify --deep --strict "$app"
+          "$app/Contents/MacOS/quill" --version
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quill-macos-aarch64
+          overwrite: true
+          retention-days: 3
+          path: |
+            dist/macos/quill-macos-aarch64.zip
+            dist/macos/quill-macos-aarch64.zip.sha256
+            dist/macos/quill-macos-aarch64.dmg
+            dist/macos/quill-macos-aarch64.dmg.sha256
+          if-no-files-found: error
+
+  windows-build:
     needs: prepare
-    uses: ./.github/workflows/package-windows.yml
-    with:
-      version: ${{ needs.prepare.outputs.version }}
-      embed_credentials: ${{ needs.prepare.outputs.embed == 'true' }}
-    secrets:
-      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ needs.prepare.outputs.credentials != 'embedded' }}
+      - name: build release ui
+        env:
+          QUILL_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          QUILL_BUILD_TELEGRAM_API_ID: ${{ needs.prepare.outputs.credentials == 'embedded' && secrets.TELEGRAM_API_ID || '' }}
+          QUILL_BUILD_TELEGRAM_API_HASH: ${{ needs.prepare.outputs.credentials == 'embedded' && secrets.TELEGRAM_API_HASH || '' }}
+        run: cargo build --release --features ui --locked
+      - name: build mini-app helper
+        run: cargo build --release --locked -p quill-webview
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quill-windows-exe
+          overwrite: true
+          path: |
+            target/release/quill.exe
+            target/release/quill-cli.exe
+            target/release/quill-webview.exe
+          retention-days: 3
+          if-no-files-found: error
 
-  macos:
-    name: macos
+  windows-test:
     needs: prepare
-    uses: ./.github/workflows/package-macos.yml
-    with:
-      version: ${{ needs.prepare.outputs.version }}
-      embed_credentials: ${{ needs.prepare.outputs.embed == 'true' }}
-    secrets:
-      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
-      MACOS_SIGNING_P12: ${{ secrets.MACOS_SIGNING_P12 }}
-      MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
-      MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
-      MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-      MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@v2
+      - name: tests (core + replay)
+        run: cargo test --no-default-features --locked -- --nocapture
 
-  # Corresponding source for the shipped LGPL libraries (FFmpeg and the
-  # tgcalls inside libquill_calls).
+  windows-native:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: restore TDLib build
+        id: tdlib-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: native/prefix
+          key: tdlib-windows-mt-${{ runner.arch }}-${{ hashFiles('src/pins.rs', 'scripts/build-tdlib-windows.ps1', 'scripts/windows-common.ps1', 'native/patches/*') }}
+      - name: restore TDLib work tree
+        if: steps.tdlib-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            native/td
+            native/build
+          key: tdlib-windows-mt-work-${{ hashFiles('src/pins.rs', 'native/patches/*') }}-${{ github.run_id }}
+          restore-keys: tdlib-windows-mt-work-${{ hashFiles('src/pins.rs', 'native/patches/*') }}-
+      - name: build TDLib
+        if: steps.tdlib-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: scripts/build-tdlib-windows.ps1
+      - name: save TDLib work tree
+        if: always() && steps.tdlib-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            native/td
+            native/build
+          key: tdlib-windows-mt-work-${{ hashFiles('src/pins.rs', 'native/patches/*') }}-${{ github.run_id }}
+      - name: save TDLib build
+        if: steps.tdlib-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: native/prefix
+          key: tdlib-windows-mt-${{ runner.arch }}-${{ hashFiles('src/pins.rs', 'scripts/build-tdlib-windows.ps1', 'scripts/windows-common.ps1', 'native/patches/*') }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quill-windows-native
+          overwrite: true
+          path: native/prefix/bin/tdjson.dll
+          retention-days: 3
+          if-no-files-found: error
+
+  windows-ffmpeg:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: restore FFmpeg build
+        id: ffmpeg-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: vendor/ffmpeg/prefix
+          key: ffmpeg-windows-${{ runner.arch }}-${{ hashFiles('scripts/build-ffmpeg.sh', 'native/quillvideo/*') }}
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: >-
+            git make diffutils
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-nasm
+            mingw-w64-ucrt-x86_64-zlib
+      - name: build FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build-ffmpeg.sh
+      - name: save FFmpeg build
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: vendor/ffmpeg/prefix
+          key: ffmpeg-windows-${{ runner.arch }}-${{ hashFiles('scripts/build-ffmpeg.sh', 'native/quillvideo/*') }}
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@v2
+      - name: decoder tests against the built FFmpeg
+        shell: pwsh
+        env:
+          QUILL_REQUIRE_VIDEO_LIB: '1'
+        run: cargo test --no-default-features --locked --lib video_decode -- --nocapture
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quill-windows-ffmpeg
+          overwrite: true
+          path: |
+            vendor/ffmpeg/prefix/bin/*.dll
+            vendor/ffmpeg/prefix/bin/ffmpeg.exe
+            vendor/ffmpeg/prefix/bin/ffprobe.exe
+            vendor/ffmpeg/prefix/share/quillvideo/*
+          retention-days: 3
+          if-no-files-found: error
+
+  windows-package:
+    needs: [prepare, calls, windows-build, windows-test, windows-native, windows-ffmpeg]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-windows-exe
+          path: target/release
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-windows-native
+          path: native/prefix/bin
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-calls-windows-x86_64
+          path: vendor/quill-calls
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-windows-ffmpeg
+          path: vendor/ffmpeg/prefix
+      - name: package
+        shell: pwsh
+        run: scripts/windows-package.ps1
+      - name: check package (PE dependencies, no VC++ runtime DLLs)
+        shell: pwsh
+        run: |
+          scripts/check-bundle-pe.ps1 dist/windows/quill-windows-x86_64
+          $vc = @(Get-ChildItem -File dist/windows/quill-windows-x86_64 | Where-Object { $_.Name -match '^(vcruntime|msvcp|concrt)' })
+          if ($vc.Count) { throw "package ships VC++ runtime DLLs: $($vc.Name -join ', ')" }
+      - name: checker negative test (unbundled FFmpeg DLL must fail)
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse dist/windows/quill-windows-x86_64 "$env:RUNNER_TEMP/neg"
+          Get-ChildItem "$env:RUNNER_TEMP/neg" -Filter 'avutil-*.dll' | Remove-Item
+          pwsh -NoProfile -File scripts/check-bundle-pe.ps1 "$env:RUNNER_TEMP/neg"
+          if ($LASTEXITCODE -eq 0) { throw 'checker accepted a package missing avutil' }
+          $global:LASTEXITCODE = 0
+      - name: run from the extracted zip (clean PATH)
+        shell: pwsh
+        env:
+          WANT_EMBED: ${{ needs.prepare.outputs.credentials == 'embedded' }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $x = Join-Path $env:RUNNER_TEMP 'extract'
+          Expand-Archive dist/windows/quill-windows-x86_64.zip $x
+          $dir = Join-Path $x 'quill-windows-x86_64'
+          . scripts/windows-common.ps1
+          $v = Invoke-QuillExe (Join-Path $dir 'quill.exe') @('--version')
+          Write-Host $v
+          if ($v -notmatch '^Quill \d') { throw "unexpected --version output: $v" }
+          if ($v -ne "Quill $env:VERSION") { throw "wrong stamped version: $v" }
+          $info = Invoke-QuillExe (Join-Path $dir 'quill.exe') @('--build-info')
+          if ($info -ne 'ui') { throw "unexpected --build-info output: $info" }
+          $embedded = Invoke-QuillExe (Join-Path $dir 'quill.exe') @('--embedded-credentials')
+          $want = if ($env:WANT_EMBED -eq 'true') { 'embedded' } else { 'none' }
+          Write-Host "embedded credentials: $embedded"
+          if ($embedded -ne $want) { throw "embedded credentials: got $embedded, want $want" }
+          pwsh -NoProfile -File scripts/check-bundle-load.ps1 $dir
+          if ($LASTEXITCODE -ne 0) { throw 'bundle load check failed' }
+          foreach ($clip in 'tests/fixtures/clip-h264-aac.mp4', 'tests/fixtures/clip-vp9.webm') {
+            $probe = Invoke-QuillExe (Join-Path $dir 'quill.exe') @('--video-probe', (Resolve-Path $clip).Path)
+            Write-Host $probe
+            if ($probe -notmatch 'frames=10') { throw "video probe failed for ${clip}: $probe" }
+          }
+      - name: quill-cli waits and passes the exit code on
+        shell: pwsh
+        run: |
+          $cli = Join-Path $env:RUNNER_TEMP 'extract/quill-windows-x86_64/quill-cli.exe'
+          $describe = (& $cli agent describe) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "quill-cli agent describe exited with $LASTEXITCODE" }
+          if (($describe | ConvertFrom-Json).name -ne 'quill') { throw "unexpected describe output: $describe" }
+          & $cli agent no-such-command 2>$null
+          if ($LASTEXITCODE -ne 2) { throw "usage error: want exit 2, got $LASTEXITCODE" }
+          cmd /c "$cli agent no-such-command 2>nul"
+          if ($LASTEXITCODE -ne 2) { throw "cmd: want exit 2, got $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+      - name: bundled ffmpeg and ffprobe run from the extracted zip
+        shell: bash
+        run: |
+          bash scripts/check-ffmpeg-tools.sh "$(cygpath -u "$RUNNER_TEMP")/extract/quill-windows-x86_64" \
+            --expect-encoder h264_mf --expect-encoder mpeg4 --expect-encoder aac \
+            --expect-encoder mjpeg --expect-encoder png
+      - name: installer
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y | Out-Null }
+          . scripts/windows-common.ps1
+          $pkg = (Resolve-Path dist/windows/quill-windows-x86_64).Path
+          $version = ((Invoke-QuillExe (Join-Path $pkg 'quill.exe') @('--version')) -replace '^Quill ', '').Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "unexpected version '$version'" }
+          & $iscc /Q "/DVersion=$version" "/DPackage=$pkg" "/DOutputDir=$((Resolve-Path dist/windows).Path)" packaging/windows/quill.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc exited with $LASTEXITCODE" }
+          $setup = 'dist/windows/quill-windows-x86_64-setup.exe'
+          (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant() + '  quill-windows-x86_64-setup.exe' |
+            Set-Content -NoNewline -Encoding ascii "$setup.sha256"
+          $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "setup exited with $($p.ExitCode)" }
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\Quill'
+          $v = Invoke-QuillExe (Join-Path $app 'quill.exe') @('--version')
+          if ($v -ne "Quill $version") { throw "installed --version: $v" }
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Quill_is1'
+          $entry = Get-ItemProperty $key
+          if ($entry.DisplayVersion -ne $version) { throw "uninstall entry version: $($entry.DisplayVersion)" }
+          if (-not (Test-Path (Join-Path ([Environment]::GetFolderPath('Programs')) 'Quill.lnk'))) { throw 'no Start menu shortcut' }
+          $un = Start-Process -FilePath (Join-Path $app 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($un.ExitCode -ne 0) { throw "uninstall exited with $($un.ExitCode)" }
+          for ($i = 0; $i -lt 20 -and (Test-Path $app); $i++) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path $app) { throw "uninstall left $app" }
+          if (Test-Path $key) { throw 'uninstall left its Settings > Apps entry' }
+          Get-Item $setup | Format-Table Name, Length
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quill-windows-x86_64
+          overwrite: true
+          retention-days: 3
+          path: |
+            dist/windows/quill-windows-x86_64.zip
+            dist/windows/quill-windows-x86_64.zip.sha256
+            dist/windows/quill-windows-x86_64-setup.exe
+            dist/windows/quill-windows-x86_64-setup.exe.sha256
+          if-no-files-found: error
+
+  flatpak:
+    name: flatpak (${{ matrix.arch }})
+    needs: [prepare, linux-package]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    defaults:
+      run:
+        shell: bash
+    env:
+      APP_ID: io.github.shinycake.Quill
+      MANIFEST: packaging/flatpak/ci.yml
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-linux-x86_64-bundle
+          path: in/linux-x86_64
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-linux-aarch64-bundle
+          path: in/linux-aarch64
+      - name: Verify both current-run bundles and prepare local manifest
+        run: |
+          set -euo pipefail
+          mkdir -p packaging/flatpak/_release
+          for arch in x86_64 aarch64; do
+            file="quill-linux-$arch-bundle.tar.gz"
+            cd "in/linux-$arch/linux"
+            test -s "$file"
+            test "$(sha256sum "$file")" = "$(tr -d '\r\n' < "$file.sha256")"
+            cd "$GITHUB_WORKSPACE"
+            cp "in/linux-$arch/linux/$file" packaging/flatpak/_release/
+          done
+          bash packaging/flatpak/bump.sh --local packaging/flatpak/_release packaging/flatpak/ci.yml
+      - name: Validate the metainfo
+        run: appstreamcli validate --strict --explain "assets/linux/$APP_ID.metainfo.xml"
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6.8
+        with:
+          manifest-path: ${{ env.MANIFEST }}
+          arch: ${{ matrix.arch }}
+          bundle: quill-linux-${{ matrix.arch }}.flatpak
+          upload-artifact: false
+          # The build directory contains the packaged binary and may contain credentials.
+          cache: false
+          restore-cache: false
+          save-cache: false
+      - name: Install flatpak-builder-lint
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+      - name: Lint the manifest
+        run: |
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            --exceptions --user-exceptions packaging/flatpak/lint-exceptions.json manifest "$MANIFEST"
+      - name: Lint the build
+        run: |
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            --exceptions --user-exceptions packaging/flatpak/lint-exceptions.json repo repo
+      - name: Install the build
+        run: |
+          flatpak remote-add --user --no-gpg-verify --if-not-exists quill-ci "$PWD/repo"
+          flatpak install --user -y --noninteractive quill-ci "$APP_ID"
+          exports="$HOME/.local/share/flatpak/exports/share"
+          test -f "$exports/applications/$APP_ID.desktop"
+          grep -qx 'MimeType=x-scheme-handler/tg;' "$exports/applications/$APP_ID.desktop"
+          test -f "$exports/icons/hicolor/512x512/apps/$APP_ID.png"
+      - name: Smoke test inside the sandbox
+        run: |
+          XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_RUNTIME_DIR
+          run() { dbus-run-session -- flatpak run "$@"; }
+          run --command=quill "$APP_ID" --version
+          run --command=sh "$APP_ID" -c '
+            cd /app/lib/quill && ldd quill quill-webview ffmpeg ffprobe lib/*.so*' | tee ldd.txt
+          if grep -n 'not found' ldd.txt; then echo '::error::a library is missing inside the Flatpak'; exit 1; fi
+          run --command=sh "$APP_ID" -c 'readlink -f /app/bin/quill' | grep -qx /app/lib/quill/quill
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quill-flatpak-${{ matrix.arch }}
+          overwrite: true
+          retention-days: 3
+          path: quill-linux-${{ matrix.arch }}.flatpak
+          if-no-files-found: error
+
+  linux-distro-packages:
+    needs: [prepare, linux-package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-linux-x86_64-bundle
+          path: in/linux-x86_64
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-linux-aarch64-bundle
+          path: in/linux-aarch64
+      - name: Verify both current-run bundles
+        run: |
+          set -euo pipefail
+          for arch in x86_64 aarch64; do
+            file="quill-linux-$arch-bundle.tar.gz"
+            cd "in/linux-$arch/linux"
+            test -s "$file"
+            test "$(sha256sum "$file")" = "$(tr -d '\r\n' < "$file.sha256")"
+            cd "$GITHUB_WORKSPACE"
+          done
+      - name: Build and test distribution packages
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          bash packaging/linux/package.sh \
+            in/linux-x86_64/linux/quill-linux-x86_64-bundle.tar.gz \
+            in/linux-aarch64/linux/quill-linux-aarch64-bundle.tar.gz "$VERSION" dist/distro
+          bash packaging/linux/test-packages.sh dist/distro
+          python3 - <<'PY'
+          from pathlib import Path
+          d = Path('dist/distro')
+          expected = {'quill-linux-x86_64.deb', 'quill-linux-x86_64-fedora.rpm',
+                      'quill-linux-x86_64-opensuse.rpm', 'quill-linux-x86_64.pkg.tar.zst'}
+          actual = {p.name for p in d.iterdir()}
+          if actual != expected or any(not (d / n).is_file() or (d / n).is_symlink() or not (d / n).stat().st_size for n in expected):
+              raise SystemExit(f'Unexpected distro packages: {sorted(actual)}')
+          PY
+      - uses: actions/upload-artifact@v7
+        with:
+          name: quill-linux-distro-packages
+          overwrite: true
+          retention-days: 3
+          path: dist/distro/
+          if-no-files-found: error
+
   sources:
     name: lgpl-sources
     needs: prepare
+    if: needs.prepare.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - name: archive LGPL sources
         run: bash scripts/release-lgpl-sources.sh dist/sources
       - uses: actions/upload-artifact@v7
         with:
           name: quill-lgpl-sources
+          overwrite: true
+          retention-days: 3
           path: dist/sources/*
           if-no-files-found: error
 
   release:
-    name: assemble release
-    needs: [prepare, calls-tests, linux, windows, macos, sources]
+    name: verify and publish GitHub Release
+    needs: [prepare, linux-checks, calls, linux-package, macos-package, windows-build, windows-test, windows-native, windows-ffmpeg, windows-package, flatpak, linux-distro-packages, sources]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    concurrency:
+      group: release
+      cancel-in-progress: false
     permissions:
-      # generate-notes needs write; the release itself is only created on a tag push.
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.prepare.outputs.version }}
       TAG: ${{ needs.prepare.outputs.tag }}
       CREDENTIALS: ${{ needs.prepare.outputs.credentials }}
-      PUBLISH: ${{ needs.prepare.outputs.publish }}
-      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
           name: quill-macos-aarch64
@@ -234,121 +1207,280 @@ jobs:
           path: in/windows
       - uses: actions/download-artifact@v8
         with:
+          name: quill-flatpak-x86_64
+          path: in/flatpak-x86_64
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-flatpak-aarch64
+          path: in/flatpak-aarch64
+      - uses: actions/download-artifact@v8
+        with:
+          name: quill-linux-distro-packages
+          path: in/distro
+      - uses: actions/download-artifact@v8
+        with:
           name: quill-lgpl-sources
           path: in/sources
-      # The release files go in release-out/, never the repo's own assets/
-      # folder (icons, emoji, the .desktop file), which the checkout contains.
-      - name: collect release files
+      - name: Verify producer checksums and collect release files
+        shell: bash
         run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           mkdir -p release-out
-          # Check each package against the checksum its build job wrote.
           for f in in/macos/quill-macos-aarch64.zip in/macos/quill-macos-aarch64.dmg \
                    in/linux-x86_64/linux/quill-linux-x86_64-bundle.tar.gz \
                    in/linux-aarch64/linux/quill-linux-aarch64-bundle.tar.gz \
                    in/windows/quill-windows-x86_64.zip in/windows/quill-windows-x86_64-setup.exe; do
-            # The Windows .sha256 file has CRLF line endings.
-            (cd "$(dirname "$f")" && tr -d '\r' < "$(basename "$f").sha256" | sha256sum -c -)
+            dir="$(dirname "$f")"; name="$(basename "$f")"
+            (cd "$dir" && test -s "$name" && test "$(sha256sum "$name")" = "$(tr -d '\r\n' < "$name.sha256")")
             cp "$f" release-out/
           done
           for arch in x86_64 aarch64; do
-            cp "in/linux-$arch/update/quill-linux-$arch" release-out/
-            chmod 755 "release-out/quill-linux-$arch"
+            binary="in/linux-$arch/update/quill-linux-$arch"
+            test -s "$binary"
+            # Ensure the updater asset is exactly the patched binary in the tarball.
+            actual="$(sha256sum "$binary" | cut -d' ' -f1)"
+            bundled="$(tar -xzOf "release-out/quill-linux-$arch-bundle.tar.gz" "quill-linux-$arch/quill" | sha256sum | cut -d' ' -f1)"
+            test "$actual" = "$bundled"
+            cp "$binary" release-out/
+            cp "in/flatpak-$arch/quill-linux-$arch.flatpak" release-out/
           done
-          cp in/sources/* release-out/
-          ls -l release-out
-      - name: previous release tag
-        id: prev
+          cp in/distro/* in/sources/* release-out/
+      - name: Check exact asset set and pinned source archives
+        shell: bash
         run: |
-          # The newest vX.Y.Z tag reachable from this commit, other than this release's own.
-          prev="$(git tag --merged HEAD --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -vx "$TAG" | head -n 1 || true)"
-          echo "tag=$prev" >> "$GITHUB_OUTPUT"
-          echo "previous tag: ${prev:-none}"
-      - name: generated changelog (merged PRs since the previous tag)
+          python3 - <<'PY'
+          import json, re
+          from pathlib import Path
+          def pin(path, pattern):
+              matches = re.findall(pattern, Path(path).read_text(), re.M)
+              if len(matches) != 1:
+                  raise SystemExit(f'Expected exactly one pin in {path}: {pattern}')
+              return matches[0]
+          ffmpeg = pin('scripts/build-ffmpeg.sh', r'^TAG=(n[0-9.]+)$')
+          pin('scripts/build-ffmpeg.sh', r'^COMMIT=([0-9a-f]{40})$')
+          tgcalls = pin('scripts/build-tgcalls.sh', r'^TGCALLS_COMMIT=([0-9a-f]{40})$')
+          expected = {
+              'quill-macos-aarch64.zip', 'quill-macos-aarch64.dmg',
+              'quill-linux-x86_64-bundle.tar.gz', 'quill-linux-aarch64-bundle.tar.gz',
+              'quill-linux-x86_64', 'quill-linux-aarch64',
+              'quill-windows-x86_64.zip', 'quill-windows-x86_64-setup.exe',
+              'quill-linux-x86_64.flatpak', 'quill-linux-aarch64.flatpak',
+              'quill-linux-x86_64.deb', 'quill-linux-x86_64-fedora.rpm',
+              'quill-linux-x86_64-opensuse.rpm', 'quill-linux-x86_64.pkg.tar.zst',
+              'LGPL-SOURCES.txt', f'quill-source-ffmpeg-{ffmpeg}.tar.xz',
+              f'quill-source-tgcalls-{tgcalls[:8]}.tar.xz',
+          }
+          root = Path('release-out')
+          actual = {p.name for p in root.iterdir()}
+          if actual != expected:
+              raise SystemExit(f'Wrong assets: missing={sorted(expected - actual)}, extra={sorted(actual - expected)}')
+          for name in expected:
+              p = root / name
+              if p.is_symlink() or not p.is_file() or not p.stat().st_size:
+                  raise SystemExit(f'Not a nonempty regular file: {p}')
+          Path('expected-assets.json').write_text(json.dumps(sorted(expected | {'SHA256SUMS.txt'})))
+          PY
+      - name: Find previous reachable release tag
+        id: previous
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag --merged "$GITHUB_SHA" --list 'v*' > "$RUNNER_TEMP/reachable-tags"
+          python3 - "$RUNNER_TEMP/reachable-tags" >> "$GITHUB_OUTPUT" <<'PY'
+          import os, re, subprocess, sys
+          version = tuple(map(int, os.environ['VERSION'].split('.')))
+          candidates = []
+          for tag in open(sys.argv[1], encoding='utf-8'):
+              tag = tag.strip()
+              if re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', tag):
+                  parsed = tuple(map(int, tag[1:].split('.')))
+                  commit = subprocess.check_output(['git', 'rev-list', '-n', '1', tag], text=True).strip()
+                  if parsed < version and commit != os.environ['GITHUB_SHA']:
+                      candidates.append((parsed, tag))
+          print('tag=' + (max(candidates)[1] if candidates else ''))
+          PY
+      - name: Generate exact checksums and release notes
         env:
-          PREV: ${{ steps.prev.outputs.tag }}
+          PREV: ${{ steps.previous.outputs.tag }}
+          BEFORE: ${{ github.event.before }}
+        shell: bash
         run: |
-          args=(-f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" -f configuration_file_path=.github/release.yml)
-          [ -n "$PREV" ] && args+=(-f previous_tag_name="$PREV")
-          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${args[@]}" --jq .body > changes.md
-          wc -l changes.md
-      - name: release-assemble unit tests
-        run: python3 -m unittest discover -s scripts -p 'test_release_assemble.py'
-      - name: notes, checksums and latest.json
-        env:
-          PREV: ${{ steps.prev.outputs.tag }}
-        run: |
-          args=(--assets release-out --version "$VERSION" --repo "$GITHUB_REPOSITORY" --changes changes.md
-                --credentials "$CREDENTIALS" --notes-out release-notes.md)
-          [ -f "release-notes/$TAG.md" ] && args+=(--curated "release-notes/$TAG.md")
-          [ -n "$PREV" ] && args+=(--previous-tag "$PREV")
-          python3 -I scripts/release-assemble.py "${args[@]}"
-          {
-            echo "## Quill $VERSION ($([ "$PUBLISH" = true ] && echo 'draft release' || echo 'dry run, no release'))"
-            echo
-            echo '| Asset | Size | SHA-256 |'
-            echo '|---|---|---|'
-            for f in release-out/*; do echo "| $(basename "$f") | $(stat -c %s "$f") | \`$(sha256sum "$f" | cut -d' ' -f1)\` |"; done
-          } >> "$GITHUB_STEP_SUMMARY"
-      # Exactly the expected files, all regular files: anything missing or
-      # extra stops the release before anything is uploaded.
-      - name: check the release file list
-        run: |
-          expected=(LGPL-SOURCES.txt SHA256SUMS.txt latest.json quill-linux-x86_64
-                    quill-linux-x86_64-bundle.tar.gz quill-linux-aarch64 quill-linux-aarch64-bundle.tar.gz
-                    quill-macos-aarch64.zip quill-macos-aarch64.dmg
-                    quill-windows-x86_64.zip quill-windows-x86_64-setup.exe)
-          for f in "${expected[@]}"; do
-            [ -f "release-out/$f" ] || { echo "::error::missing release file $f"; exit 1; }
-          done
-          sources=0
-          extra=()
-          for entry in release-out/*; do
-            name="$(basename "$entry")"
-            if [ -d "$entry" ] || [ ! -f "$entry" ]; then
-              extra+=("$name/")
-            elif [[ "$name" == quill-source-*.tar.xz ]]; then
-              sources=$((sources + 1))
-            elif ! printf '%s\n' "${expected[@]}" | grep -qxF "$name"; then
-              extra+=("$name")
+          set -euo pipefail
+          if [[ -n "$PREV" ]]; then
+            base="$PREV"
+          elif [[ "$BEFORE" =~ ^0{40}$ ]]; then
+            base=''
+          else
+            [[ "$BEFORE" =~ ^[0-9a-f]{40}$ ]]
+            if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              git fetch --no-tags origin "$BEFORE"
             fi
-          done
-          [ "$sources" -ge 1 ] || { echo "::error::no LGPL source archives"; exit 1; }
-          [ "${#extra[@]}" -eq 0 ] || { echo "::error::unexpected entries in release-out: ${extra[*]}"; exit 1; }
-          echo "release files OK: ${#expected[@]} + $sources source archives"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: quill-release-${{ needs.prepare.outputs.tag }}
-          path: |
-            release-out/
-            release-notes.md
-          if-no-files-found: error
-      # Releases only (release=true, or a pushed tag). Always a draft: the
-      # owner publishes it by hand, which creates the tag on this commit.
-      - name: create DRAFT release
-        if: needs.prepare.outputs.publish == 'true'
+            git cat-file -e "$BEFORE^{commit}"
+            base="$BEFORE"
+          fi
+          export BASE="$base"
+          python3 - <<'PY'
+          import hashlib, html, json, os, subprocess
+          from pathlib import Path
+          from urllib.parse import quote
+          root = Path('release-out')
+          names = json.loads(Path('expected-assets.json').read_text())
+          actual = {p.name for p in root.iterdir()}
+          expected = set(names) - {'SHA256SUMS.txt'}
+          if actual != expected:
+              raise SystemExit(f'Wrong assets: {sorted(actual ^ expected)}')
+          def digest(path):
+              h = hashlib.sha256()
+              with path.open('rb') as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                      h.update(chunk)
+              return h.hexdigest()
+          for name in expected:
+              p = root / name
+              if p.is_symlink() or not p.is_file() or not p.stat().st_size:
+                  raise SystemExit(f'Not a nonempty regular file: {p}')
+          sums = ''.join(f'{digest(root / n)}  {n}\n' for n in names if n != 'SHA256SUMS.txt')
+          (root / 'SHA256SUMS.txt').write_text(sums, encoding='ascii')
+          sha, tag, base = (os.environ[x] for x in ('GITHUB_SHA', 'TAG', 'BASE'))
+          url = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+          subject = subprocess.check_output(['git', 'show', '-s', '--format=%s', sha], text=True).strip()
+          revision_range = f'{base}..{sha}' if base else sha
+          log = subprocess.check_output(['git', 'log', '--reverse', '-z', '--format=%H%x00%s', revision_range], text=True)
+          fields = log.split('\0')
+          if fields[-1] == '':
+              fields.pop()
+          if len(fields) % 2:
+              raise SystemExit('Unexpected git log output')
+          lines = [f'Commit: [{sha}]({url}/commit/{sha}) {html.escape(subject)}', '',
+                   f'New commits: {len(fields) // 2}', '']
+          for commit, message in zip(fields[::2], fields[1::2]):
+              lines.append(f'- [{commit[:12]}]({url}/commit/{commit}) {html.escape(message)}')
+          if base:
+              lines += ['', f'[Compare {base}...{sha}]({url}/compare/{quote(base)}...{sha})']
+          else:
+              lines += ['', f'[Commit history]({url}/commits/{sha})']
+          lines += ['', f'## Release assets ({len(names)})', '']
+          lines += [f'- [`{n}`]({url}/releases/download/{quote(tag)}/{quote(n)})' for n in names]
+          lines += ['', 'Flatpak bundles are installed and updated manually. The standalone Linux binaries require the libraries and helpers in their matching bundles.']
+          if os.environ['CREDENTIALS'] == 'none':
+              lines += ['', 'This build has no embedded Telegram API credentials.']
+          text = '\n'.join(lines) + '\n'
+          if len(text) > 125000:
+              raise SystemExit('Release notes exceed GitHub limit')
+          Path('release-notes.md').write_text(text, encoding='utf-8')
+          print(f'Checked {len(names)} assets and {len(names)-1} SHA256SUMS entries')
+          PY
+      # Do not create a tag or a draft until every local file, checksum and note
+      # above has been checked. Never mistake a network/API error for absence.
+      - name: Create or update this repository's release
+        shell: bash
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "::error::a release for $TAG already exists; delete the old draft before re-running"
-            exit 1
+          set -euo pipefail
+          git ls-remote --refs origin "refs/tags/$TAG" > "$RUNNER_TEMP/release-tag"
+          if [[ ! -s "$RUNNER_TEMP/release-tag" ]]; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null
           fi
-          verify=()
-          [ "$GITHUB_REF_TYPE" = tag ] && verify=(--verify-tag)
-          flags=()
-          title="Quill $VERSION"
-          if [ "$PRERELEASE" = true ]; then
-            flags=(--prerelease)
-            title="Quill $VERSION (beta)"
+          git fetch --no-tags origin "refs/tags/$TAG"
+          actual="$(git rev-parse 'FETCH_HEAD^{commit}')"
+          [[ "$actual" == "$GITHUB_SHA" ]] || { echo "::error::$TAG points to $actual, not $GITHUB_SHA"; exit 1; }
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          id="$(python3 - "$RUNNER_TEMP/releases.json" <<'PY'
+          import json, os, sys
+          releases = [r for page in json.load(open(sys.argv[1])) for r in page]
+          found = [r for r in releases if r['tag_name'] == os.environ['TAG']]
+          if len(found) > 1:
+              raise SystemExit('Multiple releases for this tag')
+          print(found[0]['id'] if found else '')
+          PY
+          )"
+          if [[ -z "$id" ]]; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+              --title "$TAG" --notes-file release-notes.md
+            id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)"
           fi
-          gh release create "$TAG" --draft "${verify[@]}" "${flags[@]}" --target "$GITHUB_SHA" \
-            --title "$title" --notes-file release-notes.md release-out/*
-          gh release view "$TAG" --json isDraft,url --jq '"draft=\(.isDraft) \(.url)"'
-      # A release step that fails part-way must not leave a half-uploaded draft.
-      - name: remove a partial draft
-        if: failure() && needs.prepare.outputs.publish == 'true'
+          [[ "$id" =~ ^[0-9]+$ ]]
+          echo "RELEASE_ID=$id" >> "$GITHUB_ENV"
+      - name: Reconcile release assets, then verify uploaded bytes
+        shell: bash
         run: |
-          id="$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
-                --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | head -n 1)"
-          if [ -n "$id" ]; then
-            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
-            echo "removed the partial draft for $TAG"
-          fi
+          set -euo pipefail
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/assets.json"
+          python3 - "$RUNNER_TEMP/assets.json" "$RUNNER_TEMP" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          pages, temp = sys.argv[1], Path(sys.argv[2])
+          names = json.loads(Path('expected-assets.json').read_text())
+          def digest(path):
+              h = hashlib.sha256()
+              with path.open('rb') as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                      h.update(chunk)
+              return 'sha256:' + h.hexdigest()
+          assets = [a for page in json.load(open(pages)) for a in page]
+          if len({a['name'] for a in assets}) != len(assets):
+              raise SystemExit('Duplicate remote asset names')
+          by_name = {a['name']: a for a in assets}
+          unexpected = [a['name'] for a in assets if a['name'] not in names]
+          if unexpected:
+              raise SystemExit(f'Existing release has unexpected assets: {unexpected}')
+          upload = []
+          for name in names:
+              path = Path('release-out') / name
+              asset = by_name.get(name)
+              if not asset or asset.get('state') != 'uploaded' or asset.get('size') != path.stat().st_size or asset.get('digest') != digest(path):
+                  upload.append(name)
+          (temp / 'upload-assets').write_text(''.join(x + '\n' for x in upload))
+          PY
+          while IFS= read -r name; do
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "release-out/$name"
+          done < "$RUNNER_TEMP/upload-assets"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" > "$RUNNER_TEMP/assets-final.json"
+          python3 - "$RUNNER_TEMP/assets-final.json" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          assets = [a for page in json.load(open(sys.argv[1])) for a in page]
+          names = json.loads(Path('expected-assets.json').read_text())
+          if len(assets) != len(names) or {a['name'] for a in assets} != set(names):
+              raise SystemExit('Uploaded release asset set differs from expected')
+          for a in assets:
+              p = Path('release-out') / a['name']
+              h = hashlib.sha256()
+              with p.open('rb') as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                      h.update(chunk)
+              if a.get('state') != 'uploaded' or a.get('size') != p.stat().st_size or a.get('digest') != 'sha256:' + h.hexdigest():
+                  raise SystemExit(f"Uploaded asset does not match: {a['name']}")
+          print(f'Verified {len(assets)} remote asset sizes and SHA-256 digests')
+          PY
+      - name: Publish without promoting an older release to latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Recheck the remote tag immediately before publishing, including on reruns.
+          git fetch --no-tags origin "refs/tags/$TAG"
+          actual="$(git rev-parse 'FETCH_HEAD^{commit}')"
+          [[ "$actual" == "$GITHUB_SHA" ]] || { echo "::error::$TAG moved to $actual"; exit 1; }
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases-final.json"
+          latest="$(python3 - "$RUNNER_TEMP/releases-final.json" <<'PY'
+          import json, os, re, sys
+          current = tuple(map(int, os.environ['VERSION'].split('.')))
+          releases = [r for page in json.load(open(sys.argv[1])) for r in page]
+          for release in releases:
+              if release['draft'] or release['prerelease'] or release['tag_name'] == os.environ['TAG']:
+                  continue
+              tag = release['tag_name']
+              if not re.fullmatch(r'v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', tag):
+                  print('false')  # An unfamiliar stable release: do not risk promoting this one.
+                  break
+              if tuple(map(int, tag[1:].split('.'))) > current:
+                  print('false')
+                  break
+          else:
+              print('true')
+          PY
+          )"
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -f name="$TAG" -F body=@release-notes.md \
+            -F draft=false -F prerelease=false -f make_latest="$latest" >/dev/null
+          echo "Published $TAG from $GITHUB_SHA (make_latest=$latest)" >> "$GITHUB_STEP_SUMMARY"

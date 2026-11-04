@@ -36,9 +36,7 @@ sudo apt-get install libgtk-3-dev libasound2-dev
 
 Without it the build fails in the `gdk-pixbuf-sys` build script
 (`gdk-3.0.pc` missing). Not needed on macOS (tray-icon uses Cocoa there).
-The `linux-fmt-clippy-test` job does not build `--features ui`; the separate
-`linux-package` job does (see below), with the full apt list in
-`.github/workflows/ci.yml`.
+The release workflow contains the full Linux build dependency list.
 
 ## Tests (Linux CI)
 
@@ -58,7 +56,7 @@ On macOS, `bash scripts/macos-package-smoke.sh` copies the binary into `dist/Qui
 
 ## Linux package
 
-`bash scripts/linux-package.sh` (after `cargo build --release --features ui`, `scripts/build-tdlib.sh`, `scripts/build-ffmpeg.sh`, `scripts/build-tgcalls.sh`) writes `dist/linux/quill-linux-<arch>/` and `quill-linux-<arch>-bundle.tar.gz` (`x86_64` or `aarch64`, the build machine's CPU): `quill` plus `lib/` (tdjson, the call library libquill_calls, FFmpeg, bundled OpenSSL 3), RUNPATH `$ORIGIN/lib`, a `.desktop` file, icon, `install.sh` and a README. `scripts/check-bundle-elf.sh <dir>` fails if any ELF needs a library that is neither bundled nor an allowed system library. Needs `patchelf`. The CI `linux-package` job runs all of this with the libquill_calls the `quill-calls` workflow built earlier in the run, and uploads the tarball. Details: `docs/decisions/codex-linux-package.md`.
+`bash scripts/linux-package.sh` (after `cargo build --release --features ui`, `scripts/build-tdlib.sh`, `scripts/build-ffmpeg.sh`, `scripts/build-tgcalls.sh`) writes `dist/linux/quill-linux-<arch>/` and `quill-linux-<arch>-bundle.tar.gz` (`x86_64` or `aarch64`, the build machine's CPU): `quill` plus `lib/` (tdjson, the call library libquill_calls, FFmpeg, bundled OpenSSL 3), RUNPATH `$ORIGIN/lib`, a `.desktop` file, icon, `install.sh` and a README. `scripts/check-bundle-elf.sh <dir>` fails if any ELF needs a library that is neither bundled nor an allowed system library. Needs `patchelf`. The release workflow builds both architectures and uses their tarballs to build the Flatpak bundles. Details: `docs/decisions/codex-linux-package.md`.
 
 ## Windows package
 
@@ -70,7 +68,7 @@ pwsh scripts/build-tdlib-windows.ps1     # vcpkg openssl/zlib/gperf + tdjson.dll
 pwsh scripts/windows-package.ps1         # -> dist/windows/quill-windows-x86_64{,.zip}
 ```
 
-The package is a flat directory: `quill.exe` plus the DLLs beside it. Everything links the VC++ runtime statically (`.cargo/config.toml` sets `+crt-static`; TDLib and the ThorVG sticker renderer build with `/MT`, OpenSSL and zlib are linked into `tdjson.dll`), so no `vcruntime`/`msvcp` DLL ships. `scripts/check-bundle-pe.ps1 <dir>` fails if a DLL imports anything that is neither bundled nor a Windows system DLL. `quill_calls.dll` (the call library, docs/decisions/tgcalls-engine.md) is built by `scripts/build-tgcalls.sh` from MSYS2 bash with the MSVC environment inherited, links OpenSSL, zlib and the C runtime statically and imports the FFmpeg DLLs shipped beside it; the script takes it from `vendor/quill-calls/lib/` and fails without it. For a developer run without packaging, set `QUILL_TDJSON_PATH` and `QUILL_CALLS_LIB` to the DLL paths. The CI jobs `windows-build`, `windows-native` and `windows-package` run all of this (not required checks). Details: `docs/decisions/codex-windows-package.md`.
+The package is a flat directory: `quill.exe` plus the DLLs beside it. Everything links the VC++ runtime statically (`.cargo/config.toml` sets `+crt-static`; TDLib and the ThorVG sticker renderer build with `/MT`, OpenSSL and zlib are linked into `tdjson.dll`), so no `vcruntime`/`msvcp` DLL ships. `scripts/check-bundle-pe.ps1 <dir>` fails if a DLL imports anything that is neither bundled nor a Windows system DLL. `quill_calls.dll` (the call library, docs/decisions/tgcalls-engine.md) is built by `scripts/build-tgcalls.sh` from MSYS2 bash with the MSVC environment inherited, links OpenSSL, zlib and the C runtime statically and imports the FFmpeg DLLs shipped beside it; the script takes it from `vendor/quill-calls/lib/` and fails without it. For a developer run without packaging, set `QUILL_TDJSON_PATH` and `QUILL_CALLS_LIB` to the DLL paths. The release workflow builds and checks the package. Details: `docs/decisions/codex-windows-package.md`.
 
 ## Troubleshooting
 
@@ -145,4 +143,4 @@ Provide **your own** `api_id` / `api_hash` from https://my.telegram.org (never c
 
 ## Releases
 
-Push a `vX.Y.Z` tag that matches the `Cargo.toml` version and `.github/workflows/release.yml` builds the macOS (`quill-macos-aarch64.zip`, ad-hoc signed `Quill.app`), Linux (`quill-linux-x86_64-bundle.tar.gz` and `quill-linux-aarch64-bundle.tar.gz`, each with its updater binary `quill-linux-<arch>`, built natively on GitHub's x86_64 and arm64 runners) and Windows (`quill-windows-x86_64.zip`) packages, archives the LGPL sources, writes the release notes (optional curated top section from `release-notes/vX.Y.Z.md`, then merged PRs since the previous tag), `SHA256SUMS.txt` and `latest.json`, and creates a **draft** release for the owner to publish. `gh workflow run release.yml -f version=X.Y.Z --ref <branch>` is a dry run that uploads the same files as workflow artifacts and creates nothing. Publishing fires `release-published.yml`, which sends the `site-refresh` repository dispatch. Details: `docs/decisions/codex-release-pipeline.md`.
+`.github/workflows/release.yml` runs on pushes to `main`. A push changing only Markdown skips tests, builds and publication. Other pushes build and check the macOS, Windows, Linux and Flatpak packages and the LGPL source archives, then publish them with `SHA256SUMS.txt` to GitHub Releases. The deterministic `vYEAR.MONTHDAY.COMMITS` tag identifies the built commit; the version is embedded in the application without changing `Cargo.toml`. There is no separate PR, tag-triggered or manually dispatched release workflow. Intermediate Actions artifacts are used only to pass files between jobs.

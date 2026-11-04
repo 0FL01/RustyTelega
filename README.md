@@ -1,6 +1,6 @@
 # Quill: a fast Telegram client for macOS, Windows and Linux
 
-[![CI](https://github.com/shinycake/quill/actions/workflows/ci.yml/badge.svg)](https://github.com/shinycake/quill/actions/workflows/ci.yml)
+[![Release](https://github.com/0FL01/RustyTelega/actions/workflows/release.yml/badge.svg)](https://github.com/0FL01/RustyTelega/actions/workflows/release.yml)
 ![Rust 1.92](https://img.shields.io/badge/rust-1.92-orange)
 ![TDLib 1.8.69](https://img.shields.io/badge/TDLib-1.8.69-blue)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
@@ -9,9 +9,7 @@ Quill is a free, open-source Telegram desktop client written from scratch in Rus
 
 On the same Mac, Quill used about a third of Telegram Desktop's memory and put its window on screen about four times faster on a warm launch ([numbers below](#how-it-compares-with-telegram-desktop)).
 
-**Website and install:** [shinycake.github.io/quill](https://shinycake.github.io/quill/)
-
-If you like Quill, starring the repository helps more people find it. At 50 stars it can be listed in awesome-rust, and at 75 in Homebrew's main cask list, so `brew install` works without the tap.
+**Downloads:** [GitHub Releases](https://github.com/0FL01/RustyTelega/releases)
 
 > [!WARNING]
 > Quill is an independent project. It isn't affiliated with, endorsed by, or sponsored by Telegram (Telegram FZ-LLC or Telegram Messenger Inc.). "Telegram" is a trademark of its owner, and Quill uses the name only to say which service it works with.
@@ -35,29 +33,13 @@ Captured from a real Quill window signed in to a demo account.
 
 ## Install
 
-On a Mac (macOS 14 or later, Apple Silicon), paste this into Terminal:
+Download the package for your platform from [GitHub Releases](https://github.com/0FL01/RustyTelega/releases) and verify it against that release's `SHA256SUMS.txt`.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/shinycake/quill/main/scripts/macos-install.sh | bash
-```
+- **macOS 14+ on Apple Silicon:** open the DMG or unzip the ZIP and move Quill to Applications. A build without the maintainer's signing and notarization credentials may show a Gatekeeper warning.
+- **Windows 10+ on x64:** run the setup EXE, or extract the ZIP and run `quill.exe`. Windows may warn about an unsigned download.
+- **Linux x86_64 or arm64:** extract the matching `quill-linux-<arch>-bundle.tar.gz` and run its `install.sh`, or install the matching `.flatpak` with `flatpak install --user --or-update --bundle ./quill-linux-<arch>.flatpak`. Debian, RPM and Arch packages are also provided for x86_64.
 
-On Windows (10 or later, x64), paste this into PowerShell:
-
-```powershell
-irm https://raw.githubusercontent.com/shinycake/quill/main/scripts/windows-install.ps1 | iex
-```
-
-On Linux (x86_64 or arm64, glibc), paste this into a terminal:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/shinycake/quill/main/scripts/linux-web-install.sh | bash
-```
-
-Each script downloads the latest release from [GitHub Releases](https://github.com/shinycake/quill/releases) and checks it against the release's SHA-256 checksums. If the file doesn't match, the script stops and installs nothing. None of them needs administrator rights. Run the same command again to update.
-
-Quill for Mac is signed with a Developer ID and notarized by Apple, so it opens without a warning however you download it. A Mac copy installed before 3 November 2026 can't update to the notarized version by itself: install it once with the command above, and updates work as usual after that. The Windows build isn't signed with a paid certificate yet, so a zip downloaded in a browser asks once on first launch: click More info, then Run anyway. Files the script downloads aren't marked for that check, so they open without a warning. The [website](https://shinycake.github.io/quill/#install) walks through it step by step.
-
-Prefer a package manager? On a Mac, `brew install --cask shinycake/tap/quill-app`. On Linux, `flatpak install --user https://shinycake.github.io/quill/flatpak/quill.flatpakref` installs from Quill's own Flatpak repository.
+Flatpak files are distributed directly in Releases, not through an update repository: install a newer bundle to update. The standalone Linux executable needs the libraries and helpers from its matching bundle; it is not a self-contained download. Existing installations from the upstream repository do not automatically switch to releases of this fork.
 
 ## Features
 
@@ -69,7 +51,7 @@ Prefer a package manager? On a Mac, `brew install --cask shinycake/tap/quill-app
 - **Privacy and accounts:** secret chats, a local passcode lock, active-session management and two-step verification. Sign in with a phone code, a QR code or a password, and switch between several accounts.
 - **Your setup:** light and dark themes with automatic night mode, accent colors, chat wallpapers, text size, and bubble or plain message layouts. `tg://` and `t.me` links, a tray menu and unread badges.
 
-[STATUS.md](STATUS.md) lists every feature one by one, and the [progress dashboard](https://shinycake.github.io/quill-dashboard) charts it over time.
+[STATUS.md](STATUS.md) lists every feature one by one.
 
 ## How it compares with Telegram Desktop
 
@@ -95,7 +77,7 @@ Quill runs on your computer and keeps its data there. The local database is encr
 
 ## Use Quill with an AI agent
 
-Agent access lets an AI agent on your computer, such as Claude Code, Codex, Claude Desktop or Cursor, use your Telegram account through the Quill that is already running. It's off by default, and while it's off the only trace is one switch in Settings > Advanced. Turn it on in Settings > Advanced > Agent access. That page shows setup commands with the path of your installed Quill, and a setup prompt you can paste into any agent. The lines below assume Quill is where the one-line installer puts it. On a Mac where /Applications isn't writable, the installer uses ~/Applications instead.
+Agent access lets an AI agent on your computer, such as Claude Code, Codex, Claude Desktop or Cursor, use your Telegram account through the Quill that is already running. It's off by default, and while it's off the only trace is one switch in Settings > Advanced. Turn it on in Settings > Advanced > Agent access. That page shows setup commands with the path of your installed Quill, and a setup prompt you can paste into any agent. Adjust the paths below to where you installed Quill.
 
 macOS (Terminal):
 
@@ -140,7 +122,7 @@ cargo run --features ui          # live connect with your Telegram credentials +
 cargo run --no-default-features -- --connect-smoke   # headless WaitPhoneNumber gate
 ```
 
-Without credentials, `cargo run --features ui` opens a synthetic demo chat. To sign in to a real account from your own build, get an API ID and hash from [my.telegram.org](https://my.telegram.org) and build TDLib with `scripts/build-tdlib.sh`. Then set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in the environment or in a gitignored `quill.local.env` file, and point `QUILL_TDJSON_PATH` at the library. [docs/credentials.md](docs/credentials.md) has the details. Don't reuse another app's API ID: Telegram's [API terms](https://core.telegram.org/api/terms) require every app to have its own. Release packages already include Quill's own.
+Without credentials, `cargo run --features ui` opens a synthetic demo chat. To sign in to a real account from your own build, get an API ID and hash from [my.telegram.org](https://my.telegram.org) and build TDLib with `scripts/build-tdlib.sh`. Then set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in the environment or in a gitignored `quill.local.env` file, and point `QUILL_TDJSON_PATH` at the library. [docs/credentials.md](docs/credentials.md) has the details. Don't reuse another app's API ID: Telegram's [API terms](https://core.telegram.org/api/terms) require every app to have its own. Release builds embed credentials only when the repository secrets are configured; otherwise they contain none.
 
 On Linux, building the UI also needs the GTK 3 and ALSA development packages (`libgtk-3-dev` and `libasound2-dev` on Debian and Ubuntu).
 
@@ -162,7 +144,7 @@ Quill is released under the [MIT License](LICENSE). The packages also contain th
 
 ## Contributing
 
-Pull requests are welcome. Before you open one, run the checks from the Linux CI job:
+Pull requests are welcome. Before you open one, run the core checks locally:
 
 ```bash
 cargo fmt --all -- --check
@@ -170,4 +152,4 @@ cargo clippy --no-default-features --all-targets -- -D warnings
 cargo test --no-default-features
 ```
 
-Feature PRs don't edit `STATUS.md` or `DECISIONS.md`. List the checklist items you finished in `parity-fragments/<slice-id>.txt` and write your notes in `docs/decisions/<slice-id>.md`; the merge pipeline updates [STATUS.md](STATUS.md) after the merge. Older decisions, pins and blockers are archived in [DECISIONS.md](DECISIONS.md). Never commit API credentials.
+Older decisions, pins and blockers are archived in [DECISIONS.md](DECISIONS.md). Never commit API credentials.

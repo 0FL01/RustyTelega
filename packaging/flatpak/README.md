@@ -1,63 +1,94 @@
 # Quill's Flatpak
 
-`io.github.shinycake.Quill.yml` builds the Flatpak. It does not compile
-Quill: it unpacks the Linux release tarball for each CPU
-(`quill-linux-<arch>-bundle.tar.gz`, made by `scripts/linux-package.sh`) into
-`/app/lib/quill`, links `/app/bin/quill` to it, and renames the desktop file and
-icons to the app id. The AppStream file lives in
-`assets/linux/io.github.shinycake.Quill.metainfo.xml`; the copy here is a
-symlink to it.
+`io.github.shinycake.Quill.yml` repackages the Linux release tarballs; it does
+not compile Quill. For each CPU it installs the relocatable
+`quill-linux-<arch>-bundle.tar.gz` into `/app/lib/quill`, links
+`/app/bin/quill` to it, and renames the desktop file and icons to the app ID.
+The AppStream file here is a relative symlink to
+`assets/linux/io.github.shinycake.Quill.metainfo.xml`. Keep generated manifests
+in this directory so that Flatpak Builder can resolve it.
 
-Why a repackaged tarball and the reasons for each permission:
+The rationale for repackaging and the permissions is in
 [docs/decisions/flatpak.md](../../docs/decisions/flatpak.md).
 
-## Build and run locally (Linux)
+## Releases and installation
+
+On a release-relevant push to `main`, `.github/workflows/release.yml` builds the x86_64 and
+aarch64 Flatpaks **before** creating the draft GitHub Release. It uses the
+Linux tarballs produced by that same CI run, verifies their `.sha256` files,
+generates a local-source manifest, and builds and lints both architectures.
+The same release contains both `quill-linux-<arch>.flatpak` files and the other
+release assets; it is not assembled by a post-publication workflow.
+
+Download the matching `.flatpak` directly from GitHub Releases. For example,
+after configuring Flathub for the GNOME runtime:
 
 ```sh
 flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --user -y flathub org.flatpak.Builder
-cd packaging/flatpak
-flatpak run org.flatpak.Builder --user --install --force-clean \
-  --install-deps-from=flathub build-dir io.github.shinycake.Quill.yml
+flatpak install --user ./quill-linux-x86_64.flatpak
 flatpak run io.github.shinycake.Quill
 ```
 
-Lint it:
+There is no Pages-hosted Flatpak repository, `.flatpakref`, or automatic
+Flatpak update channel for these bundles. To update, download and install the
+new bundle manually.
+
+## Build locally from the current Linux bundles
+
+The checked-in manifest still contains historical `shinycake/quill` upstream
+URLs. **Do not build it directly.** Stage both tarballs and their matching
+`.sha256` files from the same build in `packaging/flatpak/_release/`, then run
+from the repository root:
 
 ```sh
-flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest io.github.shinycake.Quill.yml
-flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo   # after a build with --repo=repo
+(cd packaging/flatpak/_release && \
+  sha256sum -c quill-linux-x86_64-bundle.tar.gz.sha256 \
+               quill-linux-aarch64-bundle.tar.gz.sha256)
+bash packaging/flatpak/bump.sh --local packaging/flatpak/_release packaging/flatpak/ci.yml
+flatpak run org.flatpak.Builder --user --install --force-clean \
+  --install-deps-from=flathub packaging/flatpak/build-dir packaging/flatpak/ci.yml
+flatpak run io.github.shinycake.Quill
 ```
 
-CI (`.github/workflows/flatpak.yml`) does all of this for x86_64 and aarch64 on
-every pull request that touches these files, on demand, and on every published
-release. It also runs `quill --version` and `ldd` on every binary inside the
-sandbox. The build lint skips the screenshot errors listed in
-`lint-exceptions.json`, which only a hosted screenshot mirror satisfies;
-pull requests also skip the screenshot URL check, because the screenshots are
-linked from `main` and a new one exists there only after the merge.
+Install `org.flatpak.Builder` from Flathub first if needed. `--local` requires
+both regular files with the exact tarball names, reads neither a release nor
+the network, calculates their SHA-256 hashes, and atomically writes the output
+manifest next to the checked-in one. It does **not** check the sidecar hashes:
+that is the responsibility of the caller, as shown above. Flatpak Builder does
+not validate the `sha256` property against a local archive, so keep the
+verified tarballs unchanged until the build finishes. The script exits nonzero
+on missing or ambiguous sources and leaves any previous output unchanged; do
+not build an old output after a failed invocation. `ci.yml` and `_release/` are
+ignored by Git; other chosen output names should not be committed either.
 
-## Quill's own repository
+To lint a generated manifest and a repo exported with `--repo=repo`:
 
-Each published release runs `flatpak.yml`, which
-builds the manifest for both CPUs, attaches `quill-linux-<arch>.flatpak` to the
-release and asks the site to rebuild. The Pages job runs
-`scripts/site-flatpak-repo.sh`: it imports the latest release's bundles into a
-fresh OSTree repo signed with `FLATPAK_GPG_KEY`, and publishes
+```sh
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+  --exceptions --user-exceptions packaging/flatpak/lint-exceptions.json manifest packaging/flatpak/ci.yml
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+  --exceptions --user-exceptions packaging/flatpak/lint-exceptions.json repo repo
+```
 
-- `https://shinycake.github.io/quill/flatpak/repo/`, the repo,
-- `quill.flatpakref`, which installs Quill and the GNOME runtime it needs,
-- `quill.flatpakrepo`, which adds the repo only,
-- `quill.gpg`, the public key (also in `quill-repo.gpg` here).
+The local `appid-filename-mismatch` lint exception is for the temporary
+`ci.yml` name; the application ID is unchanged. The other local exceptions are
+for screenshots that are not mirrored in a hosted Flatpak repository.
 
-The private key lives outside the repo, in
-`~/.config/quill-release/flatpak-signing.asc` on the owner's Mac. Losing it
-means a new key, and every user re-adding the remote. For a release from before
-this workflow, run `flatpak.yml` by hand with its tag.
+## Bump the checked-in manifest to an already published tag
 
-## A new release
+For an explicit local update only, `bash packaging/flatpak/bump.sh
+vYEAR.MONTHDAY.COMMITS` reads `SHA256SUMS.txt` from that tag in
+`0FL01/RustyTelega`, checks for exactly one checksum per archive, and updates
+the checked-in manifest to that repository's URLs. Review the resulting diff.
+The command fails if the tag or checksums are unavailable; it never falls back
+to `shinycake/quill`. This mode is not used to build the current CI release.
 
-Nothing to do: `flatpak.yml` runs `bash packaging/flatpak/bump.sh <tag>` on
-the published release before it builds. Run the same command and commit it
-when the manifest in the repo should name a newer release, for example before
-changing the manifest.
+The script deliberately rejects unexpected source layouts, extra archive
+sources, and changed architecture mappings. If the manifest's source structure
+must change, update the checks in `bump.sh` and its tests as well.
+
+Run the offline fixture tests from the repository root with:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s packaging/flatpak -p 'test_*.py' -v
+```

@@ -1,0 +1,5 @@
+/ci.yml
+/_release/
+/build-dir/
+/repo/
+/.flatpak-builder/

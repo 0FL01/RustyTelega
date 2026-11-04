@@ -1,5 +1,6 @@
 {
     "io.github.shinycake.Quill": [
+        "appid-filename-mismatch",
         "appstream-missing-screenshots",
         "appstream-screenshots-not-mirrored-in-ostree",
         "appstream-external-screenshot-url"

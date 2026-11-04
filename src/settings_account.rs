@@ -50,6 +50,9 @@ mod tests {
 
     #[test]
     fn changelog_points_at_quill_releases() {
-        assert!(CHANGELOG_URL.contains("shinycake/quill"));
+        assert_eq!(
+            CHANGELOG_URL,
+            "https://github.com/0FL01/RustyTelega/releases"
+        );
     }
 }

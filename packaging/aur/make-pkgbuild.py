@@ -10,6 +10,11 @@ updater stays off and pacman updates it. The checksums come from the
 release's SHA256SUMS.txt, or from QUILL_SUMS_FILE on disk. `makepkg
 --printsrcinfo > .SRCINFO` in OUT_DIR writes the metadata the AUR reads.
 docs/decisions/distribution-channels.md
+
+    QUILL_SUMS_FILE=... python3 packaging/aur/make-pkgbuild.py --local VERSION OUT_DIR
+
+The --local form is only for the fork's GitHub Release package. It consumes
+locally staged bundle filenames and never downloads or publishes anything.
 """
 import os
 import re
@@ -92,12 +97,18 @@ def release_sums(version: str) -> dict[str, str]:
 
 
 def main() -> int:
-    if len(sys.argv) != 3 or not re.fullmatch(r"\d{4}\.\d{3,4}\.\d+", sys.argv[1]):
+    local = len(sys.argv) == 4 and sys.argv[1] == "--local"
+    args = sys.argv[2:] if local else sys.argv[1:]
+    version_pattern = r"\d+(?:\.\d+)*" if local else r"\d{4}\.\d{3,4}\.\d+"
+    if len(args) != 2 or not re.fullmatch(version_pattern, args[0]):
         print(__doc__, file=sys.stderr)
         return 2
-    version, out = sys.argv[1], Path(sys.argv[2])
+    if local and not os.environ.get("QUILL_SUMS_FILE"):
+        print("--local requires QUILL_SUMS_FILE; no release is downloaded", file=sys.stderr)
+        return 2
+    version, out = args[0], Path(args[1])
     sums = release_sums(version)
-    fields = {"repo": REPO, "version": version}
+    fields = {"repo": "0FL01/RustyTelega" if local else REPO, "version": version}
     for arch in ARCHES:
         asset = f"quill-linux-{arch}-bundle.tar.gz"
         digest = sums.get(asset, "")
@@ -105,8 +116,36 @@ def main() -> int:
             print(f"no SHA-256 for {asset} in the release's SHA256SUMS.txt", file=sys.stderr)
             return 1
         fields[f"sum_{arch}"] = digest
+    result = PKGBUILD.format(**fields)
+    if local:
+        # Keep the AUR form unchanged. The release form uses the checked local
+        # tarballs, and requires the libraries linked by quill-webview too.
+        substitutions = {
+            "# Maintainer: shinycake <https://github.com/shinycake>":
+                "# Maintainer: Andrey Bash <bash8de@proton.me>",
+            'url="https://shinycake.github.io/quill/"':
+                'url="https://github.com/0FL01/RustyTelega"',
+            "  'libxrandr' 'libxtst' 'vulkan-driver' 'vulkan-icd-loader' 'wayland' 'zlib'":
+                "  'libxrandr' 'libxtst' 'vulkan-driver' 'vulkan-icd-loader' 'wayland' 'zlib'\n"
+                "  'webkit2gtk-4.1' 'libsoup3'",
+            "  'webkit2gtk-4.1: bot mini apps'\n"
+            "  'libsoup3: bot mini apps'\n"
+            "  'ffmpeg: editing and sending videos, video stickers'\n":
+                "  'ffmpeg: editing and sending videos, video stickers'\n",
+        }
+        for arch in ARCHES:
+            filename = f"quill-linux-{arch}-bundle.tar.gz"
+            substitutions[
+                f'source_{arch}=("quill-linux-{arch}-$pkgver.tar.gz::'
+                f'https://github.com/0FL01/RustyTelega/releases/download/v$pkgver/{filename}")'
+            ] = f'source_{arch}=("{filename}")'
+        for old, new in substitutions.items():
+            if result.count(old) != 1:
+                print(f"cannot adapt upstream PKGBUILD: expected exactly one {old!r}", file=sys.stderr)
+                return 1
+            result = result.replace(old, new, 1)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "PKGBUILD").write_text(PKGBUILD.format(**fields))
+    (out / "PKGBUILD").write_text(result)
     return 0
 
 

@@ -75,11 +75,11 @@ Other values typed into the app (never committed):
 
 After `authorizationStateReady`, the live client pages `loadChats` for the main list and the composer sends `sendMessage`. Chat titles and message text are not written to diagnostics.
 
-Optional later (not required for personal Mac runs): Apple Developer ID, notarization credentials, a dedicated test chat with a second account. There is **no** App Store or notarization pipeline: GitHub releases ship an ad-hoc signed `Quill.app` (`.github/workflows/release.yml`), and Apple Development signing is used only on Idan's personal Mac.
+Optional (not required for personal Mac runs): Apple Developer ID and notarization credentials, and a dedicated test chat with a second account. The release workflow uses the configured macOS signing identity and notarizes Developer ID builds; without an identity the app is ad-hoc signed and is not notarized. There is no App Store release pipeline.
 
 ## Release builds
 
-Tagged releases (`.github/workflows/release.yml`) embed the project's
+Releases (`.github/workflows/release.yml`) can embed the project's
 `api_id` / `api_hash` at compile time from the `TELEGRAM_API_ID` /
 `TELEGRAM_API_HASH` repository secrets. The workflow passes them to the release
 `cargo build` only, as `QUILL_BUILD_TELEGRAM_API_ID` /
@@ -88,9 +88,11 @@ Tagged releases (`.github/workflows/release.yml`) embed the project's
 `.env` / `quill.local.env` files above still win, so developer builds behave as
 before and a user can override the release pair. `quill --embedded-credentials`
 prints `embedded` or `none` (never the values).
+Embedded credentials are extractable from distributed binaries and must be
+treated as public, even though the CI inputs are stored as secrets.
 
-Every other build embeds nothing: local `cargo build`, PR CI, and workflow
-dispatch dry runs unless the owner opts in. When the secrets are absent the
+Local `cargo build` embeds nothing unless these build variables are supplied.
+When the repository secrets are absent the
 release still builds; it is a credential-free build, and its release notes say
 so. A credential-free package needs `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` in
 the environment (or a `quill.local.env` / `.env` file in the working directory)

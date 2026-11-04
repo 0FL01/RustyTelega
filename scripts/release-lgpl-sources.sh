@@ -15,6 +15,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="${GITHUB_REPOSITORY:-0FL01/RustyTelega}"
+SOURCE_SHA="${GITHUB_SHA:-$(git -C "$ROOT" rev-parse HEAD)}"
 OUT="${1:?usage: release-lgpl-sources.sh <out-dir>}"
 mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
@@ -55,8 +57,8 @@ archive "quill-source-tgcalls-$TGCALLS_SHORT" https://github.com/TelegramMesseng
 cat > "$OUT/LGPL-SOURCES.txt" <<EOF
 Corresponding source for the LGPL components shipped with Quill
 
-Quill itself is MIT-licensed; its full source is the git tag of this release at
-https://github.com/shinycake/quill. The packages also ship these LGPL libraries
+Quill itself is MIT-licensed; the source of this release is at
+https://github.com/$REPO/tree/$SOURCE_SHA. The packages also ship these LGPL libraries
 as separate, replaceable shared libraries (Quill loads them at runtime):
 
 FFmpeg $FFMPEG_TAG (LGPL-2.1-or-later), all packages
@@ -79,7 +81,7 @@ tgcalls (LGPL-3.0), inside libquill_calls (libquill_calls.so, libquill_calls.dyl
 Written offer: for at least three years after this release, the Quill
 maintainers will provide the complete corresponding source of any LGPL
 component listed above, for the exact version shipped here, to anyone who asks
-by opening an issue at https://github.com/shinycake/quill/issues. You may
+by opening an issue at https://github.com/$REPO/issues. You may
 replace any of these libraries in the package with your own compatible build.
 EOF
 

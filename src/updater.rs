@@ -6,11 +6,11 @@ use serde::{Deserialize, Serialize};
 mod control;
 pub use control::UpdateControl;
 
-pub const RELEASES_URL: &str = "https://github.com/shinycake/quill/releases";
-pub const LATEST_API_URL: &str = "https://api.github.com/repos/shinycake/quill/releases/latest";
+pub const RELEASES_URL: &str = "https://github.com/0FL01/RustyTelega/releases";
+pub const LATEST_API_URL: &str = "https://api.github.com/repos/0FL01/RustyTelega/releases/latest";
 /// The newest releases, pre-releases included (What's new reads them).
 pub const RELEASES_API_URL: &str =
-    "https://api.github.com/repos/shinycake/quill/releases?per_page=30";
+    "https://api.github.com/repos/0FL01/RustyTelega/releases?per_page=30";
 pub(crate) const MAX_RESPONSE_BYTES: u64 = 1_048_576;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -419,6 +419,75 @@ mod tests {
     }
 
     #[test]
+    fn releases_and_staged_plans_only_trust_the_fork() {
+        let fork = "https://github.com/0FL01/RustyTelega/releases";
+        let upstream = "https://github.com/shinycake/quill/releases";
+        assert_eq!(RELEASES_URL, fork);
+        assert_eq!(
+            LATEST_API_URL,
+            "https://api.github.com/repos/0FL01/RustyTelega/releases/latest"
+        );
+        assert_eq!(
+            RELEASES_API_URL,
+            "https://api.github.com/repos/0FL01/RustyTelega/releases?per_page=30"
+        );
+
+        let current = Version::parse(crate::version::APP).unwrap();
+        let version = format!("{}.0.0", current.major.checked_add(1).unwrap());
+        let tag = format!("v{version}");
+        let release = |page: &str, asset: &str| ReleaseInfo {
+            version: version.clone(),
+            notes: "Changes".into(),
+            url: format!("{page}/tag/{tag}"),
+            asset: Some(ReleaseAsset {
+                url: format!("{asset}/download/{tag}/{}", update_asset_name()),
+                size: 120,
+                sha256: "a".repeat(64),
+            }),
+        };
+        let body = |release: &ReleaseInfo| {
+            let asset = release.asset.as_ref().unwrap();
+            json!({
+                "tag_name": tag,
+                "html_url": release.url,
+                "body": release.notes,
+                "draft": false,
+                "prerelease": false,
+                "assets": [{
+                    "name": update_asset_name(),
+                    "browser_download_url": asset.url,
+                    "size": asset.size,
+                    "digest": format!("sha256:{}", asset.sha256),
+                }],
+            })
+            .to_string()
+        };
+
+        let trusted = release(fork, fork);
+        assert_eq!(
+            interpret_release(200, body(&trusted).as_bytes(), crate::version::APP),
+            UpdateState::Available(trusted.clone())
+        );
+        // Startup and the helper both revalidate the release saved in a plan.
+        assert!(crate::update_install::valid_release(&trusted));
+
+        for (page, asset) in [(upstream, upstream), (upstream, fork), (fork, upstream)] {
+            let rejected = release(page, asset);
+            assert!(!crate::update_install::valid_release(&rejected));
+            let state = interpret_release(200, body(&rejected).as_bytes(), crate::version::APP);
+            if page == upstream {
+                assert!(matches!(
+                    state,
+                    UpdateState::Failed("Invalid release link. Retry the check.")
+                ));
+            } else {
+                assert!(matches!(state, UpdateState::Available(info) if info.asset.is_none()));
+                assert!(!valid_asset(rejected.asset.as_ref().unwrap(), &tag));
+            }
+        }
+    }
+
+    #[test]
     fn release_checks_handle_ordering_notes_absence_and_errors() {
         let release = |tag: &str| {
             serde_json::to_vec(&json!({"tag_name":tag,"html_url":format!("{RELEASES_URL}/tag/{tag}"),"body":"Changes 😀\nSecond line","draft":false,"prerelease":false})).unwrap()
@@ -493,7 +562,7 @@ mod tests {
             interpret_release(200, &release("invalid"), "0.1.0"),
             UpdateState::Failed(_)
         ));
-        let bad = json!({"tag_name":"v0.2.0","html_url":"https://github.com.evil.invalid/shinycake/quill/releases/tag/v0.2.0","body":null,"draft":false,"prerelease":false});
+        let bad = json!({"tag_name":"v0.2.0","html_url":"https://github.com.evil.invalid/0FL01/RustyTelega/releases/tag/v0.2.0","body":null,"draft":false,"prerelease":false});
         assert!(matches!(
             interpret_release(200, bad.to_string().as_bytes(), "0.1.0"),
             UpdateState::Failed(_)

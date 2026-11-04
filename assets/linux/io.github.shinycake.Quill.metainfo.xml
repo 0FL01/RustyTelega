@@ -28,9 +28,9 @@
     </p>
   </description>
   <launchable type="desktop-id">io.github.shinycake.Quill.desktop</launchable>
-  <url type="homepage">https://shinycake.github.io/quill/</url>
-  <url type="bugtracker">https://github.com/shinycake/quill/issues</url>
-  <url type="vcs-browser">https://github.com/shinycake/quill</url>
+  <url type="homepage">https://github.com/0FL01/RustyTelega</url>
+  <url type="bugtracker">https://github.com/0FL01/RustyTelega/issues</url>
+  <url type="vcs-browser">https://github.com/0FL01/RustyTelega</url>
   <categories>
     <category>Network</category>
     <category>InstantMessaging</category>

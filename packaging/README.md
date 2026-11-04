@@ -1,47 +1,16 @@
 # Packaging
 
-Where Quill is distributed besides GitHub Releases, and how each channel is
-set up. Why it is built this way: `docs/decisions/distribution-channels.md`.
+The release workflow publishes packages only to
+[GitHub Releases](https://github.com/0FL01/RustyTelega/releases). It does not
+publish to AUR, Chocolatey, Homebrew or a separate Flatpak repository.
 
-| Folder | What it is |
+| Folder | Purpose |
 |---|---|
-| `homebrew-tap/` | The contents of the `shinycake/homebrew-tap` repository (cask `quill-app`) |
-| `chocolatey/` | `make-package.py`, which writes the Chocolatey package for a release |
-| `windows/` | `quill.iss`, the Inno Setup script for `quill-windows-x86_64-setup.exe` |
-| `aur/` | `make-pkgbuild.py`, which writes the Arch User Repository package `quill-bin` for a release |
-| `flatpak/` | The Flatpak manifest; CI builds it for every release and the site serves it as Quill's own Flatpak repo |
+| `linux/` | Linux x86_64 distribution packages built from the release bundle |
+| `aur/` | Arch package generator used by the release build; no AUR upload |
+| `windows/` | Inno Setup script for the Windows setup EXE |
+| `flatpak/` | Flatpak manifest and local build instructions |
 
-## One-time setup
-
-These publish to places outside this repository, so they are done once by
-hand. After that every channel follows new releases by itself.
-
-1. **Homebrew tap.** Create the public repository and push the folder:
-
-       cp -R packaging/homebrew-tap /tmp/homebrew-tap && cd /tmp/homebrew-tap
-       git init -b main && git add -A && git commit -m "Add the Quill cask"
-       gh repo create shinycake/homebrew-tap --public --source . --push
-
-   Then `brew install --cask shinycake/tap/quill-app` works. The `bump`
-   workflow runs every three hours; run it by hand after a release to skip
-   the wait.
-
-2. **Flatpak.** Quill has its own Flatpak repo on the site. Add the signing key, kept outside the repo, as the
-   `FLATPAK_GPG_KEY` secret: `gh secret set FLATPAK_GPG_KEY -R shinycake/quill
-   < ~/.config/quill-release/flatpak-signing.asc`. See `flatpak/README.md`.
-
-3. **Chocolatey.** Sign up at community.chocolatey.org, copy the API key
-   from the account page and add it as the `CHOCO_API_KEY` secret of this
-   repository. `chocolatey.yml` then pushes every stable release; run it by
-   hand with `push` checked for the current one. Chocolatey's moderators
-   review each version before it is listed.
-
-4. **AUR.** Sign up at aur.archlinux.org and add the public key
-   `~/.config/quill-release/aur_ed25519.pub` under My Account > SSH Public
-   Key. Add the private key as the `AUR_SSH_KEY` secret: `gh secret set
-   AUR_SSH_KEY -R shinycake/quill < ~/.config/quill-release/aur_ed25519`.
-   Then run `aur.yml` by hand with `push` checked: the first push creates
-   `quill-bin`, and every stable release after that updates it.
-
-Windows package managers: Chocolatey only, by the owner's decision of
-3 November 2026. Quill is not offered on winget or Scoop.
+The older `homebrew-tap/` and `chocolatey/` directories are not used by the
+release workflow. Flatpak bundles in Releases are installed directly; they do
+not provide the automatic updates of a Flatpak repository.
