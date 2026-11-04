@@ -19,7 +19,6 @@ jobs:
       build: ${{ steps.changes.outputs.build }}
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
-      credentials: ${{ steps.version.outputs.credentials }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -53,7 +52,7 @@ jobs:
           build = any(name and not name.endswith(b'.md') for name in names)
           print(f'build={str(build).lower()}')
           PY
-      - name: Deterministic version and existing tag check
+      - name: Require release credentials and check deterministic version
         id: version
         if: steps.changes.outputs.build == 'true'
         env:
@@ -61,6 +60,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$HAVE_SECRETS" != true ]]; then
+            echo '::error::Release requires both TELEGRAM_API_ID and TELEGRAM_API_HASH repository secrets. Without them Quill opens the synthetic demo instead of live authorization.'
+            exit 1
+          fi
           day="$(TZ=UTC git log -1 --format=%cd --date=format-local:'%Y.%-m%d' "$GITHUB_SHA")"
           version="$day.$(git rev-list --count "$GITHUB_SHA")"
           python3 - "$version" <<'PY'
@@ -78,16 +81,9 @@ jobs:
             actual="$(git rev-parse 'FETCH_HEAD^{commit}')"
             [[ "$actual" == "$GITHUB_SHA" ]] || { echo "::error::$tag already points to $actual, not $GITHUB_SHA"; exit 1; }
           fi
-          credentials=none
-          if [[ "$HAVE_SECRETS" == true ]]; then
-            credentials=embedded
-          else
-            echo '::warning::Telegram credential pair is incomplete; building credential-free'
-          fi
           {
             echo "version=$version"
             echo "tag=$tag"
-            echo "credentials=$credentials"
           } >> "$GITHUB_OUTPUT"
 
   linux-checks:
@@ -268,7 +264,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           # target/ includes dep-info containing compile-time env values.
-          save-if: ${{ needs.prepare.outputs.credentials != 'embedded' }}
+          save-if: false
       - name: apt dependencies
         run: |
           sudo apt-get update
@@ -325,8 +321,8 @@ jobs:
       - name: build release ui
         env:
           QUILL_RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-          QUILL_BUILD_TELEGRAM_API_ID: ${{ needs.prepare.outputs.credentials == 'embedded' && secrets.TELEGRAM_API_ID || '' }}
-          QUILL_BUILD_TELEGRAM_API_HASH: ${{ needs.prepare.outputs.credentials == 'embedded' && secrets.TELEGRAM_API_HASH || '' }}
+          QUILL_BUILD_TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          QUILL_BUILD_TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
         run: cargo build --release --features ui --locked
       - name: build mini-app helper (WebKitGTK)
         run: cargo build --release --locked -p quill-webview
@@ -349,14 +345,9 @@ jobs:
           python3 scripts/check-bundle-dlopen.py dist/linux/quill-linux-${{ matrix.arch }}
           env -u LD_LIBRARY_PATH dist/linux/quill-linux-${{ matrix.arch }}/quill --video-probe tests/fixtures/clip-h264-aac.mp4
           env -u LD_LIBRARY_PATH dist/linux/quill-linux-${{ matrix.arch }}/quill --video-probe tests/fixtures/clip-vp9.webm
-      - name: embedded credentials match the request
-        env:
-          WANT_EMBED: ${{ needs.prepare.outputs.credentials == 'embedded' }}
+      - name: Require embedded credentials in the packaged app
         run: |
-          got="$(dist/linux/quill-linux-${{ matrix.arch }}/quill --embedded-credentials)"
-          want=none; [ "$WANT_EMBED" = true ] && want=embedded
-          echo "embedded credentials: $got"
-          test "$got" = "$want"
+          test "$(dist/linux/quill-linux-${{ matrix.arch }}/quill --embedded-credentials)" = embedded
       - name: smoke the extracted tarball
         run: |
           mkdir -p "$RUNNER_TEMP/extract"
@@ -368,6 +359,19 @@ jobs:
             --expect-encoder mpeg4 --expect-encoder aac --expect-encoder mjpeg --expect-encoder png
           grep -q "^Exec=$RUNNER_TEMP/prefix/opt/quill/quill" "$RUNNER_TEMP/prefix/share/applications/org.shinycake.quill.desktop"
           grep -qx "Exec=$RUNNER_TEMP/prefix/opt/quill/quill --quit" "$RUNNER_TEMP/prefix/share/applications/org.shinycake.quill.desktop"
+      - name: Installed app reaches live Telegram authorization without runtime credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke_home="$(mktemp -d)"
+          trap 'rm -rf "$smoke_home"' EXIT
+          app="$RUNNER_TEMP/prefix/opt/quill"
+          result="$(cd "$smoke_home" && env -u TELEGRAM_API_ID -u TELEGRAM_API_HASH \
+            -u QUILL_API_ID -u QUILL_API_HASH -u CARGO_MANIFEST_DIR -u LD_LIBRARY_PATH \
+            HOME="$smoke_home" XDG_DATA_HOME="$smoke_home/data" \
+            QUILL_TDJSON_PATH="$app/lib/libtdjson.so" "$app/quill" --connect-smoke)"
+          echo "$result"
+          test "$result" = 'SMOKE_OK wait-phone'
       - name: updater binary
         run: |
           mkdir -p dist/update
@@ -568,7 +572,6 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       VERSION: ${{ needs.prepare.outputs.version }}
       TAG: ${{ needs.prepare.outputs.tag }}
-      CREDENTIALS: ${{ needs.prepare.outputs.credentials }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -737,8 +740,6 @@ jobs:
           lines += ['', f'## Release assets ({len(names)})', '']
           lines += [f'- [`{n}`]({url}/releases/download/{quote(tag)}/{quote(n)})' for n in names]
           lines += ['', 'Flatpak bundles are installed and updated manually. The standalone Linux binaries require the libraries and helpers in their matching bundles.']
-          if os.environ['CREDENTIALS'] == 'none':
-              lines += ['', 'This build has no embedded Telegram API credentials.']
           text = '\n'.join(lines) + '\n'
           if len(text) > 125000:
               raise SystemExit('Release notes exceed GitHub limit')
