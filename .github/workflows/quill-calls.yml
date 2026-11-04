@@ -2,8 +2,9 @@ name: quill-calls
 # Builds libquill_calls (tgcalls + tg_owt behind Quill's C API,
 # docs/decisions/tgcalls-engine.md) on every platform we ship, loads it, and
 # uploads it. Runs on PRs that touch it. Each package workflow
-# (package-linux, package-macos, package-windows) calls it for its own
-# targets, so a package waits only for its own library.
+# (package-linux, package-macos, package-windows) calls it in build mode for
+# its own targets, so a package waits only for its own library and not for
+# the Rust tests; ci.yml and release.yml run those in test mode beside them.
 on:
   pull_request:
     paths:
@@ -17,6 +18,10 @@ on:
     inputs:
       targets:
         description: 'Space-separated targets to build (linux-x86_64 linux-aarch64 macos-arm64 windows-x86_64); empty builds all'
+        type: string
+        default: ''
+      mode:
+        description: "'build' uploads the library without the Rust tests (what a package waits for); 'test' runs the tests and uploads nothing; empty does both"
         type: string
         default: ''
   workflow_dispatch:
@@ -220,6 +225,7 @@ jobs:
           fi
           echo "$syms"
       - name: the Rust bindings against the library
+        if: inputs.mode != 'build'
         run: |
           # Exported here: macOS drops DYLD_* when it starts the step's bash.
           export LD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib"
@@ -231,6 +237,7 @@ jobs:
           if [[ "$RUNNER_OS" == Windows ]]; then cldir="$(dirname "$(command -v cl)")"; export PATH="$cldir:$PATH"; fi
           cargo test -p quill-calls-sys --locked
       - name: the 1:1 engine against the library
+        if: inputs.mode != 'build'
         run: |
           export LD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib"
           export DYLD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib${OPENSSL_ROOT_DIR:+:$OPENSSL_ROOT_DIR/lib}"
@@ -241,6 +248,7 @@ jobs:
           export QUILL_CALLS_LIB="$root/vendor/quill-calls/lib/${{ matrix.lib }}"
           cargo test --no-default-features --lib --locked calls::engine::tgcalls
       - uses: actions/upload-artifact@v7
+        if: inputs.mode != 'test'
         with:
           name: quill-calls-${{ matrix.target }}
           path: |

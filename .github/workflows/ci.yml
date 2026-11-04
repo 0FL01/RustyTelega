@@ -256,7 +256,15 @@ jobs:
   # the Telegram credential secrets, so these builds embed nothing.
   # Linux: UI + native libs, relocatable package (docs/decisions/codex-linux-package.md).
   # Each package workflow builds the call library it ships
-  # (quill-calls.yml, docs/decisions/tgcalls-engine.md) for its own targets.
+  # (quill-calls.yml, docs/decisions/tgcalls-engine.md) for its own targets;
+  # the library's Rust tests run here.
+  calls-tests:
+    name: calls-tests
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/quill-calls.yml
+    with:
+      mode: test
+
   linux-package:
     name: linux-package
     if: github.event_name == 'push'

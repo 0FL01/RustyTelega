@@ -35,6 +35,7 @@ jobs:
     uses: ./.github/workflows/quill-calls.yml
     with:
       targets: linux-x86_64 linux-aarch64
+      mode: build
 
   linux-package:
     name: linux-package (${{ matrix.arch }})

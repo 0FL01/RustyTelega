@@ -55,6 +55,7 @@ jobs:
     uses: ./.github/workflows/quill-calls.yml
     with:
       targets: macos-arm64
+      mode: build
 
   macos-package:
     name: macos-package

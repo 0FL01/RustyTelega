@@ -37,6 +37,7 @@ jobs:
     uses: ./.github/workflows/quill-calls.yml
     with:
       targets: windows-x86_64
+      mode: build
 
   windows-build:
     name: windows-build

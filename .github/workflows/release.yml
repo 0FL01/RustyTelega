@@ -133,7 +133,15 @@ jobs:
           echo "Quill $version, tag v$version, credentials: $credentials, draft release: $publish"
 
   # Each package builds the call library it ships for its own targets
-  # (quill-calls.yml), so no platform waits on another's.
+  # (quill-calls.yml), so no platform waits on another's. The library's Rust
+  # tests run here beside the packages, and the release waits for them.
+  calls-tests:
+    name: calls-tests
+    needs: prepare
+    uses: ./.github/workflows/quill-calls.yml
+    with:
+      mode: test
+
   linux:
     name: linux
     needs: prepare
@@ -191,7 +199,7 @@ jobs:
 
   release:
     name: assemble release
-    needs: [prepare, linux, windows, macos, sources]
+    needs: [prepare, calls-tests, linux, windows, macos, sources]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
