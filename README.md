@@ -14,7 +14,9 @@ On the same Mac, Quill used about a third of Telegram Desktop's memory and put i
 > [!WARNING]
 > Quill is an independent project. It isn't affiliated with, endorsed by, or sponsored by Telegram (Telegram FZ-LLC or Telegram Messenger Inc.). "Telegram" is a trademark of its owner, and Quill uses the name only to say which service it works with.
 >
-> Quill is early, experimental software. Use it at your own risk. It comes with no warranty, as the [MIT license](LICENSE) states, and the maintainers are not responsible for lost data, account restrictions or bans, missed messages, or any other damage. Keep an official Telegram app installed.
+> Quill is early, experimental software. It is made and tested day to day on a Mac; the Windows and Linux builds pass automated tests but have had little use on real computers so far. Use it at your own risk. It comes with no warranty, as the [MIT license](LICENSE) states, and the maintainers are not responsible for lost data, account restrictions or bans, missed messages, or any other damage. Keep an official Telegram app installed.
+
+<p align="center"><img src="docs/screenshots/demo.gif" width="880" alt="A short recording of Quill opening chats and typing a reply in the dark theme"/></p>
 
 <table>
   <tr>
@@ -52,6 +54,8 @@ curl -fsSL https://raw.githubusercontent.com/shinycake/quill/main/scripts/linux-
 Each script downloads the latest release from [GitHub Releases](https://github.com/shinycake/quill/releases) and checks it against the release's SHA-256 checksums. If the file doesn't match, the script stops and installs nothing. None of them needs administrator rights. Run the same command again to update.
 
 Quill for Mac is signed with a Developer ID and notarized by Apple, so it opens without a warning however you download it. A Mac copy installed before 3 November 2026 can't update to the notarized version by itself: install it once with the command above, and updates work as usual after that. The Windows build isn't signed with a paid certificate yet, so a zip downloaded in a browser asks once on first launch: click More info, then Run anyway. Files the script downloads aren't marked for that check, so they open without a warning. The [website](https://shinycake.github.io/quill/#install) walks through it step by step.
+
+Prefer a package manager? On a Mac, `brew install --cask shinycake/tap/quill-app`. On Linux, `flatpak install --user https://shinycake.github.io/quill/flatpak/quill.flatpakref` installs from Quill's own Flatpak repository.
 
 ## Features
 
