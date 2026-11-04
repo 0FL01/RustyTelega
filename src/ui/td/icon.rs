@@ -107,6 +107,7 @@ td_icons! {
     ReplyCancel => "box_button_close",
     // Stream C
     VoiceToText => "chat/voice_to_text",
+    HistoryFilePlay => "history_file_play",
     HistorySent => "history_sent",
     HistoryReceived => "history_received",
 }

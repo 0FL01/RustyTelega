@@ -126,6 +126,16 @@ impl ForwardHeader {
 pub fn thumb_candidates(content: &MessageContent) -> Vec<FileId> {
     let mut ids = Vec::new();
     match content {
+        MessageContent::Text(text) => {
+            if let Some(photo) = text
+                .link_preview
+                .as_ref()
+                .and_then(|preview| preview.photo.as_ref())
+            {
+                ids.extend(photo.thumb_size().map(|size| size.file_id));
+                ids.extend(photo.largest_size().map(|size| size.file_id));
+            }
+        }
         MessageContent::Photo(photo) if !photo.is_secret && !photo.has_spoiler => {
             ids.extend(photo.thumb_size().map(|size| size.file_id));
             ids.extend(photo.largest_size().map(|size| size.file_id));

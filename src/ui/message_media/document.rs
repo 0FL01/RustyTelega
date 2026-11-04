@@ -83,7 +83,15 @@ pub(in crate::ui) fn action_disc(
                 ),
             )
         })
-        .child(Icon::new(icon).size(px(20.)).text_color(fg))
+        .child(if icon == gpui_kit::assets::IconName::Play {
+            super::super::td::td_icon(super::super::td::TdIcon::HistoryFilePlay, fg)
+                .into_any_element()
+        } else {
+            Icon::new(icon)
+                .size(px(20.))
+                .text_color(fg)
+                .into_any_element()
+        })
 }
 
 /// Where a document row sits: a chat message (Open resolves like

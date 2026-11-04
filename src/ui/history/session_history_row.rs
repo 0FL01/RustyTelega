@@ -964,9 +964,18 @@ pub(in crate::ui) fn session_history_row(
             look,
         );
     }
+    let document_footer_inline = reserve_footer
+        && seek_bar.as_ref().is_none_or(|seek| seek.slider.is_none())
+        && match content {
+            MessageContent::VoiceNote(note) => {
+                note.caption.is_empty() && note.transcription.is_none()
+            }
+            MessageContent::Audio(audio) => audio.caption.is_empty(),
+            _ => false,
+        };
     session_bubble_quoted(
         message.id.0 as u64,
-        chrome(caption_reserved),
+        chrome(caption_reserved || document_footer_inline),
         String::new(),
         message.is_outgoing,
         extra,

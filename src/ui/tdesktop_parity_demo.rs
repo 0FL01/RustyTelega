@@ -286,6 +286,17 @@ fn seed(sink: Arc<MemorySink>) -> Session {
         "width":240,"height":140,"file":file(6506,"demo-gif-1.png",24)},"animation":file(6507,"demo-gif.gif",24)},
         "caption":{"@type":"formattedText","text":"","entities":[]},"show_caption_above_media":false,
         "has_spoiler":false,"is_secret":false}), Some(7*STEP)));
+    for (id, name, size) in [
+        (6500, "showcase/p5.jpg", 24),
+        (6502, "showcase/p6.jpg", 24),
+        (6503, "demo-voice.ogg", 338739),
+        (6504, "demo-voice.ogg", 144282),
+        (6505, "demo-voice.ogg", 24000),
+        (6506, "demo-gif-1.png", 24),
+        (6507, "demo-gif.gif", 24),
+    ] {
+        updates.push(json!({"@type":"updateFile", "file":file(id, name, size)}));
+    }
     updates.push(
         json!({"@type":"updateChatReadOutbox","chat_id":CHAT,"last_read_outbox_message_id":8*STEP}),
     );

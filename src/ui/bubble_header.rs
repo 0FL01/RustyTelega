@@ -154,7 +154,7 @@ pub(super) fn reply_header_strip(
                                     .min_w_0()
                                     .truncate()
                                     .text_xs()
-                                    .font_medium()
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(color)
                                     .child(name),
                             )

@@ -172,6 +172,13 @@ pub(in crate::ui) fn voice_note_row(
     let note_duration = f64::from(note.duration);
     let active = seek.slider.is_some();
     let accent = bubble_accent(outgoing, cx);
+    let wave_color = Hsla::from(crate::ui::td::td(
+        match (outgoing, !note.is_listened && !outgoing) {
+            (true, _) => quill::app_theme::PaletteKey::MsgWaveformOutInactive,
+            (false, true) => quill::app_theme::PaletteKey::MsgWaveformInActive,
+            (false, false) => quill::app_theme::PaletteKey::MsgWaveformInInactive,
+        },
+    ));
     // Phase 4.6: the active row shows elapsed / total (tdesktop-style).
     let total = format_voice_duration(note.duration);
     // `Document::composeStatusText` uses FormatDurationAndSizeText while
@@ -181,17 +188,15 @@ pub(in crate::ui) fn voice_note_row(
     let size = file
         .map(|file| file.size.max(file.expected_size))
         .filter(|size| *size > 0);
-    let idle_status = size
-        .filter(|_| file.and_then(|file| file.usable_path()).is_none())
-        .map_or_else(
-            || total.clone(),
-            |size| {
-                format!(
-                    "{total}, {}",
-                    quill::telegram::envelope::format_size_text(size)
-                )
-            },
-        );
+    let idle_status = size.map_or_else(
+        || total.clone(),
+        |size| {
+            format!(
+                "{total}, {}",
+                quill::telegram::envelope::format_size_text(size)
+            )
+        },
+    );
     // Include both idle and playback labels when estimating width.
     let playback_status = format!("{total} / {total}");
     let widest_status = if idle_status.len() > playback_status.len() {
@@ -297,8 +302,9 @@ pub(in crate::ui) fn voice_note_row(
                                         .hover(seek.hover)
                                         .dragging(seek.dragging)
                                         .into_any_element(),
-                                        None => waveform_canvas(bars, accent, progress)
-                                            .into_any_element(),
+                                        None => {
+                                            waveform_canvas(bars, wave_color, 1.).into_any_element()
+                                        }
                                     }),
                                 )
                                 .child(transcribe_button(chat_id, message_id, outgoing, cx)),
