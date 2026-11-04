@@ -97,16 +97,9 @@ impl QuillApp {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(session) = self.session() else {
-            return false;
-        };
-        let stickers = &session.stickers.stickers;
-        let emoji = &session.stickers.emoji;
-        let showing = (!stickers.suggestions.is_empty()
-            && self.composer_suggests(stickers.suggest_for.as_deref(), cx))
-            || (emoji.animated_emoji.is_some()
-                && self.composer_suggests(emoji.animated_emoji_for.as_deref(), cx));
-        if !showing || !self.composer.read(cx).focus_handle(cx).is_focused(window) {
+        if !self.suggestion_rows_shown(cx)
+            || !self.composer.read(cx).focus_handle(cx).is_focused(window)
+        {
             return false;
         }
         self.close_sticker_suggestions(cx);
@@ -154,14 +147,47 @@ impl QuillApp {
         self.sync_sticker_suggestions(&text, cx);
     }
 
+    /// Whether the sticker or animated-emoji suggestion row shows.
+    fn suggestion_rows_shown(&self, cx: &Context<Self>) -> bool {
+        self.sticker_suggestions_shown(cx)
+            || self.session().is_some_and(|session| {
+                let emoji = &session.stickers.emoji;
+                emoji.animated_emoji.is_some()
+                    && self.composer_suggests(emoji.animated_emoji_for.as_deref(), cx)
+            })
+    }
+
+    /// Whether the sticker suggestions row shows above the composer.
+    fn sticker_suggestions_shown(&self, cx: &Context<Self>) -> bool {
+        self.session().is_some_and(|session| {
+            let stickers = &session.stickers.stickers;
+            !stickers.suggestions.is_empty()
+                && self.composer_suggests(stickers.suggest_for.as_deref(), cx)
+        })
+    }
+
+    /// Drop the emoji the sticker suggestions were for: tdesktop
+    /// `sendExistingDocument` clears the field when `stickersShown()`. Its
+    /// field suggests only for a lone emoji; ours also suggests for a
+    /// trailing one, so only that emoji goes.
+    fn clear_suggested_emoji(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = self.composer.read(cx).value().to_string();
+        let Some(emoji) = suggest_emoji_for(&text) else {
+            return;
+        };
+        let start = if text.trim() == emoji {
+            0
+        } else {
+            text.rfind(emoji).unwrap_or(text.len())
+        };
+        self.replace_composer_text(start..text.len(), "", window, cx);
+    }
+
     pub(super) fn sticker_suggestions_row(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let session = self.session()?;
-        let stickers = &session.stickers.stickers;
-        if stickers.suggestions.is_empty()
-            || !self.composer_suggests(stickers.suggest_for.as_deref(), cx)
-        {
+        if !self.sticker_suggestions_shown(cx) {
             return None;
         }
+        let session = self.session()?;
         let row = div()
             .id("sticker-suggestions")
             .flex()
@@ -202,12 +228,6 @@ impl QuillApp {
         let roots = self.media_display_roots();
         let file_id = sticker.file_id;
         let emoji = sticker.emoji.clone();
-        let width = sticker.width;
-        let height = sticker.height;
-        let thumb = sticker
-            .thumb_file_id
-            .filter(|id| id.0 != 0)
-            .map(|id| (id, sticker.thumb_width, sticker.thumb_height));
         let display_id = sticker.display_file_id();
         let path = [display_id, sticker.thumb_file_id]
             .into_iter()
@@ -284,9 +304,10 @@ impl QuillApp {
             ))
             .tab_index(0)
             .cursor_pointer()
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.send_sticker_pick(file_id, emoji.clone(), width, height, thumb, cx);
-            }))
+            .on_click({
+                let sticker = sticker.clone();
+                cx.listener(move |this, _, window, cx| this.send_sticker_cell(&sticker, window, cx))
+            })
             .child(cell)
             .children(premium_mark);
         div()
@@ -295,6 +316,32 @@ impl QuillApp {
             .gap_1()
             .child(cell)
             .into_any_element()
+    }
+
+    /// A sticker cell's click. A sticker sent while suggestions show (a
+    /// suggested sticker or the animated emoji) takes the emoji's place.
+    pub(super) fn send_sticker_cell(
+        &mut self,
+        sticker: &quill::telegram::envelope::StickerItem,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let thumb = sticker
+            .thumb_file_id
+            .filter(|id| id.0 != 0)
+            .map(|id| (id, sticker.thumb_width, sticker.thumb_height));
+        let suggested = self.suggestion_rows_shown(cx);
+        let sent = self.send_sticker_pick(
+            sticker.file_id,
+            sticker.emoji.clone(),
+            sticker.width,
+            sticker.height,
+            thumb,
+            cx,
+        );
+        if sent && suggested {
+            self.clear_suggested_emoji(window, cx);
+        }
     }
 
     /// Telegram Desktop's start page of an empty private chat: "No

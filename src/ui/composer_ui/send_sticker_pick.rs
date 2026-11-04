@@ -5,6 +5,7 @@ use crate::ui::status_note::StatusNote;
 use quill::lang::{keys, tr, tr_with};
 
 impl QuillApp {
+    /// Send a picked sticker. True when it went to the open chat.
     pub(in crate::ui) fn send_sticker_pick(
         &mut self,
         file_id: FileId,
@@ -13,29 +14,29 @@ impl QuillApp {
         height: i32,
         thumb: Option<(FileId, i32, i32)>,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         if self.route_story_reply_sticker(file_id, &emoji, (width, height), thumb, cx) {
-            return;
+            return false;
         }
         if self.route_business_start_page_sticker(file_id, cx) {
-            return;
+            return false;
         }
         if self.route_poll_option_sticker(file_id, &emoji, (width, height), cx) {
-            return;
+            return false;
         }
         if self.premium_sticker_blocked(file_id, cx) {
-            return;
+            return false;
         }
         let chat_id = self.session().and_then(|session| session.open_chat);
         let Some(chat_id) = chat_id else {
-            return;
+            return false;
         };
         // Phase A1: slow-mode gate applies to sticker sends too.
         if self.slow_mode_blocked(chat_id, cx) {
-            return;
+            return false;
         }
         if self.deny_send(quill::send_rights::SendKind::Stickers, cx) {
-            return;
+            return false;
         }
         let reply = self.send_reply_for(chat_id, cx);
         let sent = if let Some(live) = self.live.as_mut() {
@@ -73,6 +74,7 @@ impl QuillApp {
             self.arm_send_fly(chat_id, file_id, cx);
         }
         cx.notify();
+        sent
     }
 
     pub(in crate::ui) fn composer_edit_banner(
