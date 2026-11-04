@@ -43,13 +43,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
-      # target/ on a ReFS Dev Drive: Defender scans it asynchronously, so the
-      # build's thousands of small writes don't each wait for a scan.
-      - uses: samypr100/setup-dev-drive@v4.1.0
-        with:
-          drive-size: 40GB
-          env-mapping: |
-            CARGO_TARGET_DIR,{{ DEV_DRIVE }}/target
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -58,7 +51,6 @@ jobs:
           toolchain: 1.99.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: '. -> ${{ env.CARGO_TARGET_DIR }}'
           save-if: ${{ !inputs.embed_credentials }}
       # +crt-static comes from .cargo/config.toml. The secrets reach only this
       # step, as compile-time env read by option_env! (src/credentials.rs).
@@ -76,9 +68,9 @@ jobs:
         with:
           name: quill-windows-exe
           path: |
-            ${{ env.CARGO_TARGET_DIR }}/release/quill.exe
-            ${{ env.CARGO_TARGET_DIR }}/release/quill-cli.exe
-            ${{ env.CARGO_TARGET_DIR }}/release/quill-webview.exe
+            target/release/quill.exe
+            target/release/quill-cli.exe
+            target/release/quill-webview.exe
           retention-days: 3
           if-no-files-found: error
 
