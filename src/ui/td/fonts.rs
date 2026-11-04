@@ -15,6 +15,7 @@ pub(crate) const FSIZE: f32 = 13.;
 /// the first window.
 pub(crate) fn register(cx: &mut App) {
     cx.set_text_rendering_mode(gpui_kit::TextRenderingMode::Grayscale);
+    super::install_window_controls(cx);
     let faces: Vec<Cow<'static, [u8]>> = vec![
         Cow::Borrowed(include_bytes!("../../../assets/fonts/OpenSans-Regular.ttf")),
         Cow::Borrowed(include_bytes!(

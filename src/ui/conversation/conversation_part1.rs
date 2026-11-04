@@ -344,7 +344,13 @@ impl QuillApp {
                                 .flex()
                                 .items_end()
                                 .min_h(px(super::td::st::compose::HISTORY_ATTACH_HEIGHT))
-                                .px(px(super::td::st::compose::HISTORY_SEND_RIGHT))
+                                // The attach button sits at the history's
+                                // left (`moveToLeft(0, …)`), which starts
+                                // under the column divider, a pixel left of
+                                // this pane; the send button
+                                // `historySendRight` in from the right.
+                                .pl(px(super::td::st::compose::HISTORY_SEND_RIGHT - 1.))
+                                .pr(px(super::td::st::compose::HISTORY_SEND_RIGHT))
                                 .when(show_attach, |row| {
                                     row.when_some(self.bot_menu_button(cx), |row, button| {
                                         row.child(button)

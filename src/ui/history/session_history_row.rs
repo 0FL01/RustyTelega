@@ -906,6 +906,35 @@ pub(in crate::ui) fn session_history_row(
         .flatten()
         .map(|width| media_content_width(width, info_width, media_max));
     let max_width = bubble_width::message_width_limit(cx, content, look.font, look.plain);
+    // A plain text message: the bubble fits its wrapped lines (tdesktop
+    // `textRealWidth`). Formatted blocks and link cards keep their own
+    // widths.
+    let text_width = match effective_content(&message.content, message.ephemeral.as_ref()) {
+        MessageContent::Text(text)
+            if !look.plain
+                && text.link_preview.is_none()
+                && text.entities.is_empty()
+                && !emoji_only
+                && extra_is_empty =>
+        {
+            let chrome_x = 2. * crate::ui::td::st::chat::MSG_PADDING_X;
+            let outer = max_width.map_or(room.outer() as f32, f32::from);
+            let extra = if text_reserved {
+                f32::from(footer_meta.reserve(footer_reserve(message.is_outgoing)))
+            } else {
+                0.
+            };
+            Some(px(super::text_measure::wrapped_width(
+                cx,
+                &text.text,
+                look.font,
+                outer - chrome_x,
+                extra,
+            )
+            .ceil()))
+        }
+        _ => None,
+    };
     let mut avatar_link = avatar_link(&sender_avatar, message, cx);
     let mut sender_status = sender_status;
     let mut chrome = |footer_inline: bool| {
@@ -936,6 +965,7 @@ pub(in crate::ui) fn session_history_row(
         }
         chrome.media_led = media_led;
         chrome.media_bleed = media_bleed;
+        chrome.text_width = text_width;
         chrome.bubbleless = bubbleless;
         chrome.media_width = media_width;
         chrome.max_width = max_width;

@@ -22,7 +22,7 @@ trap 'rm -rf "$WORK"' EXIT
 cat >"$WORK/inner.sh" <<EOF
 #!/usr/bin/env bash
 QUILL_DEMO_MAXIMIZED=1 QUILL_DEMO_HIDE_STATUS=1 QUILL_DEMO_WINDOW_SIZE=1919x1034 \\
-  QUILL_DEMO_THEME=\${QUILL_DEMO_THEME:-dark} QUILL_DEMO_LINGER_MS=15000 QUILL_REDUCED_MOTION=1 \\
+  QUILL_DEMO_THEME=\${QUILL_DEMO_THEME:-dark} QUILL_DEMO_LINGER_MS=15000 QUILL_REDUCED_MOTION=\${QUILL_REDUCED_MOTION:-1} \\
   "$BIN" --screenshot-demo "$KIND" "$WORK/out" >"$WORK/quill.log" 2>&1 &
 for _ in \$(seq 1 120); do
   [ -f "$WORK/out/.quill-ready-$KIND" ] && break

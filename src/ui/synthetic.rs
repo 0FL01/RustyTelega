@@ -335,6 +335,9 @@ pub(crate) struct MessageChrome {
     /// The media runs edge to edge under a header: the bubble is as wide
     /// as the media, not the media plus the padding.
     pub media_bleed: bool,
+    /// The text's real width (`text_measure::wrapped_width`): the bubble
+    /// shrinks to it plus its padding.
+    pub text_width: Option<Pixels>,
     /// The media stands on its own (`quill::media_bubble`): no fill,
     /// border or gradient, and the media carries its own time pill
     /// (`media_footer_pill`).
@@ -484,6 +487,7 @@ fn message_bubble_with_quote(
         footer_rebuild,
         media_led,
         media_bleed,
+        text_width,
         bubbleless,
         actions,
         actions_span,
@@ -626,6 +630,10 @@ fn message_bubble_with_quote(
         .max_w(max_width.unwrap_or(px(room.outer() as f32)))
         .line_height(relative(1.4))
         .when(media_led && !look.plain, |this| this.p_0())
+        .when_some(
+            text_width.filter(|_| media_width.is_none()),
+            |this, width| this.w(width + px(2. * super::td::st::chat::MSG_PADDING_X)),
+        )
         .when_some(media_width, |this, width| {
             this.w(super::message_media::bubble_outer_width(
                 width,

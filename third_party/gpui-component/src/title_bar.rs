@@ -104,6 +104,26 @@ impl TitleBar {
     }
 }
 
+/// Which window control a [`WindowControlStyle`] draws.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowControlKind {
+    Minimize,
+    Maximize,
+    Restore,
+    Close,
+}
+
+/// An app's own look for the window controls (Quill: Telegram Desktop's
+/// masks): the glyph for a control, normal or hovered, and the hovered
+/// background. Set it as a global; without it the kit draws its icons.
+#[derive(Clone)]
+pub struct WindowControlStyle {
+    pub icon: Rc<dyn Fn(WindowControlKind, bool) -> AnyElement>,
+    pub hover_bg: Rc<dyn Fn(WindowControlKind) -> Hsla>,
+}
+
+impl gpui::Global for WindowControlStyle {}
+
 // The Windows control buttons have a fixed width of 35px.
 //
 // We don't need implementation the click event for the control buttons.
@@ -165,6 +185,15 @@ impl ControlIcon {
         matches!(self, Self::Close { .. })
     }
 
+    fn kind(&self) -> WindowControlKind {
+        match self {
+            Self::Minimize => WindowControlKind::Minimize,
+            Self::Restore => WindowControlKind::Restore,
+            Self::Maximize => WindowControlKind::Maximize,
+            Self::Close { .. } => WindowControlKind::Close,
+        }
+    }
+
     #[inline]
     fn hover_fg(&self, cx: &App) -> Hsla {
         if self.is_close() {
@@ -197,9 +226,18 @@ impl RenderOnce for ControlIcon {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let is_linux = cfg!(target_os = "linux");
         let is_windows = cfg!(target_os = "windows");
+        let custom = cx.try_global::<WindowControlStyle>().cloned();
         let hover_fg = self.hover_fg(cx);
-        let hover_bg = self.hover_bg(cx);
-        let active_bg = self.active_bg(cx);
+        let hover_bg = match &custom {
+            Some(style) => (style.hover_bg)(self.kind()),
+            None => self.hover_bg(cx),
+        };
+        let active_bg = match &custom {
+            Some(_) => hover_bg,
+            None => self.active_bg(cx),
+        };
+        let kind = self.kind();
+        let group: gpui::SharedString = format!("window-control-{}", self.id()).into();
         let icon = self.clone();
         let on_close_window = match &self {
             ControlIcon::Close { on_close_window } => on_close_window.clone(),
@@ -242,7 +280,29 @@ impl RenderOnce for ControlIcon {
                     }
                 })
             })
-            .child(Icon::new(self.icon()).small())
+            .map(|this| match custom {
+                // The two glyphs stacked: the hovered one shows over the
+                // control while the pointer is on it.
+                Some(style) => this
+                    .group(group.clone())
+                    .relative()
+                    .child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .group_hover(group.clone(), |style| style.opacity(0.))
+                            .child((style.icon)(kind, false)),
+                    )
+                    .child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .opacity(0.)
+                            .group_hover(group, |style| style.opacity(1.))
+                            .child((style.icon)(kind, true)),
+                    ),
+                None => this.child(Icon::new(self.icon()).small()),
+            })
     }
 }
 

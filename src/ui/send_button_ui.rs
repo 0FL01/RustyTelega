@@ -208,7 +208,7 @@ fn glyph_layer(
         SendButtonKind::Save => icon(gpui_kit::assets::IconName::Check),
         SendButtonKind::Schedule => icon(gpui_kit::assets::IconName::Clock),
         SendButtonKind::Record { video: false } => layer().child(super::td::td_icon(
-            super::td::TdIcon::InputRecord,
+            super::td::TdIcon::VoiceRecord,
             super::td::td(quill::app_theme::PaletteKey::HistoryComposeIconFg),
         )),
         SendButtonKind::Record { video: true } => icon(gpui_kit::assets::IconName::Video),

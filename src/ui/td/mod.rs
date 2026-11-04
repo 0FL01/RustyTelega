@@ -25,3 +25,37 @@ pub(crate) fn shadow_line() -> gpui_kit::Div {
         .h(px(st::basic::LINE_WIDTH))
         .bg(td(quill::app_theme::PaletteKey::ShadowFg))
 }
+
+/// Telegram Desktop's window controls (`defaultWindowTitle`): its masks in
+/// `titleButtonFg`, `titleButtonFgOver` on `titleButtonBgActiveOver` when
+/// hovered, and the close button white on `titleButtonCloseBgOver`.
+pub(crate) fn install_window_controls(cx: &mut gpui_kit::App) {
+    use gpui_kit::component::{WindowControlKind as Kind, WindowControlStyle};
+    use gpui_kit::*;
+    use quill::app_theme::PaletteKey as K;
+    use std::rc::Rc;
+    cx.set_global(WindowControlStyle {
+        icon: Rc::new(|kind, hovered| {
+            let icon = match kind {
+                Kind::Minimize => TdIcon::TitleMinimize,
+                Kind::Maximize => TdIcon::TitleMaximize,
+                Kind::Restore => TdIcon::TitleRestore,
+                Kind::Close => TdIcon::TitleClose,
+            };
+            let color = match (kind, hovered) {
+                (_, false) => K::TitleButtonFg,
+                (Kind::Close, true) => K::TitleButtonCloseFgOver,
+                (_, true) => K::TitleButtonFgOver,
+            };
+            td_icon(icon, td(color)).into_any_element()
+        }),
+        hover_bg: Rc::new(|kind| {
+            td(if kind == Kind::Close {
+                K::TitleButtonCloseBgOver
+            } else {
+                K::TitleButtonBgActiveOver
+            })
+            .into()
+        }),
+    });
+}

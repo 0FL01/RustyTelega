@@ -49,6 +49,9 @@ macro_rules! td_icons {
 }
 
 td_icons! {
+    // Frame 0 of `animations/chat/voice_to_video.tgs` at `historySend.recordSize`
+    // (`SendButton::paintRecord` draws the Lottie icon).
+    VoiceRecord => "derived/voice_record",
     BubbleTail => "bubble_tail",
     TitleMinimize => "title_button_minimize",
     TitleMaximize => "title_button_maximize",

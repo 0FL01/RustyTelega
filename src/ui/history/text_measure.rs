@@ -295,6 +295,59 @@ pub(in crate::ui) fn longest_line_width(
     longest_with_extra(&lines, false, last_line_extra)
 }
 
+/// tdesktop `textRealWidth`: the widest line of `text` once it wraps at
+/// words into `available`, with `last_extra` (the time's skip block) after
+/// its last line when it still fits there. A bubble of text is as wide as
+/// this plus its padding (`Message::countGeometry`), not as wide as it may
+/// get.
+pub(in crate::ui) fn wrapped_width(
+    cx: &App,
+    text: &str,
+    font_size: Pixels,
+    available: f32,
+    last_extra: f32,
+) -> f32 {
+    let mut measurer = Measurer::new(cx, font_size);
+    let face = Face::default();
+    let mut widest = 0f32;
+    let mut last = 0f32;
+    for paragraph in text.split('\n') {
+        let mut line = 0f32;
+        let mut pending_space = 0f32;
+        for word in paragraph.split(' ') {
+            let space = measurer.advance(face, ' ');
+            let width: f32 = word.chars().map(|c| measurer.advance(face, c)).sum();
+            if line > 0. && line + pending_space + width > available {
+                widest = widest.max(line);
+                line = 0.;
+                pending_space = 0.;
+            }
+            if line == 0. && width > available {
+                // A word longer than the line breaks anywhere.
+                let mut part = 0f32;
+                for c in word.chars() {
+                    let advance = measurer.advance(face, c);
+                    if part + advance > available && part > 0. {
+                        widest = widest.max(part);
+                        part = 0.;
+                    }
+                    part += advance;
+                }
+                line = part;
+            } else {
+                line += pending_space + width;
+            }
+            pending_space = space;
+        }
+        widest = widest.max(line);
+        last = line;
+    }
+    if last_extra > 0. && last + last_extra <= available {
+        widest = widest.max(last + last_extra);
+    }
+    widest.min(available)
+}
+
 /// tdesktop's middle elision (`elisionMiddle` in `text_renderer.cpp`): the
 /// longest start and end of `text` that each fit half of `width` less the
 /// "..." between them. `None` when the whole text fits.

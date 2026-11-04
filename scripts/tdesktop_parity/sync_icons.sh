@@ -7,7 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 TD=${1:-artifacts/tdesktop}
 DEST=assets/tdesktop-icons
-grep -o '=> "[^"]*"' src/ui/td/icon.rs | sed 's/=> "\(.*\)"/\1/' | while read -r path; do
+# `derived/` masks are rendered from tdesktop's Lottie icons, not copied.
+grep -o '=> "[^"]*"' src/ui/td/icon.rs | sed 's/=> "\(.*\)"/\1/' | grep -v '^derived/' | while read -r path; do
   for suffix in "" "@2x" "@3x"; do
     src=""
     for base in "$TD/Telegram/Resources/icons" "$TD/Telegram/lib_ui/icons"; do
