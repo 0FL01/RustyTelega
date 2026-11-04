@@ -1,9 +1,10 @@
 name: quill-calls
 # Builds libquill_calls (tgcalls + tg_owt behind Quill's C API,
 # docs/decisions/tgcalls-engine.md) on every platform we ship, loads it, and
-# uploads it. Runs on PRs that touch it; ci.yml and release.yml call it
-# before the Linux, macOS and Windows packages, which ship the uploaded
-# library.
+# uploads it. Runs on PRs that touch it. Each package workflow
+# (package-linux, package-macos, package-windows) calls it in build mode for
+# its own targets, so a package waits only for its own library and not for
+# the Rust tests; ci.yml and release.yml run those in test mode beside them.
 on:
   pull_request:
     paths:
@@ -14,22 +15,52 @@ on:
       - 'scripts/build-ffmpeg.sh'
       - '.github/workflows/quill-calls.yml'
   workflow_call:
+    inputs:
+      targets:
+        description: 'Space-separated targets to build (linux-x86_64 linux-aarch64 macos-arm64 windows-x86_64); empty builds all'
+        type: string
+        default: ''
+      mode:
+        description: "'build' uploads the library without the Rust tests (what a package waits for); 'test' runs the tests and uploads nothing; empty does both"
+        type: string
+        default: ''
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  # The build matrix, cut down to the requested targets.
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      include: ${{ steps.plan.outputs.include }}
+    steps:
+      - id: plan
+        env:
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          all='[
+            {"target": "linux-x86_64", "runner": "ubuntu-22.04", "lib": "libquill_calls.so"},
+            {"target": "linux-aarch64", "runner": "ubuntu-22.04-arm", "lib": "libquill_calls.so"},
+            {"target": "macos-arm64", "runner": "macos-15", "lib": "libquill_calls.dylib"},
+            {"target": "windows-x86_64", "runner": "windows-2022", "lib": "quill_calls.dll"}
+          ]'
+          wanted="$(jq -cn --arg t "$TARGETS" '$t | split(" ") | map(select(. != ""))')"
+          include="$(jq -c --argjson w "$wanted" 'map(select(($w | length) == 0 or (.target as $t | $w | index($t))))' <<<"$all")"
+          missing="$(jq -r --argjson inc "$include" 'map(select(. as $t | $inc | map(.target) | index($t) | not)) | join(" ")' <<<"$wanted")"
+          [ -z "$missing" ] || { echo "::error::unknown quill-calls targets: $missing"; exit 1; }
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+
   build:
     name: quill-calls (${{ matrix.target }})
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { target: linux-x86_64, runner: ubuntu-22.04, lib: libquill_calls.so }
-          - { target: linux-aarch64, runner: ubuntu-22.04-arm, lib: libquill_calls.so }
-          - { target: macos-arm64, runner: macos-15, lib: libquill_calls.dylib }
-          - { target: windows-x86_64, runner: windows-2022, lib: quill_calls.dll }
+        include: ${{ fromJSON(needs.plan.outputs.include) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     env:
@@ -194,6 +225,7 @@ jobs:
           fi
           echo "$syms"
       - name: the Rust bindings against the library
+        if: inputs.mode != 'build'
         run: |
           # Exported here: macOS drops DYLD_* when it starts the step's bash.
           export LD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib"
@@ -205,6 +237,7 @@ jobs:
           if [[ "$RUNNER_OS" == Windows ]]; then cldir="$(dirname "$(command -v cl)")"; export PATH="$cldir:$PATH"; fi
           cargo test -p quill-calls-sys --locked
       - name: the 1:1 engine against the library
+        if: inputs.mode != 'build'
         run: |
           export LD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib"
           export DYLD_LIBRARY_PATH="$PWD/vendor/ffmpeg/prefix/lib${OPENSSL_ROOT_DIR:+:$OPENSSL_ROOT_DIR/lib}"
@@ -215,6 +248,7 @@ jobs:
           export QUILL_CALLS_LIB="$root/vendor/quill-calls/lib/${{ matrix.lib }}"
           cargo test --no-default-features --lib --locked calls::engine::tgcalls
       - uses: actions/upload-artifact@v7
+        if: inputs.mode != 'test'
         with:
           name: quill-calls-${{ matrix.target }}
           path: |

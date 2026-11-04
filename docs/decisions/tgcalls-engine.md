@@ -297,13 +297,15 @@ Shared code shaped by ntgcalls went too:
 
 ### Packaging
 
-`quill-calls.yml` is a reusable workflow: ci.yml (pushes) and release.yml
-run it before the Linux, macOS and Windows package jobs, which download
-their `quill-calls-<target>` artifact from the same run. A package job
-runs when the workflow ends, whether or not every target built, so a
-failing Windows build fails only the Windows package (its artifact is
-missing) and the other packages still ship. The tg_owt and codec
-cache stays in that workflow.
+`quill-calls.yml` is a reusable workflow. Each package workflow
+(package-linux, package-macos, package-windows) calls it in `build` mode
+for its own targets and downloads the `quill-calls-<target>` artifact,
+so a package waits only for its own library and a failing Windows build
+fails only the Windows package. Only `windows-package` waits for it on
+Windows; the Windows release build starts at once. ci.yml (pushes) and
+release.yml run it again in `test` mode for the Rust bindings and 1:1
+engine tests, beside the packages, and the release waits for those
+too. The tg_owt and codec cache stays in that workflow.
 
 - Linux: `lib/libquill_calls.so` beside `libtdjson.so` (RUNPATH
   `$ORIGIN`), linking the package's FFmpeg and OpenSSL;
