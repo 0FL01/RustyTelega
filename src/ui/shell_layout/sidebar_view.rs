@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 /// Motion follows the OS reduce-motion preference and the "Interface
 /// animations" power-saving switch.
-fn animate() -> bool {
+pub(super) fn animate() -> bool {
     !quill::power_saving::reduce_motion_now()
 }
 
