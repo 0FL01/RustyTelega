@@ -82,3 +82,9 @@ the default behavior leaves the hitboxes behind it hovered, so one click on
 the button also clicked the row content under it (a clip or photo opened the
 media viewer). The wheel over the button still scrolls the list. Background:
 `docs/decisions/jump-click-through.md`. Re-apply when re-vendoring.
+
+`src/message_scroller.rs`: `MessageScrollerState::scroll_by` passes
+`ListState::scroll_by` through. Quill's history lands a jumped-to message in
+the middle of the view and the "Unread messages" bar at its top by measuring
+where the paint put them and scrolling by the difference
+(`docs/decisions/unread-open-landing.md`). Re-apply when re-vendoring.

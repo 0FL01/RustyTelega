@@ -117,6 +117,13 @@ impl QuillApp {
             unread_anchor,
             is_secret,
         };
+        // Rows of the same window keep the view where it is; a new window
+        // lands instead (`rows_replaced`).
+        let same_window = self.history.key == Some(history_key)
+            && self.history.window_epoch == window_epoch
+            && !self.history.anchor_pending;
+        let hold = (same_window && (build.is_some() || splice.is_some()))
+            .then(|| self.capture_view_hold(cx));
         if let Some(mut messages) = build {
             // Deleted messages dissolve in place before they go.
             self.merge_vanishing(&mut messages);
@@ -141,9 +148,9 @@ impl QuillApp {
                 && count == self.history.scroller.read(cx).item_count()
             {
                 if media_signature != self.history.media_signature {
-                    self.history
-                        .scroller
-                        .update(cx, |state, cx| state.remeasure(cx));
+                    self.history.scroller.update(cx, |state, cx| {
+                        let _ = state.remeasure_items(0..count, cx);
+                    });
                 } else {
                     let changed: Vec<usize> = rows
                         .iter()
@@ -210,9 +217,7 @@ impl QuillApp {
                 match (first, last, self.history.ends) {
                     _ if slide.is_some() => {
                         if let Some(shift) = slide {
-                            let newer_page = self.history.had_newer;
                             self.history.scroller.update(cx, |state, cx| {
-                                let following = state.is_following_tail();
                                 if shift.tail_removed > 0 {
                                     state.splice(
                                         prev_count - shift.tail_removed..prev_count,
@@ -228,11 +233,6 @@ impl QuillApp {
                                 }
                                 if shift.tail_added > 0 {
                                     state.append(shift.tail_added, cx);
-                                    // Keep the old last row in view and read
-                                    // on from there (as for any newer page).
-                                    if newer_page && following {
-                                        state.scroll_to_item(count - shift.tail_added - 1, cx);
-                                    }
                                 }
                             });
                         }
@@ -258,16 +258,10 @@ impl QuillApp {
                         });
                     }
                     _ => {
-                        // Shrink or reorder (delete/edit): splice preserves the
-                        // scroll anchor (reset() would yank to the top and arm
-                        // tail-follow); stay at the tail only if the user was
-                        // following it.
-                        let follow = self.history.scroller.read(cx).is_following_tail();
+                        // Shrink or reorder (delete/edit), or both ends grew:
+                        // the view hold puts the reader back.
                         self.history.scroller.update(cx, |state, cx| {
                             state.splice(0..prev_count, count, cx);
-                            if follow {
-                                state.scroll_to_end(cx);
-                            }
                         });
                     }
                 }
@@ -280,7 +274,7 @@ impl QuillApp {
                 // history_ends is updated below — and must not run
                 // unconditionally or remeasure's notify() would loop.
                 self.history.scroller.update(cx, |state, cx| {
-                    state.remeasure(cx);
+                    let _ = state.remeasure_items(0..count, cx);
                 });
             }
             self.history.rows = rows;
@@ -291,13 +285,19 @@ impl QuillApp {
             }
             self.history.row_stats.note_built(rows_started);
             self.history.row_stats.messages_cloned += cloned;
-            self.rows_replaced(history_key, highlight_id, has_newer, cx);
+            if let Some(hold) = hold {
+                self.apply_view_hold(hold, cx);
+            }
+            self.rows_replaced(history_key, highlight_id, cx);
         } else if let Some(splice) = splice {
             // Messages came or went: build the rows around them again and
             // keep the rest.
             let spliced = self.splice_rows(splice, &row_build);
             self.commit_spliced_rows(spliced, mark, rows_started, cx);
-            self.rows_replaced(history_key, highlight_id, has_newer, cx);
+            if let Some(hold) = hold {
+                self.apply_view_hold(hold, cx);
+            }
+            self.rows_replaced(history_key, highlight_id, cx);
         } else {
             // Kept rows: patch the messages changed in place and bring the
             // chrome around the viewport up to date.
@@ -306,6 +306,8 @@ impl QuillApp {
                 chrome_inputs.stale_rows(&self.history.rows, &chrome_due, &patches, mark.epoch);
             self.apply_row_patches(patches, fresh, mark, rows_started, cx);
         }
+        // Read by the next render's view hold and by the landing.
+        self.history.had_newer = has_newer;
         self.remember_scroll(history_key, cx);
         self.history.shared = HistoryShared { media_roots };
         // A new jump (search hit, reply, pinned message) restarts the
@@ -358,8 +360,8 @@ impl QuillApp {
         let on_screen_rows = self.history.on_screen.clone();
         let seen_app = cx.weak_entity();
         let bar_probe = self.history.bar_probe.clone();
-        let bar_anchor = self.history.bar_anchor.clone();
-        let bar_app = cx.weak_entity();
+        let landing_probe = self.landing_probe();
+        let landing_app = cx.weak_entity();
         let viewport = self.history.viewport.clone();
         let history_focus = self.message_ui.history_focus.clone();
         let drag_app = cx.weak_entity();
@@ -386,6 +388,11 @@ impl QuillApp {
                     .track_focus(&history_focus)
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                         this.history_key_down(event, window, cx);
+                    }))
+                    // The reader's own clicking ends a landing (scrolling:
+                    // `landing_scroll_watch`).
+                    .capture_any_mouse_down(cx.listener(|this, _: &MouseDownEvent, _, _| {
+                        this.end_landing();
                     }))
                     .relative()
                     .flex()
@@ -420,6 +427,7 @@ impl QuillApp {
                 super::wallpaper_cache::Slot::History(cx.entity_id()),
             )
             .children(self.wallpaper_fade(&look, cx))
+            .child(self.landing_scroll_watch(cx))
             .child(super::history_fx::reveal_viewport(
                 reveal,
                 MessageScroller::new(id, self.history.scroller.clone(), move |ix, window, cx| {
@@ -579,15 +587,13 @@ impl QuillApp {
                                 });
                             },
                         );
-                        if let Some(fix) = super::unread_bar_anchor::check_bar_anchor(
-                            &bar_anchor,
-                            bar_probe.take(),
-                            bounds,
-                        ) {
+                        let bar = bar_probe.take();
+                        if let Some(probe) = landing_probe {
+                            let error = super::landing::landing_error(probe, bar, &rows, bounds);
                             cx.defer(move |cx| {
-                                let _ = bar_app.update(cx, |this, cx| {
+                                let _ = landing_app.update(cx, |this, cx| {
                                     this.in_window_scope(window_chat, cx, |this, cx| {
-                                        this.fix_bar_anchor(fix, cx)
+                                        this.advance_landing(error, cx)
                                     })
                                 });
                             });
@@ -714,9 +720,8 @@ impl QuillApp {
 
 impl QuillApp {
     /// New rows at the tail: tail-follow keeps the view pinned when the
-    /// user is at the bottom. A newer page must not be skipped that way:
-    /// keep the old last row in view and read on from there. `outgoing`:
-    /// one of the new rows is the user's own.
+    /// user is at the bottom (a newer page is held in place by the view
+    /// hold instead). `outgoing`: one of the new rows is the user's own.
     pub(super) fn append_tail_rows(
         &mut self,
         prev_count: usize,
@@ -730,9 +735,6 @@ impl QuillApp {
         self.history.scroller.update(cx, |state, cx| {
             following = state.is_following_tail();
             state.append(added, cx);
-            if newer_page && following {
-                state.scroll_to_item(prev_count.saturating_sub(1), cx);
-            }
         });
         // tdesktop reveals a few new rows at the bottom of a history that
         // is pinned there (`itemRevealDuration`); an inactive window just
@@ -760,7 +762,6 @@ impl QuillApp {
         &mut self,
         history_key: quill::state::ScrollKey,
         highlight_id: Option<MessageId>,
-        has_newer: bool,
         cx: &mut Context<Self>,
     ) {
         let rows = &self.history.rows;
@@ -768,7 +769,6 @@ impl QuillApp {
             .first()
             .and_then(HistoryRow::first_id)
             .zip(rows.last().and_then(HistoryRow::last_id));
-        self.history.had_newer = has_newer;
         self.history_a11y_rows_changed(cx);
         // A new or replaced window: start at the saved position, else the
         // jump target, else the "Unread messages" divider, else the bottom.
@@ -776,20 +776,12 @@ impl QuillApp {
             self.history.anchor_pending = false;
             self.anchor_opened_history(history_key, highlight_id, cx);
         }
-        // Chat-search jump: scroll the highlight into view once per new
-        // `highlight_id` (current code only outlined the message).
+        // A jump (search hit, reply, pinned message): bring the message
+        // to the middle of the view once per new `highlight_id`.
         if highlight_id != self.history.last_highlight {
             self.history.last_highlight = highlight_id;
-            if let Some(target) = highlight_id
-                && let Some(ix) = self
-                    .history
-                    .rows
-                    .iter()
-                    .position(|row| row.contains(target))
-            {
-                self.history.scroller.update(cx, |state, cx| {
-                    state.scroll_to_item(ix, cx);
-                });
+            if let Some(target) = highlight_id {
+                self.start_landing(super::landing::LandingGoal::Message(target), cx);
             }
         }
     }

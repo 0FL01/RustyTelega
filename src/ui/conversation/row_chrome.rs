@@ -341,9 +341,9 @@ impl QuillApp {
             self.history.row_stats.note_patched(changed.len(), started);
         }
         if media_changed {
-            self.history
-                .scroller
-                .update(cx, |state, cx| state.remeasure(cx));
+            self.history.scroller.update(cx, |state, cx| {
+                let _ = state.remeasure_items(0..state.item_count(), cx);
+            });
         } else if !changed.is_empty() {
             self.history.scroller.update(cx, |state, cx| {
                 for ix in changed {

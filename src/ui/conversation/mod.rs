@@ -527,10 +527,16 @@ mod header_view;
 mod history_message_list;
 mod history_reads;
 mod history_scroll_memory;
+pub(super) mod landing;
 mod render_history_row_body;
 mod row_build;
 pub(super) mod row_chrome;
 mod row_splice;
 mod rows_cache;
-pub(super) mod unread_bar_anchor;
+mod view_hold;
 pub(super) use rows_cache::{HistoryRowsKey, RowsInput};
+
+#[cfg(test)]
+#[cfg(feature = "demo-capture")]
+#[path = "open_position_tests.rs"]
+mod open_position_tests;

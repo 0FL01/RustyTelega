@@ -380,13 +380,17 @@ fn only_a_shown_jump_button_covers_the_clips(cx: &mut TestAppContext) {
     assert_eq!(occluders(&app, vcx), []);
 
     // Unread messages below show the button wherever the list is scrolled.
+    // They are the last two, so the button goes down to the latest.
     app.update_in(vcx, |app, _, cx| {
         let session = app.demo_session.as_mut().expect("demo session");
-        session
-            .chats
-            .get_mut(&TILE.0)
-            .expect("the chat")
-            .unread_count = 2;
+        let read = session
+            .histories
+            .get(&TILE.0)
+            .and_then(|history| history.messages.keys().rev().nth(2).copied())
+            .expect("messages");
+        let chat = session.chats.get_mut(&TILE.0).expect("the chat");
+        chat.unread_count = 2;
+        chat.last_read_inbox_message_id = quill::ids::MessageId(read);
         app.notify_conversation(cx);
     });
     vcx.executor()
@@ -450,13 +454,17 @@ fn the_jump_button_over_a_clip_takes_the_click(cx: &mut TestAppContext) {
     vcx.update(|window, _| window.activate_window());
     settle(vcx);
     // Unread messages below show the button wherever the list is scrolled.
+    // They are the last two, so the button goes down to the latest.
     app.update_in(vcx, |app, _, cx| {
         let session = app.demo_session.as_mut().expect("demo session");
-        session
-            .chats
-            .get_mut(&TILE.0)
-            .expect("the chat")
-            .unread_count = 2;
+        let read = session
+            .histories
+            .get(&TILE.0)
+            .and_then(|history| history.messages.keys().rev().nth(2).copied())
+            .expect("messages");
+        let chat = session.chats.get_mut(&TILE.0).expect("the chat");
+        chat.unread_count = 2;
+        chat.last_read_inbox_message_id = quill::ids::MessageId(read);
         app.notify_conversation(cx);
     });
     // At the top of the chat the clip sits highest; the button stays at

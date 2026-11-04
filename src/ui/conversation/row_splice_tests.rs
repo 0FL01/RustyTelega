@@ -274,6 +274,15 @@ fn patched_and_spliced_rows_equal_a_full_build(cx: &mut TestAppContext) {
         &[&next_day],
         Expect::Splice,
     );
+    check(
+        &app,
+        vcx,
+        "first unread deleted",
+        &[&delete(&[READ_UP_TO + 1])],
+        // The bar leaves with its message, so the rows key changes. Before
+        // the sends below: a message the reader sends takes the bar away.
+        Expect::Build,
+    );
     let pending_id = id(MESSAGES + 3);
     let pending = text_message(
         pending_id,
@@ -333,14 +342,6 @@ fn patched_and_spliced_rows_equal_a_full_build(cx: &mut TestAppContext) {
         "first of a day deleted",
         &[&delete(&[50])],
         Expect::Splice,
-    );
-    check(
-        &app,
-        vcx,
-        "first unread deleted",
-        &[&delete(&[READ_UP_TO + 1])],
-        // The bar leaves with its message, so the rows key changes.
-        Expect::Build,
     );
     check(
         &app,

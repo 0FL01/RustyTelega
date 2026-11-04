@@ -209,14 +209,11 @@ impl QuillApp {
         let old_len = replaced.len();
         let prev_count = (count + old_len).saturating_sub(new_len);
         let listed = self.history.scroller.read(cx).item_count();
-        let follow = self.history.scroller.read(cx).is_following_tail();
         if listed != prev_count {
-            // Out of step with the rows: take the new list whole.
+            // Out of step with the rows: take the new list whole (the view
+            // hold puts the reader back).
             self.history.scroller.update(cx, |state, cx| {
                 state.splice(0..listed, count, cx);
-                if follow {
-                    state.scroll_to_end(cx);
-                }
             });
             return;
         }
@@ -255,13 +252,10 @@ impl QuillApp {
             }
             return;
         }
-        // A row came or went inside the list: the splice keeps the scroll
-        // anchor; stay at the tail only if the user was following it.
+        // A row came or went inside the list (the view hold puts the
+        // reader back).
         self.history.scroller.update(cx, |state, cx| {
             state.splice(start..start + old_len, new_len, cx);
-            if follow {
-                state.scroll_to_end(cx);
-            }
         });
     }
 }
