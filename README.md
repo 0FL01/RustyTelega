@@ -11,6 +11,8 @@ On the same Mac, Quill used about a third of Telegram Desktop's memory and put i
 
 **Website and install:** [shinycake.github.io/quill](https://shinycake.github.io/quill/)
 
+If you like Quill, starring the repository helps more people find it. At 50 stars it can be listed in awesome-rust, and at 75 in Homebrew's main cask list, so `brew install` works without the tap.
+
 > [!WARNING]
 > Quill is an independent project. It isn't affiliated with, endorsed by, or sponsored by Telegram (Telegram FZ-LLC or Telegram Messenger Inc.). "Telegram" is a trademark of its owner, and Quill uses the name only to say which service it works with.
 >

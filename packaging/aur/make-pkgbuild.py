@@ -30,7 +30,7 @@ pkgrel=1
 pkgdesc="Independent, unofficial Telegram desktop client written in Rust with GPUI and TDLib"
 arch=('x86_64' 'aarch64')
 url="https://shinycake.github.io/quill/"
-license=('MIT' 'GPL-3.0-only' 'LGPL-2.1-or-later' 'BSL-1.0')
+license=('MIT' 'LGPL-3.0-only' 'LGPL-2.1-or-later' 'BSL-1.0')
 depends=(
   'alsa-lib' 'cairo' 'fontconfig' 'freetype2' 'gcc-libs' 'gdk-pixbuf2' 'glib2' 'glibc'
   'gtk3' 'hicolor-icon-theme' 'libpulse' 'libx11' 'libxcb' 'libxcomposite'
