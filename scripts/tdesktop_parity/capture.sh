@@ -17,6 +17,10 @@ KIND=${3:-ready-tdesktop-parity}
 OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT
 
+# One capture at a time: Spectacle grabs whichever window is active.
+exec 9>/tmp/quill-tdesktop-parity-capture.lock
+flock 9
+
 QUILL_DEMO_MAXIMIZED=1 QUILL_DEMO_WINDOW_SIZE=${QUILL_DEMO_WINDOW_SIZE:-1919x1034} \
   QUILL_DEMO_THEME=${QUILL_DEMO_THEME:-dark} \
   QUILL_DEMO_LINGER_MS=${QUILL_DEMO_LINGER_MS:-8000} QUILL_REDUCED_MOTION=1 \
