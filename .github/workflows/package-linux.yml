@@ -2,8 +2,8 @@ name: package-linux
 # Reusable: builds the UI plus native libs and assembles the relocatable Linux
 # package (docs/decisions/codex-linux-package.md). Called by ci.yml (no
 # credentials) and release.yml (credentials embedded only when asked). The
-# caller runs quill-calls.yml first: this job ships the libquill_calls it
-# uploaded in the same run.
+# calls job builds libquill_calls (quill-calls.yml) first, and the package
+# ships it.
 on:
   workflow_call:
     inputs:
@@ -29,8 +29,16 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # The call library this package ships (docs/decisions/tgcalls-engine.md).
+  calls:
+    name: calls
+    uses: ./.github/workflows/quill-calls.yml
+    with:
+      targets: linux-x86_64 linux-aarch64
+
   linux-package:
     name: linux-package (${{ matrix.arch }})
+    needs: calls
     # One native build per CPU, both on Ubuntu 22.04 so the package needs
     # glibc 2.35 at most (docs/decisions/linux-arm64.md).
     strategy:

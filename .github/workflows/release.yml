@@ -132,19 +132,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Quill $version, tag v$version, credentials: $credentials, draft release: $publish"
 
-  # The call library the Linux, macOS and Windows packages ship (their jobs
-  # download it from this run). Each package waits for it but runs even when
-  # another target's build failed: it fails only if its own library is
-  # missing, and the release job still needs every package.
-  quill-calls:
-    name: quill-calls
-    needs: prepare
-    uses: ./.github/workflows/quill-calls.yml
-
+  # Each package builds the call library it ships for its own targets
+  # (quill-calls.yml), so no platform waits on another's.
   linux:
     name: linux
-    needs: [prepare, quill-calls]
-    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    needs: prepare
     uses: ./.github/workflows/package-linux.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
@@ -155,8 +147,7 @@ jobs:
 
   windows:
     name: windows
-    needs: [prepare, quill-calls]
-    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    needs: prepare
     uses: ./.github/workflows/package-windows.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
@@ -167,8 +158,7 @@ jobs:
 
   macos:
     name: macos
-    needs: [prepare, quill-calls]
-    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    needs: prepare
     uses: ./.github/workflows/package-macos.yml
     with:
       version: ${{ needs.prepare.outputs.version }}

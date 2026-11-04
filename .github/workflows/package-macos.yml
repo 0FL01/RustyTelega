@@ -2,7 +2,7 @@ name: package-macos
 # Reusable: Quill.app for macOS 14+ on Apple Silicon, built on a GitHub-hosted
 # arm64 runner (never the personal self-hosted Mac). TDLib is built from source
 # (cached), libquill_calls (the call library) comes from quill-calls.yml, which
-# the caller runs first in the same run, with the FFmpeg it links (cached),
+# the calls job runs first, with the FFmpeg it links (cached),
 # and OpenSSL, built here for the deployment target, is bundled by
 # scripts/macos-package-smoke.sh.
 # Signed with the identity in MACOS_SIGNING_P12 (Apple Development or Developer
@@ -49,8 +49,16 @@ env:
   MACOSX_DEPLOYMENT_TARGET: '14.0'
 
 jobs:
+  # The call library this package ships (docs/decisions/tgcalls-engine.md).
+  calls:
+    name: calls
+    uses: ./.github/workflows/quill-calls.yml
+    with:
+      targets: macos-arm64
+
   macos-package:
     name: macos-package
+    needs: calls
     # arm64. The deployment target above, not the runner, sets the oldest
     # macOS Quill runs on; check-bundle-macho.sh fails on any library that
     # needs a newer one.

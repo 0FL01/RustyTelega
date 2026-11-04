@@ -1,9 +1,9 @@
 name: quill-calls
 # Builds libquill_calls (tgcalls + tg_owt behind Quill's C API,
 # docs/decisions/tgcalls-engine.md) on every platform we ship, loads it, and
-# uploads it. Runs on PRs that touch it; ci.yml and release.yml call it
-# before the Linux, macOS and Windows packages, which ship the uploaded
-# library.
+# uploads it. Runs on PRs that touch it. Each package workflow
+# (package-linux, package-macos, package-windows) calls it for its own
+# targets, so a package waits only for its own library.
 on:
   pull_request:
     paths:
@@ -14,22 +14,48 @@ on:
       - 'scripts/build-ffmpeg.sh'
       - '.github/workflows/quill-calls.yml'
   workflow_call:
+    inputs:
+      targets:
+        description: 'Space-separated targets to build (linux-x86_64 linux-aarch64 macos-arm64 windows-x86_64); empty builds all'
+        type: string
+        default: ''
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  # The build matrix, cut down to the requested targets.
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      include: ${{ steps.plan.outputs.include }}
+    steps:
+      - id: plan
+        env:
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          all='[
+            {"target": "linux-x86_64", "runner": "ubuntu-22.04", "lib": "libquill_calls.so"},
+            {"target": "linux-aarch64", "runner": "ubuntu-22.04-arm", "lib": "libquill_calls.so"},
+            {"target": "macos-arm64", "runner": "macos-15", "lib": "libquill_calls.dylib"},
+            {"target": "windows-x86_64", "runner": "windows-2022", "lib": "quill_calls.dll"}
+          ]'
+          wanted="$(jq -cn --arg t "$TARGETS" '$t | split(" ") | map(select(. != ""))')"
+          include="$(jq -c --argjson w "$wanted" 'map(select(($w | length) == 0 or (.target as $t | $w | index($t))))' <<<"$all")"
+          missing="$(jq -r --argjson inc "$include" 'map(select(. as $t | $inc | map(.target) | index($t) | not)) | join(" ")' <<<"$wanted")"
+          [ -z "$missing" ] || { echo "::error::unknown quill-calls targets: $missing"; exit 1; }
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+
   build:
     name: quill-calls (${{ matrix.target }})
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { target: linux-x86_64, runner: ubuntu-22.04, lib: libquill_calls.so }
-          - { target: linux-aarch64, runner: ubuntu-22.04-arm, lib: libquill_calls.so }
-          - { target: macos-arm64, runner: macos-15, lib: libquill_calls.dylib }
-          - { target: windows-x86_64, runner: windows-2022, lib: quill_calls.dll }
+        include: ${{ fromJSON(needs.plan.outputs.include) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     env:

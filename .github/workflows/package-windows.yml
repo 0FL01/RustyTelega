@@ -2,8 +2,9 @@ name: package-windows
 # Reusable: the Windows zip (docs/decisions/codex-windows-package.md).
 # windows-build: the UI release binary + core tests. windows-native: TDLib
 # (static OpenSSL/zlib/CRT) from source. windows-ffmpeg builds in parallel.
-# The caller runs quill-calls.yml first: windows-package ships the
-# quill_calls.dll it uploaded in the same run (docs/decisions/tgcalls-engine.md).
+# calls builds quill_calls.dll (quill-calls.yml) alongside them, and only
+# windows-package waits for it (docs/decisions/tgcalls-engine.md).
+# windows-test runs the core tests beside the release build, off its path.
 # windows-package: assemble, check and smoke the zip. Everything links the C runtime statically or uses the OS Universal
 # CRT, so no VC++ runtime DLL ships (docs/decisions/codex-release-pipeline.md).
 on:
@@ -31,11 +32,24 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  calls:
+    name: calls
+    uses: ./.github/workflows/quill-calls.yml
+    with:
+      targets: windows-x86_64
+
   windows-build:
     name: windows-build
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
+      # target/ on a ReFS Dev Drive: Defender scans it asynchronously, so the
+      # build's thousands of small writes don't each wait for a scan.
+      - uses: samypr100/setup-dev-drive@v4.1.0
+        with:
+          drive-size: 40GB
+          env-mapping: |
+            CARGO_TARGET_DIR,{{ DEV_DRIVE }}/target
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -44,6 +58,7 @@ jobs:
           toolchain: 1.99.1
       - uses: Swatinem/rust-cache@v2
         with:
+          workspaces: '. -> ${{ env.CARGO_TARGET_DIR }}'
           save-if: ${{ !inputs.embed_credentials }}
       # +crt-static comes from .cargo/config.toml. The secrets reach only this
       # step, as compile-time env read by option_env! (src/credentials.rs).
@@ -55,19 +70,30 @@ jobs:
         run: cargo build --release --features ui --locked
       - name: build mini-app helper
         run: cargo build --release --locked -p quill-webview
-      - name: tests (core + replay)
-        run: cargo test --no-default-features --locked -- --nocapture
       # The executables ship together: the package step reads quill-cli.exe
       # and quill-webview.exe next to quill.exe (scripts/windows-package.ps1).
       - uses: actions/upload-artifact@v7
         with:
           name: quill-windows-exe
           path: |
-            target/release/quill.exe
-            target/release/quill-cli.exe
-            target/release/quill-webview.exe
+            ${{ env.CARGO_TARGET_DIR }}/release/quill.exe
+            ${{ env.CARGO_TARGET_DIR }}/release/quill-cli.exe
+            ${{ env.CARGO_TARGET_DIR }}/release/quill-webview.exe
           retention-days: 3
           if-no-files-found: error
+
+  windows-test:
+    name: windows-test
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.1
+      - uses: Swatinem/rust-cache@v2
+      - name: tests (core + replay)
+        run: cargo test --no-default-features --locked -- --nocapture
 
   windows-native:
     name: windows-native
@@ -190,7 +216,7 @@ jobs:
   windows-package:
     name: windows-package
     runs-on: windows-latest
-    needs: [windows-build, windows-native, windows-ffmpeg]
+    needs: [calls, windows-build, windows-test, windows-native, windows-ffmpeg]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
