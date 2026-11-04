@@ -36,6 +36,7 @@ MASKS = [
     (536, 128, 576, 990),   # history avatars
     (580, 128, 902, 238),   # photo at the top of the history
     (580, 800, 902, 980),   # GIF
+    (378, 702, 398, 730),   # the mouse pointer in the reference
 ]
 
 

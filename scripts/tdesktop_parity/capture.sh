@@ -1,39 +1,49 @@
 #!/usr/bin/env bash
-# Capture a Quill screenshot demo on a KDE Plasma (Wayland) desktop session.
+# Capture a Quill screenshot demo the way the Telegram Desktop reference was
+# taken: a maximized window on a 1920x1080 KDE Plasma screen whose panel
+# leaves 1920x1036 (artifacts/telegram-donor.png is that window, 1919x1034).
 #
 # GPUI's in-process capture (`render_to_image`) is not implemented on Linux,
-# so the demo window is opened maximized and grabbed with Spectacle as the
-# active window. The Telegram Desktop reference (artifacts/telegram-donor.png)
-# was taken the same way: a maximized window on a 1920x1080 screen gives
-# 1919x1034.
+# so the demo runs in a nested, headless KWin (`kwin_wayland --virtual`) with
+# a 1920x1036 output, and Spectacle grabs the window from inside that
+# session. Nothing appears on the desktop, and a locked screen does not
+# matter. Needs kwin_wayland, spectacle and dbus-run-session.
 #
 # Usage: capture.sh <quill-binary> <out.png> [kind]
 set -euo pipefail
 
-BIN=${1:?quill binary}
-PNG=${2:?output png}
+BIN=$(realpath "${1:?quill binary}")
+PNG=$(realpath -m "${2:?output png}")
 KIND=${3:-ready-tdesktop-parity}
 
-OUT=$(mktemp -d)
-trap 'rm -rf "$OUT"' EXIT
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
 
-# One capture at a time: Spectacle grabs whichever window is active.
-exec 9>/tmp/quill-tdesktop-parity-capture.lock
-flock 9
-
-QUILL_DEMO_MAXIMIZED=1 QUILL_DEMO_HIDE_STATUS=1 QUILL_DEMO_WINDOW_SIZE=${QUILL_DEMO_WINDOW_SIZE:-1919x1034} \
-  QUILL_DEMO_THEME=${QUILL_DEMO_THEME:-dark} \
-  QUILL_DEMO_LINGER_MS=${QUILL_DEMO_LINGER_MS:-8000} QUILL_REDUCED_MOTION=1 \
-  "$BIN" --screenshot-demo "$KIND" "$OUT" >"$OUT/log" 2>&1 &
-APP=$!
-
-for _ in $(seq 1 120); do
-  [ -f "$OUT/.quill-ready-$KIND" ] && break
-  if ! kill -0 "$APP" 2>/dev/null; then cat "$OUT/log" >&2; exit 1; fi
+cat >"$WORK/inner.sh" <<EOF
+#!/usr/bin/env bash
+QUILL_DEMO_MAXIMIZED=1 QUILL_DEMO_HIDE_STATUS=1 QUILL_DEMO_WINDOW_SIZE=1919x1034 \\
+  QUILL_DEMO_THEME=\${QUILL_DEMO_THEME:-dark} QUILL_DEMO_LINGER_MS=15000 QUILL_REDUCED_MOTION=1 \\
+  "$BIN" --screenshot-demo "$KIND" "$WORK/out" >"$WORK/quill.log" 2>&1 &
+for _ in \$(seq 1 120); do
+  [ -f "$WORK/out/.quill-ready-$KIND" ] && break
   sleep 0.5
 done
-sleep "${QUILL_CAPTURE_SETTLE:-2}"
+sleep \${QUILL_CAPTURE_SETTLE:-3}
+spectacle --background --nonotify --activewindow --output "$PNG" >"$WORK/spectacle.log" 2>&1
+kill %1 2>/dev/null || true
+EOF
+chmod +x "$WORK/inner.sh"
+mkdir -p "$WORK/out" "$WORK/config"
 
-spectacle --background --nonotify --activewindow --output "$PNG"
-kill "$APP" 2>/dev/null || true
+# A clean config: the user's KWin output settings (scale) must not apply.
+XDG_CONFIG_HOME="$WORK/config" timeout 120 dbus-run-session -- \
+  kwin_wayland --virtual --width 1920 --height 1036 --scale 1 \
+  --socket "quill-capture-$$" --exit-with-session "$WORK/inner.sh" \
+  >"$WORK/kwin.log" 2>&1 || true
+
+if [ ! -s "$PNG" ]; then
+  cat "$WORK/quill.log" "$WORK/spectacle.log" >&2 2>/dev/null || true
+  echo "capture failed" >&2
+  exit 1
+fi
 identify "$PNG"

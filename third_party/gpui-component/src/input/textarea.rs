@@ -21,6 +21,7 @@ pub struct Textarea {
     height: Option<DefiniteLength>,
     editor_padding: Option<gpui::Edges<gpui::Pixels>>,
     placeholder_color: Option<gpui::Hsla>,
+    placeholder_focus_color: Option<gpui::Hsla>,
     appearance: bool,
     bordered: bool,
     disabled: bool,
@@ -77,6 +78,7 @@ impl Textarea {
             height: None,
             editor_padding: None,
             placeholder_color: None,
+            placeholder_focus_color: None,
             appearance: true,
             bordered: true,
             disabled: false,
@@ -107,6 +109,12 @@ impl Textarea {
     /// Override the placeholder colour without changing other inputs.
     pub fn placeholder_color(mut self, color: impl Into<gpui::Hsla>) -> Self {
         self.placeholder_color = Some(color.into());
+        self
+    }
+
+    /// The placeholder colour while the field has the focus.
+    pub fn placeholder_focus_color(mut self, color: impl Into<gpui::Hsla>) -> Self {
+        self.placeholder_focus_color = Some(color.into());
         self
     }
 
@@ -215,6 +223,9 @@ impl Textarea {
             .appearance(self.appearance)
             .when_some(self.editor_padding, |this, padding| this.editor_padding(padding))
             .when_some(self.placeholder_color, |this, color| this.placeholder_color(color))
+            .when_some(self.placeholder_focus_color, |this, color| {
+                this.placeholder_focus_color(color)
+            })
             .bordered(self.bordered)
             .disabled(self.disabled)
             .readonly(self.readonly)

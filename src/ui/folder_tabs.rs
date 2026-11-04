@@ -100,7 +100,7 @@ pub(super) fn build_slots(
         main_position.min(slots.len()),
         FolderSlot {
             kind: FolderSlotKind::All,
-            name: tr(keys::Q_CHAT_ALL_CHATS).into(),
+            name: tr(keys::FILTERS_ALL).into(),
             glyph: folder_glyph(tr(keys::FILTERS_ALL_SHORT)),
             rail_icon: TdIcon::FoldersAll,
             badge: None,

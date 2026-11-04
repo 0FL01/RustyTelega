@@ -142,6 +142,7 @@ pub struct Input {
     height: Option<DefiniteLength>,
     editor_padding: Option<Edges<Pixels>>,
     placeholder_color: Option<Hsla>,
+    placeholder_focus_color: Option<Hsla>,
     appearance: bool,
     cleanable: bool,
     mask_toggle: bool,
@@ -256,6 +257,7 @@ impl Input {
             height: None,
             editor_padding: None,
             placeholder_color: None,
+            placeholder_focus_color: None,
             appearance: true,
             cleanable: false,
             mask_toggle: false,
@@ -322,6 +324,11 @@ impl Input {
 
     pub(crate) fn editor_padding(mut self, padding: Edges<Pixels>) -> Self {
         self.editor_padding = Some(padding);
+        self
+    }
+
+    pub(crate) fn placeholder_focus_color(mut self, color: Hsla) -> Self {
+        self.placeholder_focus_color = Some(color);
         self
     }
 
@@ -573,10 +580,15 @@ impl RenderOnce for Input {
         sync_focused_input_registry(&state, window, cx);
 
         state.ensure_highlighter_factory(crate::highlighter::input_highlighter_factory(), cx);
+        let placeholder = if state.has_selection_focus(window, cx) {
+            self.placeholder_focus_color.or(self.placeholder_color)
+        } else {
+            self.placeholder_color
+        };
         state.set_editor_style(
             gpui_base::input::InputEditorStyle {
                 foreground: cx.theme().foreground,
-                muted_foreground: self.placeholder_color.unwrap_or(cx.theme().muted_foreground),
+                muted_foreground: placeholder.unwrap_or(cx.theme().muted_foreground),
                 background: cx.theme().editor_background(),
                 border: cx.theme().border,
                 selection: cx.theme().selection,

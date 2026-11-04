@@ -14,11 +14,11 @@ The main window copies Telegram Desktop's Night look exactly. The reference is a
 
 ```sh
 cargo build --features demo-capture --bin quill
-scripts/tdesktop_parity/capture.sh target/debug/quill /tmp/quill.png   # KDE Plasma, Wayland
+scripts/tdesktop_parity/capture.sh target/debug/quill /tmp/quill.png   # needs kwin_wayland and spectacle
 python3 -I scripts/tdesktop_parity/diff.py artifacts/telegram-donor.png /tmp/quill.png /tmp/diff
 ```
 
-The `ready-tdesktop-parity` demo reproduces the reference state: the same folders, the same four channels, and the chat with Lain. The capture is the maximized window (1920×1036), compared from the top-left corner. `diff.py` prints, per region, the share of pixels that differ and writes heat maps. Avatars, the photo and the GIF are masked.
+The `ready-tdesktop-parity` demo reproduces the reference state: the same folders, the same four channels, and the chat with Lain. The capture runs the demo maximized in a nested, headless KWin with a 1920×1036 output (the reference's screen less its panel) and grabs the window with Spectacle, so it does not touch the desktop. It is compared from the top-left corner. `diff.py` prints, per region, the share of pixels that differ and writes heat maps. Avatars, the photo, the GIF and the reference's mouse pointer are masked.
 
 ## Values
 

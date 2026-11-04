@@ -16,6 +16,7 @@
 "lng_filters_added_also#one" = "You also joined {count} chat.";
 "lng_filters_added_also#other" = "You also joined {count} chats.";
 "lng_filters_added_title" = "Folder {folder} Added";
+"lng_filters_all" = "All chats";
 "lng_filters_all_short" = "All";
 "lng_filters_by_link_about" = "You can deselect the chats you don't want to join.";
 "lng_filters_by_link_about_quit" = "You can deselect the chats you don't want to quit.";

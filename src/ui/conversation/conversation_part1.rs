@@ -384,6 +384,7 @@ impl QuillApp {
                                                 .bordered(false)
                                                 .editor_padding(gpui_kit::Edges { top: px(0.), right: px(5.), bottom: px(0.), left: px(5.) })
                                                 .placeholder_color(super::td::td(quill::app_theme::PaletteKey::PlaceholderFg))
+                                                .placeholder_focus_color(super::td::td(quill::app_theme::PaletteKey::PlaceholderFgActive))
                                                 .aria_label(tr(keys::SR_CHAT_COLUMN_MESSAGE))
                                                 // Custom emoji drawn inline
                                                 // (codex:composer-input).

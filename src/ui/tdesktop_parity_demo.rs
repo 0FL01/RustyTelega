@@ -28,10 +28,13 @@ register_demos![
 ];
 
 impl QuillApp {
-    fn demo_tdesktop_parity(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+    fn demo_tdesktop_parity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.appearance.folder_tabs_view = quill::folder_icons::FolderTabsView::Left;
         self.frame.sidebar_width = gpui_kit::px(454.);
         self.open_folder_tab(Some(FOLDER), cx);
+        // Telegram Desktop gives the open chat's field the focus.
+        self.composer
+            .update(cx, |input, cx| input.focus(window, cx));
     }
 }
 

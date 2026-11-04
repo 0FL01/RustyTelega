@@ -491,6 +491,9 @@ impl QuillApp {
                             .placeholder_color(crate::ui::td::td(
                                 quill::app_theme::PaletteKey::PlaceholderFg,
                             ))
+                            .placeholder_focus_color(crate::ui::td::td(
+                                quill::app_theme::PaletteKey::PlaceholderFgActive,
+                            ))
                             .h(px(crate::ui::td::st::dialogs::DIALOGS_FILTER_HEIGHT)),
                     ),
             )
