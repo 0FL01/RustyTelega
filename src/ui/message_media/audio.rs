@@ -243,7 +243,7 @@ pub(in crate::ui) fn voice_note_row(
     // for a voice note); the status label is the widest it gets.
     let status_width = crate::ui::history::bubble_width::longest_line_width(
         cx,
-        &widest_status,
+        widest_status,
         px(crate::ui::td::st::chat::info::FONT),
         FontWeight::NORMAL,
         0,

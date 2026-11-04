@@ -222,7 +222,12 @@ fn the_wide_layout_puts_every_message_on_the_left_with_photos(cx: &mut TestAppCo
     let (app, mut vcx) = new_app(cx, 1600.);
     let vcx = &mut vcx;
     frames(vcx);
-    // Wide enough, but off by default: the look is unchanged.
+    // Wide enough, and the setting off: the look is unchanged.
+    app.update(vcx, |app, cx| {
+        app.appearance.adaptive_for_wide = false;
+        cx.notify();
+    });
+    frames(vcx);
     app.read_with(vcx, |app, _| {
         assert_eq!(app.history.chat_layout.get(), ChatLayout::Wide);
         assert!(!app.chat_wide());

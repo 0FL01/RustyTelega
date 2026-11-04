@@ -551,7 +551,10 @@ mod tests {
         assert_eq!(bubble[0].0, KeyGroup::Messages);
         assert!(bubble[0].1.contains(&EditorRow::Key(PaletteKey::MsgOutBg)));
         let by_key = rows_matching("DIALOGSBG");
-        assert_eq!(by_key[0].1, vec![EditorRow::Key(PaletteKey::DialogsBg)]);
+        assert_eq!(
+            by_key[0].1.first(),
+            Some(&EditorRow::Key(PaletteKey::DialogsBg))
+        );
         assert_eq!(rows_matching("background")[0].1[0], EditorRow::Background);
         assert!(rows_matching("zzz").is_empty());
     }

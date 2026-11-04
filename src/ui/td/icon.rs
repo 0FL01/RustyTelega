@@ -76,7 +76,6 @@ td_icons! {
     PinnedShowAll => "pinned_show_all",
     InputAttach => "chat/input_attach",
     InputSmileFace => "chat/input_smile_face",
-    InputRecord => "chat/input_record",
     InputSend => "chat/input_send",
     // Stream A: folder rail masks.
     FoldersAll => "folders/folders_all",

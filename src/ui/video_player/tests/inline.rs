@@ -218,7 +218,7 @@ fn a_clip_scrolled_out_of_view_pauses_is_released_and_comes_back(cx: &mut TestAp
     for script in &scripts {
         queue_backend(script);
     }
-    let (app, mut vcx) = new_app_sized(cx, 460.);
+    let (app, mut vcx) = new_app_sized(cx, 400.);
     let vcx = &mut vcx;
     vcx.update(|window, _| window.activate_window());
     settle(vcx);
@@ -232,11 +232,12 @@ fn a_clip_scrolled_out_of_view_pauses_is_released_and_comes_back(cx: &mut TestAp
     while round_state(&app, vcx) != Some((true, false)) {
         steps += 1;
         assert!(
-            steps < 60,
+            steps < 300,
             "never held off screen: {:?}",
             round_state(&app, vcx)
         );
-        scroll(vcx, -10.);
+        // Small steps: the row's bottom margin past its picture is thin.
+        scroll(vcx, -2.);
     }
     let held = app
         .read_with(vcx, |app, _| app.playback.inline_videos.player(ROUND))
@@ -305,7 +306,7 @@ fn a_round_video_playing_with_sound_keeps_going_off_screen(cx: &mut TestAppConte
     for script in &scripts {
         queue_backend(script);
     }
-    let (app, mut vcx) = new_app_sized(cx, 460.);
+    let (app, mut vcx) = new_app_sized(cx, 400.);
     let vcx = &mut vcx;
     vcx.update(|window, _| window.activate_window());
     settle(vcx);

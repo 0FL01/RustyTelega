@@ -76,13 +76,7 @@ impl BubbleRoom {
     /// leaves inside the bubble's border (`led`: the picture leads the
     /// bubble) or inside its padding.
     pub(in crate::ui) fn media(self, led: bool) -> i32 {
-        let chrome = if self.plain {
-            0
-        } else if led {
-            0
-        } else {
-            PADDED_CHROME
-        };
+        let chrome = if self.plain || led { 0 } else { PADDED_CHROME };
         MAX_MEDIA_SIZE.min(self.room - chrome).max(1)
     }
 

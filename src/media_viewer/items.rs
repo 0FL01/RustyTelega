@@ -413,7 +413,8 @@ mod tests {
         let item = &items[0];
         assert_eq!(item.display_file_ids, vec![FileId(51)]);
         assert_eq!(item.download_file_id, FileId(51));
-        assert_eq!(item.duration_label.as_deref(), Some("1:12"));
+        // tdesktop `FormatDurationText` pads the minutes.
+        assert_eq!(item.duration_label.as_deref(), Some("01:12"));
     }
 
     #[test]

@@ -105,8 +105,10 @@ fn quill_themes_are_the_defaults_and_look_as_before(cx: &mut TestAppContext) {
                 0x1f6feb,
             ),
         ] {
+            // Quill Dark is no longer the night default: pick it.
             app.appearance = quill::settings::AppearancePrefs {
                 theme: choice,
+                night_theme: quill::app_theme::ThemeId::Builtin(BuiltinTheme::QuillDark),
                 ..Default::default()
             };
             reapply(app, cx);

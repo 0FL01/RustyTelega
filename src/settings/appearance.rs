@@ -619,8 +619,10 @@ mod theme_choice_tests {
         assert_eq!(picked.font_size_px, 16);
 
         // Moved once: a later choice of the old values is kept.
-        let mut again = AppearancePrefs::default();
-        again.folder_tabs_view = FolderTabsView::Top;
+        let mut again = AppearancePrefs {
+            folder_tabs_view: FolderTabsView::Top,
+            ..AppearancePrefs::default()
+        };
         super::move_to_tdesktop_look(&mut again);
         assert_eq!(again.folder_tabs_view, FolderTabsView::Top);
     }

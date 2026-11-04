@@ -232,12 +232,13 @@ fn tiles_still_open_after_a_drag_and_an_expand(cx: &mut TestAppContext) {
     assert_eq!(open_chat(&app, vcx), Some(ChatId(34)));
 }
 
-/// The strip is as wide as the list as laid out less the sidebar's
-/// padding, and the expanded grid shows every row it has.
+/// The strip is as wide as the list as laid out less the column's 1px
+/// divider (tdesktop's list has no padding), and the expanded grid shows
+/// every row it has.
 fn strip_fits(app: &Entity<QuillApp>, vcx: &mut VisualTestContext) {
     let strip = vcx.debug_bounds("top-strip").expect("strip");
     let list = app.update(vcx, |app, _| app.list_width());
-    assert_eq!(strip.size.width, list - px(25.));
+    assert_eq!(strip.size.width, list - px(1.));
     click(vcx, "top-toggle");
     std::thread::sleep(std::time::Duration::from_millis(300));
     frames(vcx);

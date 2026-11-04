@@ -768,7 +768,7 @@ mod tests {
         assert_eq!(item.kind, StoryViewerKind::Video);
         assert_eq!(item.display_file_ids, vec![FileId(50)]);
         assert_eq!(item.download_file_id, FileId(50));
-        assert_eq!(item.duration_label.as_deref(), Some("0:12"));
+        assert_eq!(item.duration_label.as_deref(), Some("00:12"));
     }
 
     #[test]

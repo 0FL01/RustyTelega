@@ -1,10 +1,6 @@
 //! composer submit/send/edit/reply/scheduling, command menu state, drafts consumption.
 #![deny(clippy::indexing_slicing)]
 
-use super::actions::{
-    FormatBlockQuote, FormatBold, FormatClear, FormatItalic, FormatMonospace, FormatSpoiler,
-    FormatStrikethrough, FormatUnderline,
-};
 use super::app::{PaneMode, QuillApp};
 use super::demo::demo_media_allowlist;
 use super::nested_click::SwallowPress;
@@ -13,7 +9,7 @@ use super::*;
 use crate::ui::composer_state::DraftClear;
 use crate::ui::status_note::StatusNote;
 use gpui_kit::component::button::*;
-use gpui_kit::component::menu::{DropdownMenu, PopupMenuItem};
+use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::*;
 use gpui_kit::*;
 use quill::composer::{

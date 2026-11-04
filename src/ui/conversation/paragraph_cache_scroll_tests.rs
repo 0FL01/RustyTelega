@@ -148,14 +148,14 @@ fn going_back_to_an_earlier_width_lays_out_nothing(cx: &mut TestAppContext) {
     let vcx = &mut vcx;
     rtl_group(&app, vcx);
     // The window opens at C, where a bubble is as wide as it gets.
-    for width in [700., 640.] {
+    for width in [840., 760.] {
         assert!(
             layouts_resizing(&app, vcx, &[width]) > 0,
             "the posts rewrapped at {width}"
         );
     }
     assert_eq!(
-        layouts_resizing(&app, vcx, &[1000., 700., 640., 1000., 700.]),
+        layouts_resizing(&app, vcx, &[1000., 840., 760., 1000., 840.]),
         0
     );
     assert_eq!(paragraph_cache::relayouts_in_tests(), 0);
@@ -184,7 +184,7 @@ fn dragging_back_over_widths_lays_out_none_again(cx: &mut TestAppContext) {
 fn widening_until_posts_fit_lays_out_none_again(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx, "ready-chats");
     let vcx = &mut vcx;
-    resize(&app, vcx, 640., 800.);
+    resize(&app, vcx, 760., 800.);
     rtl_group_of(&app, vcx, |n| words(n, 8));
     redraw(vcx);
     assert!(

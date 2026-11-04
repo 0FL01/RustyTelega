@@ -135,9 +135,13 @@ fn english_strings_use_the_ellipsis_character() {
             include_str!("../../lang/en/stories_live.strings"),
         ),
     ] {
-        assert!(
-            !text.contains("..."),
-            "{name}.strings has a three-dot ellipsis"
-        );
+        // Strings the main window shows exactly as Telegram Desktop words
+        // them, three full stops included (its `lang.strings`).
+        const TDESKTOP_VERBATIM: [&str; 1] = ["\"lng_message_ph\""];
+        let offending = text
+            .lines()
+            .filter(|line| line.contains("..."))
+            .any(|line| !TDESKTOP_VERBATIM.iter().any(|key| line.starts_with(key)));
+        assert!(!offending, "{name}.strings has a three-dot ellipsis");
     }
 }
