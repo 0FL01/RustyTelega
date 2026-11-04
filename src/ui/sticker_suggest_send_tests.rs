@@ -1,6 +1,8 @@
 //! Sending an emoji dismisses the sticker and animated-emoji suggestions
 //! it raised (tdesktop `updateStickersByEmoji` runs on the field clear
-//! after Send). Over the `ready-chats` demo; nothing reaches Telegram.
+//! after Send), and a suggested sticker takes its emoji's place (tdesktop
+//! `sendExistingDocument` clears the field while `stickersShown()`). Over
+//! the `ready-chats` demo; nothing reaches Telegram.
 #![cfg(feature = "demo-capture")]
 #![allow(clippy::unwrap_used, reason = "test code")]
 
@@ -138,4 +140,86 @@ fn escape_closes_the_suggestions_until_the_text_changes(cx: &mut TestAppContext)
     vcx.simulate_input(EMOJI);
     frames(vcx);
     assert_eq!(shown(&app, vcx), (true, true));
+}
+
+fn composer_text(app: &Entity<QuillApp>, vcx: &mut VisualTestContext) -> String {
+    app.read_with(vcx, |app, cx| app.composer.read(cx).value().to_string())
+}
+
+/// Click the suggested sticker the way its cell does.
+fn send_suggested(app: &Entity<QuillApp>, vcx: &mut VisualTestContext) {
+    vcx.update(|window, cx| {
+        app.update(cx, |app, cx| app.send_sticker_cell(&sticker(1), window, cx));
+    });
+    frames(vcx);
+}
+
+fn type_in_composer(app: &Entity<QuillApp>, vcx: &mut VisualTestContext, text: &str) {
+    vcx.update(|window, cx| {
+        app.update(cx, |app, cx| {
+            app.composer.update(cx, |input, cx| input.focus(window, cx));
+        });
+    });
+    vcx.simulate_input(text);
+}
+
+#[gpui_kit::test]
+fn sending_a_suggested_sticker_clears_its_emoji(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    type_in_composer(&app, vcx, EMOJI);
+    hold_suggestions(&app, vcx);
+    assert_eq!(shown(&app, vcx), (true, true));
+
+    send_suggested(&app, vcx);
+    assert_eq!(composer_text(&app, vcx), "");
+    assert_eq!(shown(&app, vcx), (false, false));
+}
+
+#[gpui_kit::test]
+fn sending_the_animated_emoji_clears_its_emoji(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    type_in_composer(&app, vcx, EMOJI);
+    app.update(vcx, |app, cx| {
+        if let Some(session) = app.demo_session.as_mut() {
+            let emoji = &mut session.stickers.emoji;
+            emoji.animated_emoji_for = Some(EMOJI.into());
+            emoji.animated_emoji = Some(sticker(3));
+        }
+        cx.notify();
+    });
+    frames(vcx);
+    assert_eq!(shown(&app, vcx), (false, true));
+
+    vcx.update(|window, cx| {
+        app.update(cx, |app, cx| app.send_sticker_cell(&sticker(3), window, cx));
+    });
+    frames(vcx);
+    assert_eq!(composer_text(&app, vcx), "");
+}
+
+#[gpui_kit::test]
+fn a_suggested_sticker_leaves_the_text_before_its_emoji(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    type_in_composer(&app, vcx, &format!("so tired {EMOJI}"));
+    hold_suggestions(&app, vcx);
+
+    send_suggested(&app, vcx);
+    assert_eq!(composer_text(&app, vcx), "so tired ");
+}
+
+#[gpui_kit::test]
+fn a_sticker_sent_without_suggestions_keeps_the_text(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let vcx = &mut vcx;
+    type_in_composer(&app, vcx, EMOJI);
+    hold_suggestions(&app, vcx);
+    vcx.simulate_keystrokes("escape");
+    frames(vcx);
+    assert_eq!(shown(&app, vcx), (false, false));
+
+    send_suggested(&app, vcx);
+    assert_eq!(composer_text(&app, vcx), EMOJI);
 }
