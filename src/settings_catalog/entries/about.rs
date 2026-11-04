@@ -10,10 +10,17 @@ pub(super) const ENTRIES: &[Entry] = &[
     Entry::new("about.about_quill", P, keys::Q_OPS_ABOUT_QUILL).keywords(&["disclaimer"]),
     Entry::new("about.whats_new", P, keys::Q_PREFS_WHATS_NEW)
         .keywords(&["changelog", "release notes"]),
-    Entry::new("about.share", P, keys::Q_SETTINGS_ABOUT_SHARE_QUILL)
-        .keywords(&["recommend", "invite", "website", "link"]),
-    Entry::new("about.source_code", P, keys::Q_SETTINGS_ABOUT_SOURCE_CODE)
-        .keywords(&["github", "repository", "open source"]),
+    Entry::new("about.share", P, keys::Q_SETTINGS_ABOUT_SHARE_QUILL).keywords(&[
+        "recommend",
+        "invite",
+        "website",
+        "link",
+    ]),
+    Entry::new("about.source_code", P, keys::Q_SETTINGS_ABOUT_SOURCE_CODE).keywords(&[
+        "github",
+        "repository",
+        "open source",
+    ]),
     Entry::new("about.licenses", P, keys::Q_OPS_OPEN_SOURCE_LICENSES).keywords(&[
         "third party",
         "legal",
