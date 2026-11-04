@@ -8,6 +8,7 @@ set up. Why it is built this way: `docs/decisions/distribution-channels.md`.
 | `homebrew-tap/` | The contents of the `shinycake/homebrew-tap` repository (cask `quill-app`) |
 | `chocolatey/` | `make-package.py`, which writes the Chocolatey package for a release |
 | `windows/` | `quill.iss`, the Inno Setup script for `quill-windows-x86_64-setup.exe` |
+| `aur/` | `make-pkgbuild.py`, which writes the Arch User Repository package `quill-bin` for a release |
 | `flatpak/` | The Flatpak manifest; CI builds it for every release and the site serves it as Quill's own Flatpak repo |
 
 ## One-time setup
@@ -34,6 +35,13 @@ hand. After that every channel follows new releases by itself.
    repository. `chocolatey.yml` then pushes every stable release; run it by
    hand with `push` checked for the current one. Chocolatey's moderators
    review each version before it is listed.
+
+4. **AUR.** Sign up at aur.archlinux.org and add the public key
+   `~/.config/quill-release/aur_ed25519.pub` under My Account > SSH Public
+   Key. Add the private key as the `AUR_SSH_KEY` secret: `gh secret set
+   AUR_SSH_KEY -R shinycake/quill < ~/.config/quill-release/aur_ed25519`.
+   Then run `aur.yml` by hand with `push` checked: the first push creates
+   `quill-bin`, and every stable release after that updates it.
 
 Windows package managers: Chocolatey only, by the owner's decision of
 3 November 2026. Quill is not offered on winget or Scoop.

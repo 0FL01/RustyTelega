@@ -40,3 +40,6 @@
 "qll_navigation_open_a_private_chat_or" = "Open a private chat or channel to choose the gift recipient.";
 "qll_navigation_star_subscriptions" = "Star subscriptions";
 "qll_navigation_stars" = "Stars";
+"qll_settings_about_share_quill" = "Share Quill";
+"qll_settings_about_link_copied" = "Quill link copied";
+"qll_settings_about_source_code" = "Source code on GitHub";

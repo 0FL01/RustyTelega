@@ -20,6 +20,9 @@ register_demos![
         seed_ready_unread_read_session,
         "screenshot demo — after mark-read (injected updates, no live Telegram)"
     ),
+    DemoSpec::chat_list("ready-about-share").setup(|app, _, _| {
+        app.open_settings_on(quill::settings_catalog::Page::About);
+    }),
     DemoSpec::chat_list("ready-update-changelog")
         .setup(|app, _, _| app.demo_update(UpdateDemo::Changelog)),
     DemoSpec::chat_list("ready-update-failure")

@@ -68,6 +68,7 @@ Windows gap.
 |---|---|---|
 | Homebrew | `shinycake/homebrew-tap`, cask `quill-app` (the token `quill` is a homebrew/core formula) | the tap's scheduled `bump` workflow reads the latest release's `SHA256SUMS.txt`, audits and commits |
 | Chocolatey | community package `quill`, wrapping the setup.exe | `chocolatey.yml` tests each release's package on Windows and pushes it when `CHOCO_API_KEY` is set; moderators review each version |
+| AUR | `quill-bin`, repackaging the Linux bundles for x86_64 and aarch64 into `/usr/lib/quill` | `aur.yml` writes the PKGBUILD from each stable release's `SHA256SUMS.txt`, builds, installs and runs it in an Arch container, and pushes when `AUR_SSH_KEY` is set |
 | Flatpak | Quill's own repo at `https://shinycake.github.io/quill/flatpak/`, app `io.github.shinycake.Quill` | `flatpak.yml` attaches each release's bundles; the site rebuilds the signed repo from them (`scripts/site-flatpak-repo.sh`) |
 
 Chocolatey is the only Windows package manager, by the owner's decision on
@@ -87,3 +88,11 @@ The in-app updater already stands aside for package managers
 the Mac). The cask moves Quill.app into /Applications and sets
 `auto_updates true`, so Quill keeps updating itself there and Homebrew does
 not fight it.
+
+The AUR package installs under `/usr`, which `distro_managed` treats as
+package-managed, so the in-app updater stays off and pacman updates Quill.
+It is a `-bin` package because building Quill from source needs TDLib, the
+call library and FFmpeg built first, which takes an hour or more; the release
+bundles are the same files every other Linux channel ships. The AUR pushes
+over SSH with a key made for this alone, kept at
+`~/.config/quill-release/aur_ed25519` and in the `AUR_SSH_KEY` secret.

@@ -25,6 +25,12 @@ pub const NOTICES_FILE: &str = "THIRD_PARTY.md";
 /// build, or a package assembled before the notices were staged).
 pub const NOTICES_URL: &str = "https://github.com/shinycake/quill/blob/main/THIRD_PARTY.md";
 
+/// The Quill website: what "Share Quill" copies.
+pub const WEBSITE_URL: &str = "https://shinycake.github.io/quill/";
+
+/// Quill's source repository.
+pub const SOURCE_URL: &str = "https://github.com/shinycake/quill";
+
 /// Places a package keeps `THIRD_PARTY.md` for an executable at `exe`:
 /// beside it (Linux and Windows packages) and in `Contents/Resources`
 /// (macOS app bundle, executable in `Contents/MacOS`).

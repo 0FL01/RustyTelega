@@ -304,6 +304,8 @@ and the tgcalls inside libquill_calls) are attached as `quill-source-*`
 archives; `LGPL-SOURCES.txt` has the exact upstream URLs and commits and a
 written offer for the corresponding source.
 
+If Quill is useful to you, a star on the [repository](https://github.com/{repo}) helps more people find it, and bugs and ideas go to [its issues](https://github.com/{repo}/issues).
+
 ## Checksums (SHA-256)
 
 ```

@@ -90,6 +90,7 @@
           { "@type": "Question", "name": "How is Quill different from Telegram Desktop?", "acceptedAnswer": { "@type": "Answer", "text": "Quill is a separate app written from scratch in Rust. GPUI, the framework from the Zed editor, draws its interface on the GPU. On an M1 Pro Mac it used about a third of Telegram Desktop's memory after launch and put its window on screen about four times faster on a warm launch. Windows and Linux haven't been measured yet." } },
           { "@type": "Question", "name": "Can my account get banned for using Quill?", "acceptedAnswer": { "@type": "Answer", "text": "Quill follows Telegram's rules for third-party apps, but Telegram decides what it allows, and nobody can promise anything. Quill is early, experimental software. Use it at your own risk and keep an official Telegram app installed." } },
           { "@type": "Question", "name": "Does Quill see my messages?", "acceptedAnswer": { "@type": "Answer", "text": "No. Quill runs on your computer and keeps its data there, encrypted with a key held in the macOS keychain, sealed with Windows DPAPI, or in a file only your user can read on Linux. Quill has no server and the app collects no analytics. Besides Telegram, it only contacts GitHub to check for updates, and you can turn that off." } },
+          { "@type": "Question", "name": "Is Quill tested on Windows and Linux?", "acceptedAnswer": { "@type": "Answer", "text": "Quill is made and tested day to day on a Mac. The Windows and Linux builds pass the same automated tests on every release, but they've had little use on real computers so far, so expect rough edges there." } },
           { "@type": "Question", "name": "Is Quill free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Quill is free software under the MIT license, and the source code is on GitHub. There's nothing to buy and no account other than your Telegram one." } }
         ]
       }
@@ -473,6 +474,15 @@
             <p class="why-note">Prefer a zip? <a href="https://github.com/shinycake/quill/releases/latest/download/quill-macos-aarch64.zip">Download the zip</a>, double-click it and drag Quill into Applications.</p>
           </div>
 
+          <div class="inst-card">
+            <h4>Or install it with Homebrew</h4>
+            <p class="inst-lede">Quill has its own Homebrew tap, and it keeps updating itself after Homebrew installs it.</p>
+            <div class="cmd">
+              <code id="mac-brew-cmd">brew install --cask shinycake/tap/quill-app</code>
+              <button type="button" class="copy" aria-describedby="mac-brew-cmd">Copy</button>
+            </div>
+          </div>
+
           <div class="inst-card" data-asset-missing="quill-macos-aarch64.dmg">
             <h4>Or download it yourself</h4>
             <p class="inst-lede">Get the app as a zip file. Double-click it, drag Quill into your Applications folder and open it.</p>
@@ -655,8 +665,12 @@
         <p>The Windows build isn't signed with a paid Microsoft certificate yet, and Windows checks programs that a browser downloads. The <a href="#windows-install">one-line installer</a> downloads with PowerShell, so there's nothing to confirm. If you downloaded the zip, confirm it once with More info → Run anyway. macOS doesn't ask, because the Mac build is signed with a Developer ID and notarized by Apple. Linux doesn't ask either. Each release lists SHA-256 checksums so you can verify the download.</p>
       </details>
       <details>
+        <summary>Is Quill tested on Windows and Linux?</summary>
+        <p>Quill is made and tested day to day on a Mac. The Windows and Linux builds pass the same automated tests on every release, but they've had little use on real computers so far, so expect rough edges there. If something breaks, please <a href="https://github.com/shinycake/quill/issues">open an issue</a>.</p>
+      </details>
+      <details>
         <summary>How can I help?</summary>
-        <p>Try it, and <a href="https://github.com/shinycake/quill/issues">open an issue</a> when something breaks or feels off. Pull requests are welcome too.</p>
+        <p>Try it, and <a href="https://github.com/shinycake/quill/issues">open an issue</a> when something breaks or feels off. Pull requests are welcome too. A <a href="https://github.com/shinycake/quill">star on GitHub</a> also helps: it's how lists like Homebrew's decide what to include.</p>
       </details>
     </section>
   </main>
