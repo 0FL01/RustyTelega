@@ -1395,9 +1395,9 @@ jobs:
           PY
           )"
           if [[ -z "$id" ]]; then
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
-              --title "$TAG" --notes-file release-notes.md
-            id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)"
+            id="$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$TAG" -f name="$TAG" -F body=@release-notes.md \
+              -F draft=true --jq .id)"
           fi
           [[ "$id" =~ ^[0-9]+$ ]]
           echo "RELEASE_ID=$id" >> "$GITHUB_ENV"
