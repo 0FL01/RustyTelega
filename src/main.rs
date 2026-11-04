@@ -600,10 +600,17 @@ fn run_screenshot_demo(demo: (ui::ScreenshotDemo, std::path::PathBuf)) {
                 let demo_window = cx
                     .open_window(
                         WindowOptions {
-                            window_bounds: Some(WindowBounds::Windowed(Bounds {
-                                origin: point(px(demo_x), px(demo_y)),
-                                size: size(px(demo_w), px(demo_h)),
-                            })),
+                            window_bounds: Some({
+                                let bounds = Bounds {
+                                    origin: point(px(demo_x), px(demo_y)),
+                                    size: size(px(demo_w), px(demo_h)),
+                                };
+                                if std::env::var("QUILL_DEMO_MAXIMIZED").as_deref() == Ok("1") {
+                                    WindowBounds::Maximized(bounds)
+                                } else {
+                                    WindowBounds::Windowed(bounds)
+                                }
+                            }),
                             app_id: Some(quill::desktop_app_id::get().into()),
                             ..ui::window_frame::window_options(kind.window_title())
                         },
