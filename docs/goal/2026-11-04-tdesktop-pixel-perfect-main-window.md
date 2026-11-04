@@ -1,6 +1,6 @@
 # Goal: Pixel-perfect main window after Telegram Desktop (Night)
 
-Status: active
+Status: complete
 Source: user instruction 2026-11-04 ("pixel perfect интерфейс для telegram … gpui.rs выглядеть буквально вот так"); reference `artifacts/telegram-donor.png`, defect `artifacts/quill-now.png`; approved plan (copied below)
 Last updated: 2026-11-04
 
@@ -26,8 +26,8 @@ Primary evidence for R2–R9: capture the `ready-tdesktop-parity` demo with `scr
     - The `ready-tdesktop-parity` demo reproduces the donor state.
     - The capture and diff scripts run.
   - Primary evidence: the capture PNG plus the diff report.
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: `lib_ui` at c3f7343; contract in `docs/decisions/tdesktop-pixel-contract.md`; demo `src/ui/tdesktop_parity_demo.rs`; `scripts/tdesktop_parity/{capture.sh,diff.py}` run (final capture of `ready-tdesktop-parity` (nested KWin, 1920×1036) against the donor with `diff.py`: total 2.11%).
 - **R2: Foundation.**
   - Source: plan, Phase 1.
   - Acceptance:
@@ -37,15 +37,15 @@ Primary evidence for R2–R9: capture the `ready-tdesktop-parity` demo with `scr
     - The default dark theme is tdesktop `night`.
     - Defaults: folder rail on the left, adaptive wide mode on.
   - Primary evidence: `cargo test` plus the capture.
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: LICENSE GPL-3.0 (upstream MIT kept in `licenses/`); Open Sans in `assets/fonts`, `Theme::text_size` 13; masks via `src/ui/td/icon.rs`; default night = Tinted; folder rail Left and adaptive wide on, with a one-time prefs move (`move_to_tdesktop_look`). `cargo test --lib` 7139 passed; `cargo test --features demo-capture --bin quill` 2726 passed, 1 load-dependent failure (`settings_window::arrival::every_setting_has_a_place_to_land`, passes 3/3 alone).
 - **R3: Window chrome.**
   - Source: plan, Phase 2.
   - Acceptance:
     - The title bar is 24px with tdesktop min/max/close masks and colours.
     - There is no caption, search button or menu bar.
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: titlebar region 0.00%.
 - **R4: Folder rail.**
   - Source: plan, Phase 3.
   - Acceptance:
@@ -54,8 +54,8 @@ Primary evidence for R2–R9: capture the `ready-tdesktop-parity` demo with `scr
     - Items are 62px, with 36px masks and an 11px semibold label.
     - Colours follow the Night theme.
     - The last item is "Edit".
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: folder-rail region 1.43% (label glyph AA).
 - **R5: Chat list.**
   - Source: plan, Phase 4.
   - Acceptance:
@@ -63,16 +63,16 @@ Primary evidence for R2–R9: capture the `ready-tdesktop-parity` demo with `scr
     - Search is a 35px pill in a 54px zone.
     - Rows are 62px with tdesktop geometry and colours, a channel mask, verified masks and no mute glyph.
     - Dates follow `FormatDialogsDate`.
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: chat-list region 1.75% (glyph AA, preview mini-thumbs and emoji differ in content).
 - **R6: Header and pinned bar.**
   - Source: plan, Phase 5.
   - Acceptance:
     - The header is 54px with icons in the order search, call, info, menu.
     - The status reads "last seen 1 minute ago".
     - The pinned bar is 49px with a pin-list button.
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: header 0.96%, pinned 2.69% (glyph AA; the donor has a coloured glow under the bar from its own content).
 - **R7: History.**
   - Source: plan, Phase 6.
   - Acceptance:
@@ -81,8 +81,8 @@ Primary evidence for R2–R9: capture the `ready-tdesktop-parity` demo with `scr
     - Avatar 33px, bubble padding (11,8,11,8), radii 16/6, tail.
     - Bubble colours `#182533` / `#2B5278`.
     - 13px text, tdesktop time and check marks.
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: history 2.45%; geometry, colours and tail match. Difference: glyph AA plus fixture pictures (photo, reply thumb, GIF) that are not the donor's, the COLRv1 🤖 emoji and the reply emoji pattern.
 - **R8: Media in bubbles.**
   - Source: plan, Phase 7.
   - Acceptance:
@@ -90,8 +90,8 @@ Primary evidence for R2–R9: capture the `ready-tdesktop-parity` demo with `scr
     - Audio file: name plus "00:06".
     - Reply block uses tdesktop metrics.
     - GIF: label and time pills.
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: Voice, audio, reply and GIF rows match in the history region above; waveforms are the donor's.
 - **R9: Composer.**
   - Source: plan, Phase 8.
   - Acceptance:
@@ -99,14 +99,14 @@ Primary evidence for R2–R9: capture the `ready-tdesktop-parity` demo with `scr
     - Order: attach | field | emoji | mic.
     - There is no "AA" button.
     - The placeholder is "Write a message...".
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: composer region 1.18%; format button removed (`format_menu_button` deleted).
 - **R10: Delivery.**
   - Source: user instruction "реализовать и коммит пуш".
   - Acceptance: the work is committed and pushed to `origin`.
   - Primary evidence: the `git push` output.
-  - Status: pending
-  - Evidence:
+  - Status: verified
+  - Evidence: `git push origin main` of a45a54e08 and this document update.
 
 ### Constraints
 
@@ -136,16 +136,14 @@ Primary evidence for R2–R9: capture the `ready-tdesktop-parity` demo with `scr
 
 ## Current Checkpoint
 
-- Closes: R1, R2
-- Smallest next action: capture/diff scripts, the parity demo, then the foundation edits.
-- Expected evidence: the first capture of the demo.
+- Closes: none (all outcomes verified).
 
 ## Current State
 
-- Resolved: plan approved; decisions recorded below.
-- Last relevant evidence: an X11 capture via XWayland works (`WAYLAND_DISPLAY= DISPLAY=:0` + `magick import -window <id>`). `render_to_image` is not implemented on Linux.
+- Resolved: R1–R10.
+- Last relevant evidence: the final capture diff (total 2.11%; titlebar 0.00, rail 1.43, list 1.75, header 0.96, pinned 2.69, history 2.45, composer 1.18).
 - Blocker: none.
-- Next: R1.
+- Known leftovers inside C1 or fixture content: glyph AA; the 🤖 emoji (COLRv1, not drawn by GPUI); fixture pictures differ from the donor's.
 
 ## Material Decisions
 
@@ -155,13 +153,15 @@ Primary evidence for R2–R9: capture the `ready-tdesktop-parity` demo with `scr
 ## Checkpoint History
 
 - 2026-11-04: plan approved; `lib_ui` submodule fetched (c3f7343). Values: `fsize` 13px, `windowTitleHeight` 24px, `roundRadiusLarge` 6px, `roundRadiusSmall` 3px.
+- 2026-11-04: X11 and desktop Spectacle captures were dropped (CSD insets, locked screen); captures run in a nested headless KWin with a clean config.
+- 2026-11-04: R1–R9 verified by capture and diff (91% → 2.11% differing); tests brought in line (a45a54e08).
 
 ## Completion
 
-- Resolved outcomes:
-- Commands and artifacts:
-- Constraint and diff-scope check:
-- Final status:
+- Resolved outcomes: R1–R10 verified.
+- Commands and artifacts: `cargo build --features demo-capture --bin quill`; `scripts/tdesktop_parity/capture.sh target/debug/quill /tmp/quill.png`; `python3 -I scripts/tdesktop_parity/diff.py artifacts/telegram-donor.png /tmp/quill.png /tmp/diff`; `cargo test --lib`; `cargo test --features demo-capture --bin quill`; `cargo clippy --features demo-capture --all-targets` (clean).
+- Constraint and diff-scope check: C1 holds (text metrics match, AA differs). C2: the narrow layout tests (`pull_next_ui_tests`, `paragraph_cache_scroll`) pass. C3: top folder tabs and the non-wide mode stay in settings. Changes also touched `src/ui/td/*`, `src/ui/history/*`, `third_party/gpui-pre` (ellipsis) and lang strings, all serving R2–R9.
+- Final status: complete.
 
 ---
 
