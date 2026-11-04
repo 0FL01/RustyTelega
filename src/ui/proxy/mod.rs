@@ -550,6 +550,87 @@ impl QuillApp {
         )
     }
 
+    /// tdesktop's connecting widget (`window_connecting_widget.cpp`) with
+    /// nothing to say but the proxy: a round `connectingLeft`/`Right` plate
+    /// with its shadow, `connectingMargin` in from the chat list's
+    /// bottom-left corner, the shield in its middle.
+    pub(super) fn proxy_connecting_widget(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        use crate::ui::td::{TdIcon, td, td_icon};
+        use quill::app_theme::PaletteKey as K;
+        let session = self.session()?;
+        if !session.settings.proxy.shield() {
+            return None;
+        }
+        let connected = matches!(
+            session.connection,
+            ConnectionState::Ready | ConnectionState::Updating
+        );
+        let (icon, color) = if connected {
+            (TdIcon::ProxyOn, td(K::WindowBgActive))
+        } else {
+            (TdIcon::ProxyOff, td(K::MenuIconFg))
+        };
+        let margin = px(crate::ui::td::st::window::CONNECTING_MARGIN);
+        let half = crate::ui::td::icon::icon_size(TdIcon::ConnectingLeft).width;
+        let side = margin * 2. + half * 2.;
+        let shield = crate::ui::td::icon::icon_size(icon);
+        Some(
+            div()
+                .id("proxy-shield")
+                .relative()
+                .size(side)
+                .cursor_pointer()
+                .role(gpui_kit::Role::Button)
+                .aria_label(tr(keys::PROXY_SETTINGS))
+                .tooltip(move |window, cx| {
+                    gpui_kit::component::tooltip::Tooltip::new(if connected {
+                        tr(keys::Q_PREFS_PROXY_ENABLED)
+                    } else {
+                        tr(keys::CONNECTION_PROXY_CONNECTING)
+                    })
+                    .build(window, cx)
+                })
+                .child(
+                    div()
+                        .absolute()
+                        .left(margin)
+                        .top(margin)
+                        .child(td_icon(TdIcon::ConnectingLeftShadow, td(K::WindowShadowFg)))
+                        .child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .child(td_icon(TdIcon::ConnectingLeft, td(K::WindowBg))),
+                        ),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .left(margin + half)
+                        .top(margin)
+                        .child(td_icon(
+                            TdIcon::ConnectingRightShadow,
+                            td(K::WindowShadowFg),
+                        ))
+                        .child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .child(td_icon(TdIcon::ConnectingRight, td(K::WindowBg))),
+                        ),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .left((side - shield.width) / 2.)
+                        .top((side - shield.height) / 2.)
+                        .child(td_icon(icon, color)),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.open_proxy_list(cx)))
+                .into_any_element(),
+        )
+    }
+
     /// "Proxy settings" link for the connection strip while connecting,
     /// with tdesktop's proxy shield (`ProxyIcon` in
     /// `window_connecting_widget.cpp`) in front while a proxy is enabled.

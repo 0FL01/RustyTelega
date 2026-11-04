@@ -93,11 +93,26 @@ fn message(id: i64, sender: i64, date: i64, content: Value, reply: Option<i64>) 
     json!({"@type":"updateNewMessage","message":m})
 }
 
+/// The waveforms of the reference's two voice notes, read back from its
+/// bars (`PaintWaveform` with the loudest sample at 31).
+const WAVE_FIRST: [u8; 100] = [
+    2, 8, 29, 15, 18, 22, 13, 24, 0, 8, 0, 22, 24, 13, 13, 29, 13, 11, 13, 29, 15, 13, 29, 6, 29,
+    15, 6, 31, 27, 6, 22, 4, 27, 6, 15, 11, 20, 22, 24, 29, 15, 15, 15, 8, 13, 0, 20, 0, 27, 11, 6,
+    15, 6, 29, 13, 24, 31, 15, 22, 22, 2, 2, 15, 22, 22, 29, 4, 13, 2, 27, 4, 22, 20, 11, 27, 8, 0,
+    15, 2, 0, 2, 15, 8, 15, 11, 8, 0, 0, 15, 27, 27, 31, 31, 13, 27, 18, 8, 4, 0, 0,
+];
+const WAVE_SECOND: [u8; 100] = [
+    0, 8, 15, 22, 18, 24, 2, 11, 22, 6, 2, 11, 18, 15, 11, 18, 31, 22, 15, 18, 22, 18, 0, 0, 31,
+    31, 31, 11, 11, 11, 11, 8, 8, 31, 31, 31, 24, 22, 18, 24, 22, 18, 18, 15, 15, 15, 18, 11, 18,
+    0, 6, 6, 0, 2, 22, 31, 24, 24, 31, 31, 27, 31, 31, 31, 18, 22, 15, 15, 22, 18, 8, 11, 15, 15,
+    8, 8, 8, 6, 8, 8, 8, 6, 6, 0, 2, 15, 0, 0, 11, 31, 27, 18, 24, 11, 24, 18, 15, 11, 0, 0,
+];
+
 fn voice(id: i32, duration: i32, size: i64) -> Value {
-    let wave = quill::voice::waveform_base64(&[
-        6, 14, 22, 30, 18, 10, 26, 31, 20, 12, 8, 24, 28, 16, 10, 20, 8, 23, 30, 12, 24, 15, 6, 27,
-        31, 14, 9, 20, 28, 9, 15, 26,
-    ]);
+    let wave = quill::voice::waveform_base64(match id {
+        6504 => &WAVE_SECOND,
+        _ => &WAVE_FIRST,
+    });
     json!({"@type":"messageVoiceNote","voice_note":{"@type":"voiceNote","duration":duration,
         "waveform":wave,"mime_type":"audio/ogg","speech_recognition_result":null,
         "voice":file(id,"demo-voice.ogg",size)},

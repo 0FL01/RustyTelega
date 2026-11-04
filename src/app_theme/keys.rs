@@ -178,6 +178,7 @@ palette_keys! {
     HistoryPeer6NameFg = "historyPeer6NameFg", Messages, "Sender name colour 6";
     HistoryPeer7NameFg = "historyPeer7NameFg", Messages, "Sender name colour 7";
     HistoryPeer8NameFg = "historyPeer8NameFg", Messages, "Sender name colour 8";
+    WindowShadowFg = "windowShadowFg", Window, "Floating panel shadow";
 }
 
 impl PaletteKey {

@@ -57,13 +57,11 @@ impl QuillApp {
                             .w(self.list_width())
                             .h_full()
                             .child(list)
-                            .children(self.proxy_shield_button(cx).map(|button| {
-                                div()
-                                    .absolute()
-                                    .left(px(crate::ui::td::st::window::CONNECTING_MARGIN))
-                                    .bottom(px(crate::ui::td::st::window::CONNECTING_MARGIN))
-                                    .child(button)
-                            })),
+                            .children(
+                                self.proxy_connecting_widget(cx).map(|widget| {
+                                    div().absolute().left_0().bottom_0().child(widget)
+                                }),
+                            ),
                     )
                     .into_any_element();
             }

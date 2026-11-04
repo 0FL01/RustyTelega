@@ -49,6 +49,10 @@ macro_rules! td_icons {
 }
 
 td_icons! {
+    ConnectingLeft => "connecting_left",
+    ConnectingLeftShadow => "connecting_left_shadow",
+    ConnectingRight => "connecting_right",
+    ConnectingRightShadow => "connecting_right_shadow",
     // Frame 0 of `animations/chat/voice_to_video.tgs` at `historySend.recordSize`
     // (`SendButton::paintRecord` draws the Lottie icon).
     VoiceRecord => "derived/voice_record",

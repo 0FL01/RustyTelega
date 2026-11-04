@@ -410,7 +410,6 @@ fn pinned_bar_segments(count: usize, position: usize) -> AnyElement {
     };
     div()
         .relative()
-        .top(px(1.))
         .w(px(line))
         .h(px(st::HISTORY_REPLY_HEIGHT))
         .overflow_hidden()
