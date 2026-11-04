@@ -4,11 +4,12 @@
 #![deny(clippy::indexing_slicing)]
 
 use super::app::{ChatListFilter, QuillApp};
-use super::chat_theme::{accent, accent_strong, text_on_fill};
+use super::chat_theme::{accent_strong, text_on_fill};
 use super::folder_glyphs::folder_glyph;
 use super::folder_tabs_drag::folder_tab_drag;
 use super::folder_tabs_fit::{FADE_WIDTH, RevealKey, fade_edges, needs_reveal};
-use super::pressable::PressableDiv;
+use super::td::st::window as st_window;
+use super::td::{self, TdIcon};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::*;
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
@@ -16,16 +17,16 @@ use gpui_kit::component::tab::{Tab, TabBar};
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::*;
+use quill::app_theme::PaletteKey;
 use quill::folder_icons::{FolderTabsMode, FolderTabsView};
 use quill::lang::{keys, tr, tr_with};
 use quill::state::FolderBadge;
 
 /// Column width (tdesktop `windowFiltersWidth` is 72px; the topic column
 /// uses 68px with the same name width).
-pub(super) const RAIL_WIDTH: f32 = 68.;
+pub(super) const RAIL_WIDTH: f32 = st_window::WINDOW_FILTERS_WIDTH;
 /// Narrower column when only icons show.
 pub(super) const RAIL_WIDTH_ICONS: f32 = 52.;
-const RAIL_NAME_WIDTH: f32 = 54.;
 
 /// What a slot selects. The order of the slots is the order of the tabs:
 /// the folders with All at its position among them (Premium can move it),
@@ -42,6 +43,7 @@ pub(super) struct FolderSlot {
     pub kind: FolderSlotKind,
     pub name: String,
     pub glyph: IconName,
+    pub rail_icon: TdIcon,
     /// Unread chats in this folder (tdesktop `setUnreadCount`).
     pub badge: Option<FolderBadge>,
 }
@@ -58,6 +60,39 @@ pub(super) fn build_slots(
             kind: FolderSlotKind::Folder(*id),
             name: name.clone(),
             glyph: folder_glyph(icon),
+            rail_icon: match quill::folder_icons::display_icon_name(icon) {
+                "Cat" => TdIcon::FoldersCat,
+                "Book" => TdIcon::FoldersBook,
+                "Money" => TdIcon::FoldersMoney,
+                "Game" => TdIcon::FoldersGame,
+                "Light" => TdIcon::FoldersLight,
+                "Like" => TdIcon::FoldersLike,
+                "Note" => TdIcon::FoldersNote,
+                "Palette" => TdIcon::FoldersPalette,
+                "Travel" => TdIcon::FoldersTravel,
+                "Sport" => TdIcon::FoldersSport,
+                "Favorite" => TdIcon::FoldersFavorite,
+                "Airplane" => TdIcon::FoldersAirplane,
+                "Groups" => TdIcon::FoldersGroups,
+                "All" => TdIcon::FoldersAll,
+                "Unread" => TdIcon::FoldersUnread,
+                "Crown" => TdIcon::FoldersCrown,
+                "Flower" => TdIcon::FoldersFlower,
+                "Home" => TdIcon::FoldersHome,
+                "Love" => TdIcon::FoldersLove,
+                "Mask" => TdIcon::FoldersMask,
+                "Party" => TdIcon::FoldersParty,
+                "Trade" => TdIcon::FoldersTrade,
+                "Unmuted" => TdIcon::FoldersUnmuted,
+                "Setup" => TdIcon::FoldersSetup,
+                "Poo" => TdIcon::FoldersPoo,
+                "Private" => TdIcon::FoldersPrivate,
+                "Bots" => TdIcon::FoldersBots,
+                "Work" => TdIcon::FoldersWork,
+                "Channels" => TdIcon::FoldersChannels,
+                "Study" => TdIcon::FoldersStudy,
+                _ => TdIcon::FoldersCustom,
+            },
             badge: None,
         })
         .collect();
@@ -67,6 +102,7 @@ pub(super) fn build_slots(
             kind: FolderSlotKind::All,
             name: tr(keys::FILTERS_ALL_SHORT).into(),
             glyph: folder_glyph(tr(keys::FILTERS_ALL_SHORT)),
+            rail_icon: TdIcon::FoldersAll,
             badge: None,
         },
     );
@@ -74,12 +110,14 @@ pub(super) fn build_slots(
         kind: FolderSlotKind::Unread,
         name: tr(keys::FILTERS_NAME_UNREAD).into(),
         glyph: folder_glyph(tr(keys::FILTERS_NAME_UNREAD)),
+        rail_icon: TdIcon::FoldersAll,
         badge: None,
     });
     slots.push(FolderSlot {
         kind: FolderSlotKind::Archived,
         name: tr(keys::FILTERS_TYPE_NO_ARCHIVED).into(),
         glyph: IconName::Archive,
+        rail_icon: TdIcon::FoldersCustom,
         badge: None,
     });
     slots
@@ -449,12 +487,20 @@ impl QuillApp {
             .w_full()
             .overflow_y_scroll();
         for (ix, slot) in slots.iter().enumerate() {
+            if matches!(slot.kind, FolderSlotKind::Unread | FolderSlotKind::Archived) {
+                continue;
+            }
             let active = ix == selected;
-            let color = if active {
-                Hsla::from(accent())
+            let color = td::td(if active {
+                PaletteKey::SideBarTextFgActive
             } else {
-                cx.theme().muted_foreground
-            };
+                PaletteKey::SideBarTextFg
+            });
+            let icon_color = td::td(if active {
+                PaletteKey::SideBarIconFgActive
+            } else {
+                PaletteKey::SideBarIconFg
+            });
             let kind = slot.kind;
             let name = slot.name.clone();
             let menu_folder = match kind {
@@ -471,10 +517,13 @@ impl QuillApp {
                 .items_center()
                 .justify_center()
                 .w_full()
-                .py(px(8.))
-                .gap(px(4.))
+                .h(px(st_window::WINDOW_FILTERS_BUTTON_HEIGHT))
+                .bg(if active {
+                    td::td(PaletteKey::SideBarBgActive)
+                } else {
+                    td::td(PaletteKey::SideBarBg)
+                })
                 .cursor_pointer()
-                .pressable(cx.theme())
                 .role(Role::Tab)
                 .aria_selected(active)
                 .aria_label(name.clone())
@@ -489,14 +538,22 @@ impl QuillApp {
                     )
                 })
                 .when(show_icon, |this| {
-                    this.child(Icon::new(slot.glyph).size(px(22.)).text_color(color))
+                    this.child(
+                        div()
+                            .absolute()
+                            .top(px(st_window::WINDOW_FILTERS_ICON_TOP))
+                            .child(td::td_icon(slot.rail_icon, icon_color)),
+                    )
                 })
                 .when(show_text, |this| {
                     this.child(
                         div()
-                            .w(px(RAIL_NAME_WIDTH.min(width - 6.)))
-                            .text_size(px(10.))
-                            .line_height(px(12.))
+                            .absolute()
+                            .top(px(st_window::WINDOW_FILTERS_TEXT_TOP))
+                            .w(px(width - 2. * st_window::WINDOW_FILTERS_TEXT_SKIP))
+                            .text_size(px(st_window::WINDOW_FILTERS_FONT_SIZE))
+                            .line_height(px(15.))
+                            .font_semibold()
                             .text_center()
                             .line_clamp(2)
                             .text_ellipsis()
@@ -512,24 +569,43 @@ impl QuillApp {
                             .right(px(6.))
                             .child(folder_badge_pill(badge, cx)),
                     )
-                })
-                .when(active, |this| {
-                    this.child(
-                        div()
-                            .absolute()
-                            .left_0()
-                            .top(px(8.))
-                            .bottom(px(8.))
-                            .w(px(4.))
-                            .rounded_r(px(2.))
-                            .bg(accent()),
-                    )
                 });
             list = list.child(
                 folder_tab_drag(item, kind, slot.name.clone().into(), premium, &weak)
                     .test_support(),
             );
         }
+        list = list.child(
+            div()
+                .id("folder-rail-edit")
+                .relative()
+                .flex()
+                .flex_col()
+                .items_center()
+                .w_full()
+                .h(px(st_window::WINDOW_FILTERS_BUTTON_HEIGHT))
+                .flex_none()
+                .cursor_pointer()
+                .on_click(cx.listener(|this, _, _, cx| this.open_folder_manage(cx)))
+                .child(
+                    div()
+                        .absolute()
+                        .top(px(st_window::WINDOW_FILTERS_ICON_TOP))
+                        .child(td::td_icon(
+                            TdIcon::FoldersEdit,
+                            td::td(PaletteKey::SideBarIconFg),
+                        )),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .top(px(st_window::WINDOW_FILTERS_TEXT_TOP))
+                        .text_size(px(st_window::WINDOW_FILTERS_FONT_SIZE))
+                        .font_semibold()
+                        .text_color(td::td(PaletteKey::SideBarTextFg))
+                        .child("Edit"),
+                ),
+        );
         div()
             .id("folder-rail")
             .flex()
@@ -538,23 +614,19 @@ impl QuillApp {
             .w(px(width))
             .h_full()
             .min_h_0()
-            .bg(cx.theme().sidebar)
-            .border_r_1()
-            .border_color(cx.theme().border)
+            .bg(td::td(PaletteKey::SideBarBg))
             .role(Role::TabList)
             .aria_label(tr(keys::SETTINGS_SECTION_FILTERS))
-            .child(list)
             .child(
-                div().flex().flex_none().justify_center().py_2().child(
-                    Button::new("folder-manage")
-                        .icon(IconName::Settings)
-                        .small()
-                        .tooltip(tr(keys::Q_CHATLIST_CHAT_FOLDERS))
-                        .accessibility_label(tr(keys::Q_CHATLIST_MANAGE_CHAT_FOLDERS))
-                        .ghost()
-                        .on_click(cx.listener(|this, _, _, cx| this.open_folder_manage(cx))),
-                ),
+                div()
+                    .h(px(st_window::WINDOW_FILTERS_MAIN_MENU_HEIGHT))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(self.main_navigation_menu(cx)),
             )
+            .child(list)
             .into_any_element()
     }
 

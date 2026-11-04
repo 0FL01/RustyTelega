@@ -18,5 +18,8 @@ pub(crate) mod window_title {
     pub(crate) const BUTTON_WIDTH: f32 = 36.;
 }
 
+pub(crate) mod dialogs;
+pub(crate) mod window;
+
 // Each area of the main window keeps its metrics in its own file below,
 // named after the tdesktop style it ports.

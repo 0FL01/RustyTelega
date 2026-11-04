@@ -509,18 +509,14 @@ pub(super) fn session_chat_row(
         .id(("chat-row", id.0 as u64))
         .a11y_tag(quill::agent::ui_driver::redact::chat_tag(id.0))
         .w_full()
-        .px_2()
+        .px(px(10.))
         .role(Role::Button)
         .aria_label(row_label)
-        // kit Phase 3: fixed height (see `chat_row_height`) — the
-        // `VirtualList` positions rows from declared sizes, so the row
-        // enforces the same height and centers its content. Title and
-        // preview truncate to one line so content can never overflow it.
+        // Keep rendered row height in sync with the virtual list.
         .h(chat_row_height(&tags, row_style.preview_lines))
         .flex()
         .flex_col()
         .justify_center()
-        .rounded_md()
         // Plain arrow while hovering: on macOS 26 the pointing hand reads
         // as a drag affordance, which a row you only click isn't.
         .when(!selected, |this| this.pressable(cx.theme()))
@@ -531,11 +527,11 @@ pub(super) fn session_chat_row(
             this.hover(|s| s.bg(open_row_hover_fill(cx.theme())))
                 .active(|s| s.bg(cx.theme().primary.opacity(0.4)))
         })
-        .bg(if selected {
-            cx.theme().primary.opacity(0.25)
+        .bg(crate::ui::td::td(if selected {
+            quill::app_theme::PaletteKey::DialogsBgActive
         } else {
-            cx.theme().sidebar
-        })
+            quill::app_theme::PaletteKey::DialogsBg
+        }))
         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
             // Slice CL3: in multi-select mode a row click toggles the
             // check instead of opening the chat.
@@ -601,7 +597,7 @@ pub(super) fn session_chat_row(
             div()
                 .flex()
                 .items_center()
-                .gap_3()
+                .gap(px(12.))
                 // Parity slice: circular chat photo or colored initials for
                 // every chat-list row / chat type.
                 // Slice CL3: the select-mode check circle precedes the
@@ -670,7 +666,17 @@ pub(super) fn session_chat_row(
                                             },
                                         )
                                         .when_some(kind_icon, |this, icon| {
-                                            this.child(row_glyph(icon, muted_fg))
+                                            let mask = match icon {
+                                                IconName::Megaphone => Some(crate::ui::td::TdIcon::DialogsChannel),
+                                                IconName::Users => Some(crate::ui::td::TdIcon::DialogsChat),
+                                                IconName::Bot => Some(crate::ui::td::TdIcon::DialogsBot),
+                                                _ => None,
+                                            };
+                                            if let Some(mask) = mask {
+                                                this.child(crate::ui::td::td_icon(mask, crate::ui::td::td(quill::app_theme::PaletteKey::DialogsChatIconFg)))
+                                            } else {
+                                                this.child(row_glyph(icon, muted_fg))
+                                            }
                                         })
                                         .when_some(verify_icon, |this, path| {
                                             this.child(super::bot_verify_icon::bot_verify_icon(path))
@@ -678,10 +684,12 @@ pub(super) fn session_chat_row(
                                         .child(
                                             div()
                                                 .font_semibold()
+                                                .text_size(px(13.))
+                                                .text_color(crate::ui::td::td(if selected { quill::app_theme::PaletteKey::DialogsNameFgActive } else { quill::app_theme::PaletteKey::DialogsNameFg }))
                                                 .min_w_0()
                                                 .truncate()
                                                 .child(
-                                                    super::emoji_sprites::one_line(&title, px(14.))
+                                                    super::emoji_sprites::one_line(&title, px(13.))
                                                         .unwrap_or_else(|| {
                                                             super::bidi_line::one_line_plain(title)
                                                                 .into_any_element()
@@ -689,17 +697,11 @@ pub(super) fn session_chat_row(
                                                 ),
                                         )
                                         .when_some(title_badge, |this, badge| {
-                                            this.child(title_badge_element(
-                                                badge,
-                                                badge_emoji,
-                                                cx,
-                                            ))
-                                        })
-                                        .when(chat.is_muted(), |this| {
-                                            this.child(row_glyph(
-                                                IconName::BellOff,
-                                                muted_fg,
-                                            ))
+                                            if matches!(badge, TitleBadge::Verified) {
+                                                this.child(div().relative().flex_none().child(crate::ui::td::td_icon(crate::ui::td::TdIcon::DialogsVerifiedStar, crate::ui::td::td(quill::app_theme::PaletteKey::DialogsVerifiedIconBg))).child(div().absolute().top_0().left_0().child(crate::ui::td::td_icon(crate::ui::td::TdIcon::DialogsVerifiedCheck, crate::ui::td::td(quill::app_theme::PaletteKey::DialogsVerifiedIconFg)))))
+                                            } else {
+                                                this.child(title_badge_element(badge, badge_emoji, cx))
+                                            }
                                         })
                                         .when(chat.is_forum_chat(), |this| {
                                             this.child(forum_badge(id, cx))
@@ -712,8 +714,8 @@ pub(super) fn session_chat_row(
                                             .flex_none()
                                             .items_center()
                                             .gap_0p5()
-                                            .text_xs()
-                                            .text_color(muted_fg)
+                                            .text_size(px(13.))
+                                            .text_color(crate::ui::td::td(quill::app_theme::PaletteKey::DialogsDateFg))
                                             .when(status != RowStatus::None, |this| {
                                                 this.child(row_status_mark(status, cx))
                                             })
@@ -796,10 +798,10 @@ pub(super) fn session_chat_row(
                                                         super::image_budget::SizedSource::Mini(
                                                             mini,
                                                         ),
-                                                        px(18.),
+                                                        px(crate::ui::td::st::dialogs::DIALOGS_MINI_PREVIEW_SIZE),
                                                     ))
                                                     .id(("preview-thumb", id.0 as u64))
-                                                    .size(px(18.))
+                                                    .size(px(crate::ui::td::st::dialogs::DIALOGS_MINI_PREVIEW_SIZE))
                                                     .aspect_square()
                                                     .flex_none()
                                                     .mr_1()

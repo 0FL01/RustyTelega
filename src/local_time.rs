@@ -248,32 +248,37 @@ pub fn day_label(date: &CivilTime, now: &CivilTime) -> String {
     }
 }
 
-/// Compact chat-list timestamp: `HH:MM` today or within the last 20 hours
-/// (Telegram Desktop's `FormatDialogsDate`), a short weekday within the
-/// past week, `12 Mar` this year, `12.03.25` otherwise.
+/// Compact chat-list timestamp, following tdesktop's `FormatDialogsDate`:
+/// time on the same day or within 20 hours, weekday within seven calendar
+/// days, and a numeric short date otherwise.
 pub fn chat_list_stamp(date: &CivilTime, now: &CivilTime) -> String {
     const RECENT_MINUTES: i64 = 20 * 60;
     let minutes =
         |t: &CivilTime| t.day_number() * 1440 + i64::from(t.hour) * 60 + i64::from(t.minute);
     let age = now.day_number() - date.day_number();
-    if (minutes(now) - minutes(date)).abs() < RECENT_MINUTES {
-        return hhmm(date);
-    }
-    match age {
-        i64::MIN..=0 => hhmm(date),
-        1..=6 => weekday_name(date.weekday)
+    if age == 0 || (minutes(now) - minutes(date)).abs() < RECENT_MINUTES {
+        // Qt's English short-time pattern separates AM/PM with U+202F.
+        hhmm(date)
+            .replace(" AM", "\u{202f}AM")
+            .replace(" PM", "\u{202f}PM")
+    } else if age.abs() < 7 {
+        weekday_name(date.weekday)
             .get(..3)
             .unwrap_or_default()
-            .to_string(),
-        _ if date.year == now.year => {
-            format!(
-                "{} {}",
-                date.day,
-                month_name(date.month).get(..3).unwrap_or_default()
-            )
-        }
-        _ => short_date(date),
+            .to_string()
+    } else {
+        dialogs_short_date(date)
     }
+}
+
+/// The English (United States) short-date form used by the dialogs list.
+fn dialogs_short_date(date: &CivilTime) -> String {
+    format!(
+        "{}/{}/{:02}",
+        date.month,
+        date.day,
+        date.year.rem_euclid(100)
+    )
 }
 
 /// The numeric short date, `12.03.25` (tdesktop prints
@@ -450,9 +455,19 @@ mod tests {
         let now = civil_at(T, 0);
         let stamp = |secs_ago: i64| chat_list_stamp(&civil_at(T - secs_ago, 0), &now);
         assert_eq!(stamp(60), "21:41");
+        {
+            let _clock = crate::clock_style::ClockStyle::Hour12.pin();
+            assert_eq!(stamp(60), "9:41\u{202f}PM");
+        }
         assert_eq!(stamp(2 * 86_400), "Sat");
-        assert_eq!(stamp(30 * 86_400), "29 Aug");
-        assert_eq!(stamp(400 * 86_400), "24.08.25");
+        assert_eq!(stamp(30 * 86_400), "8/29/26");
+        assert_eq!(stamp(400 * 86_400), "8/24/25");
+        // Future dates use the same absolute-distance rules.
+        assert_eq!(chat_list_stamp(&civil_at(T + 2 * 86_400, 0), &now), "Wed");
+        assert_eq!(
+            chat_list_stamp(&civil_at(T + 8 * 86_400, 0), &now),
+            "10/6/26"
+        );
         // Last night, within 20 hours: still the time.
         let early = civil_at(T + 4 * 3600, 0);
         assert_eq!(chat_list_stamp(&civil_at(T, 0), &early), "21:42");

@@ -454,6 +454,10 @@ impl QuillApp {
             .role(gpui_kit::Role::Group)
             .a11y_tag(quill::agent::ui_driver::redact::PART_SEARCH)
             .flex()
+            .h(px(
+                crate::ui::td::st::dialogs::DIALOGS_FILTER_CONTAINER_HEIGHT,
+            ))
+            .px(px(crate::ui::td::st::dialogs::DIALOGS_FILTER_SKIP))
             .items_center()
             .gap_2()
             .child(
@@ -469,7 +473,7 @@ impl QuillApp {
                     .child(
                         Textarea::new(&self.search_ui.input)
                             .aria_label(tr(keys::Q_CHAT_SEARCH))
-                            .h(px(40.)),
+                            .h(px(crate::ui::td::st::dialogs::DIALOGS_FILTER_HEIGHT)),
                     ),
             )
             .children(story_stack)

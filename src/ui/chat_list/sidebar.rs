@@ -77,14 +77,16 @@ impl QuillApp {
             .w(self.list_width())
             .flex_none()
             .h_full()
-            .p_3()
+            .when(mode != PaneMode::Ready, |this| this.p_3().gap_2())
             .border_r_1()
             .border_color(cx.theme().border)
-            .bg(cx.theme().sidebar)
+            .bg(crate::ui::td::td(quill::app_theme::PaletteKey::DialogsBg))
             .flex()
             .flex_col()
-            .gap_2()
-            .child(self.sidebar_header(mode, cx))
+            .when(
+                mode != PaneMode::Ready || !self.folder_rail_active(),
+                |this| this.child(self.sidebar_header(mode, cx)),
+            )
             .when_some(
                 (!self.chat_list.contacts_tab_open && !self.chat_list.calls_tab_open)
                     .then(|| chat_list_caption(mode, self.session()))

@@ -19,9 +19,7 @@ pub(super) fn title_bar(
     menu_bar: Option<Entity<gpui_kit::component::menu::AppMenuBar>>,
     cx: &mut Context<QuillApp>,
 ) -> impl IntoElement {
-    let _ = live;
-    let _ = mode;
-    let title = "Quill";
+    let _ = (live, search_open);
     let show_cycle = mode == PaneMode::Synthetic;
     // kit Phase 7: kit `TitleBar` — native-feel chrome (drag, double-click
     // zoom, Linux min/max/close, macOS traffic-light inset) in theme tokens,
@@ -31,7 +29,6 @@ pub(super) fn title_bar(
         .on_close_window(cx.listener(|this, _, window, cx| {
             this.exit_after_exports(super::export_quit::quit_app, window, cx);
         }))
-        .caption(div().font_semibold().text_sm().child(title))
         .when_some(menu_bar, |bar, menu| bar.menu(menu))
         .child(
             div()
@@ -40,34 +37,6 @@ pub(super) fn title_bar(
                 .items_center()
                 .flex_none()
                 .children(update)
-                .when(mode == PaneMode::Ready, |this| {
-                    this.child(
-                        Button::new("search")
-                            .icon(if search_open {
-                                IconName::X
-                            } else {
-                                IconName::Search
-                            })
-                            .ghost()
-                            .tooltip(if search_open {
-                                tr(keys::Q_MISC_CLOSE_SEARCH)
-                            } else {
-                                tr(keys::Q_MISC_SEARCH)
-                            })
-                            .accessibility_label(if search_open {
-                                tr(keys::Q_MISC_CLOSE_SEARCH)
-                            } else {
-                                tr(keys::Q_MISC_SEARCH)
-                            })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                if this.search_is_open() {
-                                    this.close_search_ui(window, cx);
-                                } else {
-                                    this.open_search_ui(window, cx);
-                                }
-                            })),
-                    )
-                })
                 .when(show_cycle, |this| {
                     this.child(
                         Button::new("cycle-auth")
