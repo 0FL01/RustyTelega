@@ -3046,17 +3046,21 @@ impl RenderingParameters {
             .find(|&n| format_features.flags.sample_count_supported(n))
             .unwrap_or(1);
 
+        // Quill: on Linux glyph coverage blends as is, as Qt's raster engine
+        // blends FreeType's grayscale glyphs (`freetype_raster`), so text
+        // matches Telegram Desktop's weight; elsewhere Zed's defaults stay.
+        let linux = cfg!(any(target_os = "linux", target_os = "freebsd"));
         let gamma = env::var("ZED_FONTS_GAMMA")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(1.8_f32)
+            .unwrap_or(if linux { 1.0_f32 } else { 1.8_f32 })
             .clamp(1.0, 2.2);
         let gamma_ratios = get_gamma_correction_ratios(gamma);
 
         let grayscale_enhanced_contrast = env::var("ZED_FONTS_GRAYSCALE_ENHANCED_CONTRAST")
             .ok()
             .and_then(|v| v.parse().ok())
-            .unwrap_or(1.0_f32)
+            .unwrap_or(if linux { 0.0_f32 } else { 1.0_f32 })
             .max(0.0);
 
         let subpixel_enhanced_contrast = env::var("ZED_FONTS_SUBPIXEL_ENHANCED_CONTRAST")

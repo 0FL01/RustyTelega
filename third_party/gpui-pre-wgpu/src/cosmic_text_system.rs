@@ -1,5 +1,6 @@
 // Modified by the Quill project (2026) from gpui-pre-wgpu 0.3.9 (Apache-2.0):
-// emoji graphemes are shaped with the colour emoji font.
+// emoji graphemes are shaped with the colour emoji font; grayscale glyphs are
+// rasterised by FreeType with light hinting (`freetype_raster`).
 // See third_party/gpui-pre-wgpu/QUILL-CHANGES.md.
 use anyhow::{Context as _, Ok, Result};
 use collections::HashMap;
@@ -54,6 +55,9 @@ struct CosmicTextSystemState {
     font_system: FontSystem,
     scratch: ShapeBuffer,
     swash_scale_context: ScaleContext,
+    /// Grayscale glyphs as Qt draws them (`freetype_raster`); `None` keeps
+    /// swash (FreeType did not start, or `QUILL_GLYPH_RASTER=swash`).
+    freetype: Option<crate::freetype_raster::FreeTypeRaster>,
     pending_glyph_images: HashMap<RenderGlyphParams, swash::scale::image::Image>,
     /// Contains all already loaded fonts, including all faces. Indexed by `FontId`.
     loaded_fonts: Vec<LoadedFont>,
@@ -143,6 +147,8 @@ impl CosmicTextSystem {
             font_system,
             scratch: ShapeBuffer::default(),
             swash_scale_context: ScaleContext::new(),
+            freetype: crate::freetype_raster::FreeTypeRaster::new()
+                .filter(|_| std::env::var("QUILL_GLYPH_RASTER").map_or(true, |raster| raster != "swash")),
             pending_glyph_images: HashMap::default(),
             loaded_fonts: Vec::new(),
             loaded_font_ids_by_key: HashMap::default(),
@@ -164,6 +170,8 @@ impl CosmicTextSystem {
             font_system,
             scratch: ShapeBuffer::default(),
             swash_scale_context: ScaleContext::new(),
+            freetype: crate::freetype_raster::FreeTypeRaster::new()
+                .filter(|_| std::env::var("QUILL_GLYPH_RASTER").map_or(true, |raster| raster != "swash")),
             pending_glyph_images: HashMap::default(),
             loaded_fonts: Vec::new(),
             loaded_font_ids_by_key: HashMap::default(),
@@ -527,13 +535,40 @@ impl CosmicTextSystemState {
         params: &RenderGlyphParams,
     ) -> Result<swash::scale::image::Image> {
         let loaded_font = &self.loaded_fonts[params.font_id.0];
-        let font_ref = loaded_font.font.as_swash();
         let pixel_size = f32::from(params.font_size);
 
         let subpixel_offset = Vector::new(
             params.subpixel_variant.x as f32 / SUBPIXEL_VARIANTS_X as f32 / params.scale_factor,
             params.subpixel_variant.y as f32 / SUBPIXEL_VARIANTS_Y as f32 / params.scale_factor,
         );
+
+        if !params.is_emoji
+            && !params.subpixel_rendering
+            && let Some(freetype) = self.freetype.as_mut()
+        {
+            let index = self
+                .font_system
+                .db()
+                .face(loaded_font.font.id())
+                .map_or(0, |face| face.index);
+            let font = loaded_font.font.clone();
+            // The variant is a fraction of a device pixel.
+            let rendered = freetype.render(
+                params.font_id,
+                &font,
+                index,
+                params.glyph_id.0,
+                pixel_size * params.scale_factor,
+                params.subpixel_variant.x as f32 / SUBPIXEL_VARIANTS_X as f32,
+                params.subpixel_variant.y as f32 / SUBPIXEL_VARIANTS_Y as f32,
+            );
+            match rendered {
+                Err(error) => log::warn!("FreeType glyph failed, using swash: {error:#}"),
+                image => return image,
+            }
+        }
+        let loaded_font = &self.loaded_fonts[params.font_id.0];
+        let font_ref = loaded_font.font.as_swash();
 
         let mut scaler = self
             .swash_scale_context

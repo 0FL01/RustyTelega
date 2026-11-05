@@ -52,7 +52,13 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
     - On Linux, grayscale glyphs are rasterised by FreeType with light (hintslight) hinting.
     - Blending matches Qt's.
     - `align.py` ink ratios are within 1.00 ± 0.03.
-  - Status: open
+  - Status: in progress
+  - Evidence (2026-11-05): FreeType LIGHT raster in `third_party/gpui-pre-wgpu/src/freetype_raster.rs`; Linux defaults gamma 1.0, grayscale contrast 0.
+    - Sweep of the same capture: swash + gamma 1.8/contrast 1 (old) total 1.97%; FreeType + 1.8/1 1.97%; FreeType + 1.4/0 1.70%; swash + 1.0/0 1.26%; FreeType + 1.0/0 1.20%.
+    - Ink ratio 1.00 on 15 of 21 runs; several runs now differ by 0.05–0.09 mean grey levels (list name 1, header status, message time, voice time), i.e. bit-identical glyphs.
+    - Left at 0.91–0.94: list previews (next to fixture mini pictures), "Denis Sexy IT" (the 🤖 is missing, R4), header name.
+  - Also: middle elision and file title widths use the semibold face and shaped widths (`elidew` ceiled), and rail labels centre as `QFixed::toInt` rounds (`td::label::centered_label`).
+  - Region diff (tolerance 24, masks on): rail 0.72, list 0.63, header 0.09, pinned 0.87, history 1.58, composer 0.46, total 1.18.
 - **R4: Telegram emoji set.**
   - Source: plan, Phase 3 (user: bundle the sheets, default).
   - Acceptance:
@@ -107,7 +113,7 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
 
 ## Current State
 
-- Resolved: R1. R2 in progress (21/22 runs aligned).
+- Resolved: R1. R2 in progress (21/22 runs aligned). R3 in progress (FreeType LIGHT, gamma 1.0).
 - Last relevant evidence: the 2026-11-05 capture in R2.
 - Blocker: none.
 

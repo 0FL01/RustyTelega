@@ -1,4 +1,5 @@
 mod cosmic_text_system;
+mod freetype_raster;
 mod device_recovery;
 mod wgpu_atlas;
 mod wgpu_context;

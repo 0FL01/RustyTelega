@@ -54,6 +54,8 @@ fn char_width(text_system: &TextSystem, font_id: FontId, font_size: Pixels, c: c
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub(in crate::ui) struct Face {
     pub(in crate::ui) bold: bool,
+    /// Semibold, the weight of names and file titles (`semiboldFont`).
+    pub(in crate::ui) semibold: bool,
     pub(in crate::ui) italic: bool,
     pub(in crate::ui) mono: bool,
 }
@@ -64,6 +66,16 @@ impl Face {
             bold: run.style.bold,
             italic: run.style.italic,
             mono: run.style.code || run.style.pre,
+            ..Self::default()
+        }
+    }
+
+    /// The face of plain text at `weight`.
+    fn weighted(weight: FontWeight) -> Self {
+        Self {
+            bold: weight >= FontWeight::BOLD,
+            semibold: weight >= FontWeight::SEMIBOLD && weight < FontWeight::BOLD,
+            ..Self::default()
         }
     }
 }
@@ -225,6 +237,8 @@ impl<'a> Measurer<'a> {
             let mut font = font(family);
             if face.bold {
                 font.weight = FontWeight::BOLD;
+            } else if face.semibold {
+                font.weight = FontWeight::SEMIBOLD;
             }
             if face.italic {
                 font.style = FontStyle::Italic;
@@ -321,13 +335,10 @@ pub(in crate::ui) fn longest_line_width(
         return 0;
     }
     let mut measurer = Measurer::new(cx, font_size);
-    let face = Face {
-        bold: weight >= FontWeight::SEMIBOLD,
-        ..Face::default()
-    };
+    let face = Face::weighted(weight);
     let lines: Vec<f32> = text
         .split('\n')
-        .map(|line| line.chars().map(|c| measurer.advance(face, c)).sum())
+        .map(|line| measurer.word(face, line))
         .collect();
     longest_with_extra(&lines, false, last_line_extra)
 }
@@ -396,30 +407,40 @@ pub(in crate::ui) fn middle_elision(
     width: f32,
 ) -> Option<MiddleElided> {
     let mut measurer = Measurer::new(cx, font_size);
-    let face = Face {
-        bold: weight >= FontWeight::SEMIBOLD,
-        ..Face::default()
-    };
-    let chars: Vec<char> = text.chars().collect();
-    let advances: Vec<f32> = chars.iter().map(|&c| measurer.advance(face, c)).collect();
-    if advances.iter().sum::<f32>() <= width {
+    let face = Face::weighted(weight);
+    if measurer.word(face, text) <= width {
         return None;
     }
-    let ellipsis: f32 = "...".chars().map(|c| measurer.advance(face, c)).sum();
+    // `elidew` is an integer font width; each side takes shaped letters
+    // while they fit half of what the ellipsis leaves (`Renderer::drawLine`).
+    let ellipsis = measurer.word(face, "...").ceil();
     let half = (width - ellipsis) / 2.;
-    let fit = |iter: &mut dyn Iterator<Item = &f32>| {
+    let chars: Vec<char> = text.chars().collect();
+    let space_width = measurer.advance(face, ' ');
+    let mut fit = |from_end: bool, budget: f32| {
         let (mut count, mut used) = (0, 0.);
-        for advance in iter {
-            if used + advance > half {
+        for n in 1..=chars.len() {
+            let part: String = if from_end {
+                chars.iter().skip(chars.len() - n).collect()
+            } else {
+                chars.iter().take(n).collect()
+            };
+            let width = measurer.word(face, &part);
+            if width > budget {
                 break;
             }
-            used += advance;
-            count += 1;
+            (count, used) = (n, width);
         }
         (count, used)
     };
-    let (left, left_width) = fit(&mut advances.iter());
-    let (right, right_width) = fit(&mut advances.iter().rev());
+    let (left, left_width) = fit(false, half);
+    // A cut at a space gives the right side the space's width.
+    let space = if chars.get(left) == Some(&' ') {
+        space_width
+    } else {
+        0.
+    };
+    let (right, right_width) = fit(true, half + space);
     Some(MiddleElided {
         start: chars.iter().take(left).collect(),
         end: chars

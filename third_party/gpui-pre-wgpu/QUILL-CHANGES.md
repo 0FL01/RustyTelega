@@ -189,3 +189,19 @@ fewer copies and textures (sweep finding media-7,
 The Quill project also changed it in 2026 so text glyphs can be swept: the atlas
 forwards `text_glyph_count` and `remove_text_glyphs_unused_since` to its
 `AtlasState` (see gpui-pre's `QUILL-CHANGES.md`).
+
+The Quill project changed it in 2026 so Linux text matches Telegram
+Desktop's pixels (`docs/goal/2026-11-04-tdesktop-pixel-exact.md`, R3):
+
+- `src/freetype_raster.rs` (new): grayscale glyphs rasterised by FreeType
+  with `FT_LOAD_TARGET_LIGHT` and `FT_RENDER_MODE_LIGHT`, the sub-pixel
+  position applied with `FT_Set_Transform` before loading, as Qt's
+  `QFontEngineFT` does for a desktop set to slight hinting.
+- `src/cosmic_text_system.rs`: `render_glyph_image` uses it for non-emoji,
+  non-subpixel glyphs and falls back to swash on error;
+  `QUILL_GLYPH_RASTER=swash` keeps swash.
+- `src/wgpu_renderer.rs`: on Linux and FreeBSD the default text gamma is 1.0
+  and the grayscale enhanced contrast 0, so coverage blends as Qt's raster
+  engine blends it; `ZED_FONTS_*` still override.
+- `Cargo.toml`: `freetype-sys` (system FreeType through pkg-config, else
+  bundled).

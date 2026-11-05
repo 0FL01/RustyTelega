@@ -554,11 +554,17 @@ impl QuillApp {
                             .text_size(px(st_window::WINDOW_FILTERS_FONT_SIZE))
                             .line_height(px(15.))
                             .font_semibold()
-                            .text_center()
-                            .line_clamp(2)
-                            .text_ellipsis()
                             .text_color(color)
-                            .child(name),
+                            .child(td::label::centered_label(
+                                name.clone(),
+                                width - 2. * st_window::WINDOW_FILTERS_TEXT_SKIP,
+                                div()
+                                    .w_full()
+                                    .text_center()
+                                    .line_clamp(2)
+                                    .text_ellipsis()
+                                    .child(name),
+                            )),
                     )
                 })
                 .when_some(slot.badge, |this, badge| {
@@ -600,10 +606,16 @@ impl QuillApp {
                     div()
                         .absolute()
                         .top(px(st_window::WINDOW_FILTERS_TEXT_TOP))
+                        .w(px(width - 2. * st_window::WINDOW_FILTERS_TEXT_SKIP))
                         .text_size(px(st_window::WINDOW_FILTERS_FONT_SIZE))
+                        .line_height(px(15.))
                         .font_semibold()
                         .text_color(td::td(PaletteKey::SideBarTextFg))
-                        .child("Edit"),
+                        .child(td::label::centered_label(
+                            "Edit",
+                            width - 2. * st_window::WINDOW_FILTERS_TEXT_SKIP,
+                            div().w_full().text_center().child("Edit"),
+                        )),
                 ),
         );
         div()
