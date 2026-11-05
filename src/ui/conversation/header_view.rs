@@ -55,7 +55,7 @@ impl QuillApp {
                 div()
                     .text_size(px(13.))
                     .text_color(super::super::td::td(
-                        quill::app_theme::PaletteKey::WindowBoldFg,
+                        quill::app_theme::PaletteKey::DialogsNameFg,
                     ))
                     .font_semibold()
                     .truncate()

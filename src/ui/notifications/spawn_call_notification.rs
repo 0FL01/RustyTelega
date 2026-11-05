@@ -24,6 +24,9 @@ impl QuillApp {
         notification: quill::notify_call::CallNotification,
         cx: &mut Context<Self>,
     ) {
+        if cfg!(test) {
+            return;
+        }
         if quill::notify::current_backend() == quill::notify::NotifyBackend::Native {
             let account = account.0.as_str();
             cx.show_system_notification(SystemNotification {
@@ -282,6 +285,10 @@ impl QuillApp {
                     cx,
                 );
             }
+            return;
+        }
+        // The OS daemon can sound its own alert, outside the test audio output.
+        if cfg!(test) {
             return;
         }
         if quill::notify::current_backend() == quill::notify::NotifyBackend::Native {

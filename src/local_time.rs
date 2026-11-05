@@ -257,8 +257,10 @@ pub fn chat_list_stamp(date: &CivilTime, now: &CivilTime) -> String {
         |t: &CivilTime| t.day_number() * 1440 + i64::from(t.hour) * 60 + i64::from(t.minute);
     let age = now.day_number() - date.day_number();
     if age == 0 || (minutes(now) - minutes(date)).abs() < RECENT_MINUTES {
-        // Qt uses a narrow no-break space, which Open Sans does not draw.
-        hhmm(date).replace(" AM", "AM").replace(" PM", "PM")
+        // QLocale's English short time keeps a narrow no-break separator.
+        hhmm(date)
+            .replace(" AM", "\u{202f}AM")
+            .replace(" PM", "\u{202f}PM")
     } else if age.abs() < 7 {
         weekday_name(date.weekday)
             .get(..3)
@@ -455,7 +457,7 @@ mod tests {
         assert_eq!(stamp(60), "21:41");
         {
             let _clock = crate::clock_style::ClockStyle::Hour12.pin();
-            assert_eq!(stamp(60), "9:41PM");
+            assert_eq!(stamp(60), "9:41\u{202f}PM");
         }
         assert_eq!(stamp(2 * 86_400), "Sat");
         assert_eq!(stamp(30 * 86_400), "8/29/26");

@@ -54,8 +54,21 @@ const ALERT_LATE: Duration = Duration::from_secs(2);
 /// device went away, the error callback marks it stale and the output
 /// opens the new default: the app mixer, and every player on it, moves
 /// over.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(in crate::ui) struct SharedOutput(Arc<Output>);
+
+impl Default for SharedOutput {
+    fn default() -> Self {
+        #[cfg(test)]
+        {
+            Self::for_test(None)
+        }
+        #[cfg(not(test))]
+        {
+            Self(Arc::new(Output::default()))
+        }
+    }
+}
 
 #[derive(Default)]
 struct Output {
@@ -957,6 +970,7 @@ mod gate {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{NotificationSound, NotificationSounds};
     use super::{Feed, Heard, QUIET_FOR, Quiet, SharedOutput, look};
     use rodio::buffer::SamplesBuffer;
     use rodio::mixer::mixer;
@@ -970,6 +984,21 @@ mod tests {
             ChannelCount::new(1).unwrap(),
             SampleRate::new(rate).unwrap(),
         )
+    }
+
+    #[test]
+    fn test_notifications_never_reach_the_audio_output() {
+        let output = SharedOutput::default();
+        assert!(matches!(&output.0.forced, Some(None)));
+        let mut sounds = NotificationSounds::new(output.clone());
+        sounds.play(NotificationSound::DefaultTone);
+        sounds.play_at(
+            NotificationSound::File("missing-tone.mp3".into()),
+            Some(100),
+        );
+        assert!(sounds.player.is_none());
+        assert_eq!(output.players_made(), 0);
+        assert_eq!(output.wakes(), 0);
     }
 
     #[test]

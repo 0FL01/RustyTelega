@@ -46,6 +46,14 @@ cargo clippy --no-default-features --all-targets -- -D warnings
 cargo test --no-default-features
 ```
 
+UI test builds (`cargo test --features demo-capture --locked --bin quill`)
+default to the existing device-free `SharedOutput` test backend, so notification
+and incoming-call alerts cannot open the real audio device. Audio tests can still
+use explicit in-memory mixers or the simulated-device gate. Native OS notification
+delivery is also skipped under `cfg(test)`: its daemon could sound an alert outside
+Quill's audio output. No manual mute or environment flag is needed; ordinary app
+builds and saved notification/volume settings are unchanged.
+
 ## Release profile
 
 ```bash

@@ -36,6 +36,10 @@ fn an_incoming_call_rings_before_any_window_draws(cx: &mut TestAppContext) {
     let mut vcx = VisualTestContext::from_window(handle.into(), cx);
     vcx.update(|window, cx| window.render_frame(cx));
     vcx.run_until_parked();
+    if let Some(active) = vcx.update(|_, cx| cx.active_window()) {
+        VisualTestContext::from_window(active, cx).deactivate_window();
+    }
+    assert!(vcx.update(|_, cx| cx.active_window().is_none()));
     app.update(&mut vcx, |app, cx| {
         let Some(call) = app
             .demo_session
@@ -53,5 +57,12 @@ fn an_incoming_call_rings_before_any_window_draws(cx: &mut TestAppContext) {
         // no window has drawn since.
         app.deliver_notifications(None, cx);
         assert_eq!(app.calls.sounds.looping(), Some(CallSound::Incoming));
+        assert!(app.calls.notified.is_some());
+        assert_eq!(
+            app.notify
+                .notify_inflight
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
     });
 }

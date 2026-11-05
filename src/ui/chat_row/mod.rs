@@ -841,7 +841,11 @@ pub(super) fn session_chat_row(
                                                                     .map(|sender| format!("{sender}: "))
                                                             })
                                                             .flatten(),
-                                                        muted_fg,
+                                                        crate::ui::td::td(if selected {
+                                                            quill::app_theme::PaletteKey::DialogsTextFgActive
+                                                        } else {
+                                                            quill::app_theme::PaletteKey::DialogsTextFg
+                                                        }).into(),
                                                     ),
                                                 )
                                                 .into_any_element(),
