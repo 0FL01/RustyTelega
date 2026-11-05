@@ -1,6 +1,6 @@
 # Goal: Green code-bearing CI after tdesktop parity
 
-Status: active
+Status: complete
 Source: user instruction 2026-11-05: "commit and push, убедиться что в ci всё окей"
 Last updated: 2026-11-05
 
@@ -20,14 +20,14 @@ Complete the frozen Required Outcomes using the listed Change Envelope and Prima
   - Source: user "commit and push".
   - Acceptance: only necessary CI fixes/progress are published; original WIP remains untouched and unstaged.
   - Primary evidence: scoped diff, relevant local regression, Sol review, commit and remote SHA verification.
-  - Status: in_progress
-  - Evidence: baseline HEAD/remote `fe544777849a7c3221b56900665a9cf8b9ffbae5`; two exact catalog-arm exceptions added, existing integration test now 3 passed. Sol reviewed the actual diff and approves scoped commit/push without blocking findings. Original WIP hashes match; publication pending.
+  - Status: verified
+  - Evidence: two exact catalog-arm exceptions and this progress contract committed as `a08b0fc40d561a2f62dc56cc6ef07fbb4fb5ca3b`, pushed to `origin/main`; `git ls-remote` confirmed the same SHA. Existing integration test passes 3 tests. Sol approved the actual scoped diff without blocking findings. Original WIP hashes match and remain outside staging/commits.
 - R2: Actual code-bearing CI is green.
   - Source: user "убедиться что в ci всё окей".
   - Acceptance: the published non-Markdown/code-bearing run completes successfully, with every applicable job successful and only legitimate condition-skips. Record run URL, tested SHA and job results. A docs-only successor is not tested-code evidence.
   - Primary evidence: GitHub Actions run/job conclusions and failed-step logs where needed.
-  - Status: in_progress
-  - Evidence: implementation run [42015073616](https://github.com/0FL01/RustyTelega/actions/runs/42015073616), SHA `217ecf20467036bab67db0c30ab3eddc62c6cfe7`, has failed Linux checks job `127203577204`: `app_name_check::repository_sources_pass` rejects two legitimate emoji-art references. Docs-only run `42015342551` on `fe5447778` is not substantive-test evidence.
+  - Status: verified
+  - Evidence: code-bearing run [42018626177](https://github.com/0FL01/RustyTelega/actions/runs/42018626177), SHA `a08b0fc40d561a2f62dc56cc6ef07fbb4fb5ca3b`, attempt 1, completed **success** at 2026-11-05 11:54:48 UTC: **11 successful jobs, 0 skipped, 0 failed**. Direct GitHub Actions run/job queries confirmed this after the watcher completed. The earlier implementation run `42015073616` failed the two legitimate emoji-art references; neither docs-only run `42015342551` nor this closure's successor is substituted for tested-code evidence.
 
 ### Constraints and non-goals
 
@@ -46,18 +46,46 @@ Complete the frozen Required Outcomes using the listed Change Envelope and Prima
 
 ## Current Checkpoint
 
-- Closes: R1, then R2.
-- Next: commit/push only the allowlist and this goal, then follow the resulting code-bearing run to completion. Sol approved the current fix; CI-green is not yet verified.
-- Expected evidence: local test changes from 2 passed/1 failed to 3 passed; new Actions run has substantive jobs and final successful conclusions, or an exact blocker.
+- Closed: R1 and R2.
+- Next: publish this docs-only closure record and stop. No further fixes, audits or parity work are part of this objective.
+- Evidence: the real code-bearing run on `a08b0fc40d561a2f62dc56cc6ef07fbb4fb5ca3b` passed every applicable job; the closure commit does not change tested code or claim its own skipped run as substantive validation.
 
 ## Current State
 
 - Local reproduction: `cargo test --no-default-features --locked --test app_name_check -- --nocapture` failed 2 passed/1 failed, matching CI. Both hits name the external emoji source app, not Quill.
 - `scripts/check-app-name.sh` already specifies path/text allowlisting for legitimate other-app mentions. Its negative/allowlist fixtures pass and remain unchanged.
 - Fix: two exact path/Rust-arm entries in the existing allowlist, preserving the pack name and attribution. The same local integration command now passes 3 tests; `git diff --check` passes. Negative and allowlist fixtures remain enabled. No runtime/workflow changes or broad exceptions.
-- Sol's new actual-diff review approves scoped commit/push, no blocking findings; the prior parity review is not substituted for it. No CI success claimed. `gh` is absent; GitHub Actions read tools work. Old implementation-run package jobs are still pending and its Linux checks already failed; a new substantive run is required.
+- R1 and R2 verified. Sol's new actual-diff review approved the exact allowlist change, no blocking findings; the prior parity review was not substituted for it. Source/allowlist content did not change after review. Only CI evidence/closure documentation follows the reviewed commit.
+- The temporary read-only watcher completed; the final snapshot is `ci-after-parity/run-42018626177.json` and observation log `watch-42018626177-final.log`. No repository process/service/dependency was added. Direct GitHub Actions tools independently returned the same completed-success SHA and all 11 successful jobs.
+
+### Verified code-bearing jobs
+
+All job links share [run 42018626177](https://github.com/0FL01/RustyTelega/actions/runs/42018626177); every conclusion below is `success`.
+
+| Job | ID |
+| --- | --- |
+| prepare | 127215393701 |
+| Linux fmt, clippy and tests | 127215477769 |
+| quill-calls (linux-aarch64) | 127215477780 |
+| quill-calls (linux-x86_64) | 127215477890 |
+| linux-package (x86_64) | 127217516923 |
+| linux-package (aarch64) | 127217516990 |
+| flatpak (x86_64) | 127226545846 |
+| flatpak (aarch64) | 127226545883 |
+| linux-distro-packages | 127226545841 |
+| lgpl-sources | 127215477641 |
+| verify and publish GitHub Release | 127228813966 |
 
 ## Checkpoint History
 
 - 2026-11-05: froze this separate CI objective after reproducing the actual failing implementation-run step. Prior pixel-exact objective stays complete.
 - 2026-11-05: added only two exact allowlist entries; `cargo test --no-default-features --locked --test app_name_check -- --nocapture` changes from 2 passed/1 failed to 3 passed/0 failed. All original WIP hashes remain unchanged. Next: Sol review and scoped publication.
+- 2026-11-05: Sol approved the actual narrow diff; pushed `a08b0fc40d561a2f62dc56cc6ef07fbb4fb5ca3b` and verified remote SHA. New run `42018626177` starts substantive jobs; awaiting actual CI results, not claiming completion.
+- 2026-11-05 closure: run `42018626177` completed success, all 11 applicable jobs passed on the published code-bearing SHA. No retries, gate suppression or additional fixes were needed. Direct run/job queries verified the result; the final follow-up changes only this document.
+
+## Completion
+
+- R1/R2 resolved: scoped fix is published and actual code-bearing CI is green, with tested SHA/run/job evidence above.
+- Local proof: `cargo test --no-default-features --locked --test app_name_check -- --nocapture` passes 3 tests, including unchanged negative/allowlist fixtures; `git diff --check` passes. Full applicable gates are evidenced by the real CI run, not an unnecessary local replay of unrelated suites.
+- Scope/constraints: exactly two exact allowlist exceptions; checker, runtime names/attribution, workflow, permanent audio protection and completed parity goal are unchanged. No dependencies, screenshots, crops or unrelated WIP are committed. Original WIP hashes remain intact.
+- Final status: complete. This docs-only closure publication is not passed off as a newly tested code commit; code-bearing CI evidence remains bound to `a08b0fc40d561a2f62dc56cc6ef07fbb4fb5ca3b`.
