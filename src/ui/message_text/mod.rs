@@ -283,7 +283,7 @@ pub(super) fn message_footer(
         .items_start()
         .text_size(px(info::FONT))
         .line_height(px(font::HEIGHT))
-        .child(time)
+        .child(super::td::label::label(time))
         .when_some(mark, |this, icon| {
             this.child(
                 div()
@@ -517,6 +517,7 @@ pub(super) fn message_chrome(
         footer_inline: false,
         footer_overlay: false,
         footer_rebuild: None,
+        media_info: Default::default(),
         media_led: false,
         media_bleed: false,
         text_width: None,

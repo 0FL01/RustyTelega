@@ -17,6 +17,13 @@ thread_local! {
 
 const CHAR_WIDTH_CACHE_CAP: usize = 16 * 1024;
 
+thread_local! {
+    /// Shaped word widths by font, size and word, bounded like
+    /// [`CHAR_WIDTHS`].
+    static WORD_WIDTHS: std::cell::RefCell<HashMap<(FontId, u32, String), f32>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
 /// Horizontal room a `pre` block takes around its code
 /// (`message_text::pre_block`: `px_2` on both sides and the copy
 /// button's `pr_6`).
@@ -226,6 +233,36 @@ impl<'a> Measurer<'a> {
         });
         f32::from(char_width(self.text_system, font_id, self.font_size, c))
     }
+
+    /// The shaped width of one word: Telegram Desktop measures a word as
+    /// one shaped block, so pairs inside it kern (`Ui::Text::String`
+    /// blocks), which a sum of character advances misses.
+    fn word(&mut self, face: Face, word: &str) -> f32 {
+        if word.is_empty() {
+            return 0.;
+        }
+        let _ = self.advance(face, ' ');
+        let Some(&font_id) = self.fonts.get(&face) else {
+            return 0.;
+        };
+        let key = (
+            font_id,
+            f32::from(self.font_size).to_bits(),
+            word.to_string(),
+        );
+        WORD_WIDTHS.with(|cache| {
+            if let Some(width) = cache.borrow().get(&key) {
+                return *width;
+            }
+            let width = f32::from(self.text_system.shaped_width(font_id, self.font_size, word));
+            let mut cache = cache.borrow_mut();
+            if cache.len() >= CHAR_WIDTH_CACHE_CAP {
+                cache.clear();
+            }
+            cache.insert(key, width);
+            width
+        })
+    }
 }
 
 /// The unwrapped width of the longest line of `text` with its
@@ -316,7 +353,7 @@ pub(in crate::ui) fn wrapped_width(
         let mut pending_space = 0f32;
         for word in paragraph.split(' ') {
             let space = measurer.advance(face, ' ');
-            let width: f32 = word.chars().map(|c| measurer.advance(face, c)).sum();
+            let width = measurer.word(face, word);
             if line > 0. && line + pending_space + width > available {
                 widest = widest.max(line);
                 line = 0.;

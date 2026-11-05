@@ -274,7 +274,7 @@ mod tests {
             last_preview: String::new(),
             last_preview_style: ChatPreviewStyle::default(),
             last_preview_sender: String::new(),
-            last_preview_thumb: None,
+            last_preview_thumbs: Vec::new(),
             last_message: None,
             sender_actions: Vec::new(),
             draft: None,

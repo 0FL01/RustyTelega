@@ -7,6 +7,7 @@
 pub(crate) mod colors;
 pub(crate) mod fonts;
 pub(crate) mod icon;
+pub(crate) mod label;
 pub(crate) mod st;
 
 pub(crate) use colors::td;

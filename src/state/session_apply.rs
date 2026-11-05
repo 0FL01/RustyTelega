@@ -136,6 +136,48 @@ impl Session {
         }
     }
 
+    /// The minithumbnails a chat row shows for `message`: its photo's, or
+    /// for an album the first three of the album's photos that the history
+    /// holds (`MediaPhoto::replyPreview` over `Data::Group`, at most
+    /// `kMaxPreviewImages`).
+    fn preview_thumbs(
+        &self,
+        chat_id: ChatId,
+        message: &ParsedMessage,
+    ) -> Vec<std::sync::Arc<crate::telegram::envelope::MiniThumbnail>> {
+        const MAX_PREVIEW_IMAGES: usize = 3;
+        let thumb = |content: &MessageContent| match content {
+            MessageContent::Photo(photo) if !photo.is_secret && !photo.has_spoiler => photo
+                .minithumbnail
+                .clone()
+                .filter(|mini| !mini.data.is_empty())
+                .map(std::sync::Arc::new),
+            _ => None,
+        };
+        let own = || {
+            thumb(effective_content(
+                &message.content,
+                message.ephemeral.as_ref(),
+            ))
+            .into_iter()
+            .collect()
+        };
+        if message.media_album_id == 0 {
+            return own();
+        }
+        let Some(history) = self.histories.get(&chat_id.0) else {
+            return own();
+        };
+        let album: Vec<_> = history
+            .messages
+            .values()
+            .filter(|item| item.media_album_id == message.media_album_id)
+            .take(MAX_PREVIEW_IMAGES)
+            .filter_map(|item| thumb(effective_content(&item.content, item.ephemeral.as_ref())))
+            .collect();
+        if album.is_empty() { own() } else { album }
+    }
+
     pub(crate) fn set_chat_last_message(
         &mut self,
         chat_id: ChatId,
@@ -148,6 +190,7 @@ impl Session {
             self.service_text_for(chat_id, content, message.sender, message.is_outgoing)
                 .map(|text| text.plain())
         });
+        let thumbs = message.map(|message| self.preview_thumbs(chat_id, message));
         let chat = self
             .chats
             .entry(chat_id.0)
@@ -156,14 +199,7 @@ impl Session {
             let content = effective_content(&message.content, message.ephemeral.as_ref());
             chat.last_preview = service_preview.unwrap_or_else(|| content.preview());
             chat.last_preview_style = preview_style(content, &chat.last_preview);
-            chat.last_preview_thumb = match content {
-                MessageContent::Photo(photo) if !photo.is_secret && !photo.has_spoiler => photo
-                    .minithumbnail
-                    .clone()
-                    .filter(|mini| !mini.data.is_empty())
-                    .map(std::sync::Arc::new),
-                _ => None,
-            };
+            chat.last_preview_thumbs = thumbs.unwrap_or_default();
             chat.last_preview_sender = if chat.last_preview_style.service {
                 String::new()
             } else {
@@ -183,7 +219,7 @@ impl Session {
         } else {
             chat.last_preview = String::new();
             chat.last_preview_style = ChatPreviewStyle::default();
-            chat.last_preview_thumb = None;
+            chat.last_preview_thumbs = Vec::new();
             chat.last_preview_sender = String::new();
             chat.last_message = None;
         }

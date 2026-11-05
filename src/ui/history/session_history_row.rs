@@ -328,31 +328,19 @@ pub(in crate::ui) fn session_history_row(
     // Media corners follow the bubble (Telegram Desktop `BubbleRounding`): a
     // picture that leads the bubble takes its radius on the edges that are
     // free of the sender name, a caption above/below, badges or reactions.
-    let corners = if bubbleless {
-        MediaCorners::bare(
-            cx,
-            quill::chat_wide::has_right_layout(message.is_outgoing, look.wide),
-            look.joined_above,
-        )
-    } else {
-        let media_led = header.is_none()
-            && leads_with_media(effective_content(
-                &message.content,
-                message.ephemeral.as_ref(),
-            ));
-        let caption_above = has_caption && caption_above_media(&message.content);
-        let caption_below = has_caption && !caption_above;
-        let badges = message.self_destruct_badge(unix_ms_now()).is_some()
-            || message.auto_delete_chip(unix_ms_now()).is_some();
-        MediaCorners::in_bubble(
-            cx,
-            message.is_outgoing,
-            look.plain,
-            media_led || media_bleed,
-            sender.is_none() && !caption_above && !media_bleed,
-            !caption_below && !badges && !has_chips,
-        )
-    };
+    let corners = super::row_parts::media_corners(
+        message,
+        bubbleless,
+        look,
+        super::row_parts::CornerFacts {
+            header: header.is_some(),
+            media_bleed,
+            has_caption,
+            has_sender: sender.is_some(),
+            has_chips,
+        },
+        cx,
+    );
     let covered_content = effective_content(&message.content, message.ephemeral.as_ref());
     // A revealed spoiler is plain media from here on: it shows, opens and
     // plays like any other.
@@ -585,45 +573,8 @@ pub(in crate::ui) fn session_history_row(
                 .into_any_element(),
         ),
     };
-    // Self-destruct badge: counts down locally against `unix_ms_now()` on
-    // the 1-second tick (`ensure_self_destruct_tick`); TDLib deletes the
-    // row when the timer fires.
-    let outgoing = message.is_outgoing;
-    let self_destruct_badge = message.self_destruct_badge(unix_ms_now()).map(|label| {
-        div()
-            .id(("self-destruct-badge", message.id.0 as u64))
-            .mt_1()
-            .text_xs()
-            // Outgoing bubbles are accent-filled: inherit their text
-            // color like the time footer instead of warning orange.
-            .map(|this| {
-                if outgoing {
-                    this.opacity(0.8)
-                } else {
-                    this.text_color(warning_text())
-                }
-            })
-            .child(label)
-    });
-    // Phase B4: auto-delete countdown chip (`message.auto_delete_in`,
-    // schema 1.8.67 line 3148) — "🗑 59m left", decaying on the same
-    // 1-second tick as the self-destruct badge.
-    let auto_delete_chip = message.auto_delete_chip(unix_ms_now()).map(|label| {
-        div()
-            .id(("auto-delete-chip", message.id.0 as u64))
-            .mt_1()
-            .text_xs()
-            // Outgoing bubbles are accent-filled: inherit their text
-            // color like the time footer instead of warning orange.
-            .map(|this| {
-                if outgoing {
-                    this.opacity(0.8)
-                } else {
-                    this.text_color(warning_text())
-                }
-            })
-            .child(label)
-    });
+    // The countdown chips tick with `ensure_self_destruct_tick`.
+    let (self_destruct_badge, auto_delete_chip) = super::row_parts::countdowns(message);
     // A time footer exists and nothing renders after the body/caption: the
     // footer can share its last line instead of taking a row of its own.
     let fact_check = super::fact_check_block::fact_check_block(
@@ -800,6 +751,7 @@ pub(in crate::ui) fn session_history_row(
     let footer_overlay = (media_led || media_bleed)
         && caption_below_el.is_none()
         && (reserve_footer || (bubbleless && message.date > 0));
+    let media_info = super::row_parts::media_info(message, session);
     let caption_below_el = caption_below_el.map(|caption| {
         if media_led {
             div().px_2().py_1().child(caption).into_any_element()
@@ -835,27 +787,15 @@ pub(in crate::ui) fn session_history_row(
             .child(media)
             .into_any_element()
     });
-    // Bubble-less media carries its time itself, so reactions under it
-    // don't push the pill off the picture.
     let extra_media = extra_media.map(|media| {
         if !bubbleless {
             return media;
         }
-        let pill = footer_overlay
-            .then(|| message_footer_meta(&footer_meta))
-            .flatten()
-            .map(|footer| {
-                let meta = footer_meta.mirrored();
-                crate::ui::synthetic::media_footer_pill(
-                    footer,
-                    Some(std::rc::Rc::new(move || message_footer_meta(&meta))),
-                )
-            });
-        div()
-            .relative()
-            .child(media)
-            .children(pill)
-            .into_any_element()
+        super::row_parts::bubbleless_media(
+            media,
+            footer_overlay.then_some(&footer_meta),
+            media_info,
+        )
     });
     let extra_media_present = extra_media.is_some();
     let extra_is_empty =
@@ -909,32 +849,17 @@ pub(in crate::ui) fn session_history_row(
     // A plain text message: the bubble fits its wrapped lines (tdesktop
     // `textRealWidth`). Formatted blocks and link cards keep their own
     // widths.
-    let text_width = match effective_content(&message.content, message.ephemeral.as_ref()) {
-        MessageContent::Text(text)
-            if !look.plain
-                && text.link_preview.is_none()
-                && text.entities.is_empty()
-                && !emoji_only
-                && extra_is_empty =>
-        {
-            let chrome_x = 2. * crate::ui::td::st::chat::MSG_PADDING_X;
+    let text_width = (!look.plain && !emoji_only && extra_is_empty)
+        .then(|| {
             let outer = max_width.map_or(room.outer() as f32, f32::from);
             let extra = if text_reserved {
                 f32::from(footer_meta.reserve(footer_reserve(message.is_outgoing)))
             } else {
                 0.
             };
-            Some(px(super::text_measure::wrapped_width(
-                cx,
-                &text.text,
-                look.font,
-                outer - chrome_x,
-                extra,
-            )
-            .ceil()))
-        }
-        _ => None,
-    };
+            super::row_parts::plain_text_width(message, look.font, outer, extra, cx)
+        })
+        .flatten();
     let mut avatar_link = avatar_link(&sender_avatar, message, cx);
     let mut sender_status = sender_status;
     let mut chrome = |footer_inline: bool| {
@@ -959,6 +884,7 @@ pub(in crate::ui) fn session_history_row(
         }
         chrome.footer_inline = footer_inline;
         chrome.footer_overlay = footer_overlay;
+        chrome.media_info = media_info;
         if footer_overlay && chrome.footer.is_some() {
             let meta = footer_meta.mirrored();
             chrome.footer_rebuild = Some(std::rc::Rc::new(move || message_footer_meta(&meta)));

@@ -39,9 +39,11 @@ impl QuillApp {
             status_indicator,
             info_target,
         } = identity;
+        // Telegram Desktop places the name at topBarArrowPadding.top (8) and
+        // the status at height - 8 - font height (28): two 18px lines 2px
+        // apart, centred in the 54px bar (history_view_top_bar_widget.cpp).
         let title_row = div()
-            .relative()
-            .top(px(1.))
+            .h(px(super::super::td::st::font::HEIGHT))
             .flex()
             .items_center()
             .gap_1()
@@ -83,6 +85,7 @@ impl QuillApp {
                 div()
                     .flex()
                     .flex_col()
+                    .gap(px(2.))
                     .min_w_0()
                     .child(title_row)
                     .when_some(status_line, |this, line| {
@@ -174,6 +177,7 @@ fn conversation_status_line(
 ) -> AnyElement {
     div()
         .id("conversation-status")
+        .h(px(super::super::td::st::font::HEIGHT))
         .flex()
         .items_center()
         .text_size(px(13.))

@@ -465,6 +465,9 @@ impl QuillApp {
                     .id("sidebar-search-field")
                     .key_context(crate::ui::chat_list_keys::CHAT_SEARCH_CONTEXT)
                     .flex_1()
+                    // `filterTop = (areaHeight - height) / 2` in integers.
+                    .self_start()
+                    .mt(px(crate::ui::td::st::dialogs::dialogs_filter_top()))
                     .on_click(cx.listener(|this, _, window, cx| {
                         if !this.search_is_open() {
                             this.open_search_ui(window, cx);
@@ -488,6 +491,8 @@ impl QuillApp {
                                 left: px(0.),
                             })
                             .text_size(px(crate::ui::td::st::basic::FSIZE))
+                            // The text style's lines are the font height.
+                            .line_height(px(crate::ui::td::st::font::HEIGHT))
                             .placeholder_color(crate::ui::td::td(
                                 quill::app_theme::PaletteKey::PlaceholderFg,
                             ))

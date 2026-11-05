@@ -330,6 +330,8 @@ pub(crate) struct MessageChrome {
     /// Builds `footer` again: an animation layer drawing a video under the
     /// pill redraws the pill above it (`anim_layer::mirror`).
     pub footer_rebuild: Option<std::rc::Rc<dyn Fn() -> Option<AnyElement>>>,
+    /// How the picture's time pill sits and when it shows.
+    pub media_info: MediaInfo,
     /// Media-led bubble: thin inset instead of text padding.
     pub media_led: bool,
     /// The media runs edge to edge under a header: the bubble is as wide
@@ -359,11 +361,29 @@ pub(crate) struct MessageChrome {
     pub max_width: Option<Pixels>,
 }
 
+/// The hover group of a message's media: the picture's time pill that only
+/// shows under the pointer (`MediaInfo::on_hover`) reveals in it.
+pub(crate) const MEDIA_INFO_GROUP: &str = "message-media-info";
+
+/// How a picture's time pill sits and when it shows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct MediaInfo {
+    /// A GIF or a video: `Gif::draw` passes `fullBottom - msgDateImgDelta`
+    /// to `drawInfo`, which takes the delta off again, so the pill sits
+    /// twice the delta up.
+    pub video: bool,
+    /// Only under the pointer: `Photo::needInfoDisplay` and
+    /// `GroupedMedia::needInfoDisplay` show the time while sending or
+    /// failed, on the chat's last own message, and under the cursor.
+    pub on_hover: bool,
+}
+
 /// The time on a picture: a dark pill in the bottom-right corner of the
 /// nearest positioned parent (the bubble, or a bubble-less media block).
 pub(crate) fn media_footer_pill(
     footer: AnyElement,
     rebuild: Option<std::rc::Rc<dyn Fn() -> Option<AnyElement>>>,
+    info: MediaInfo,
 ) -> AnyElement {
     // tdesktop `Message::drawInfo` with `InfoDisplayType::Image`: a
     // `msgDateImgBg` pill `msgDateImgDelta` in from the corner, padded by
@@ -378,17 +398,27 @@ pub(crate) fn media_footer_pill(
             .text_color(super::td::td(quill::app_theme::PaletteKey::MsgDateImgFg))
             .child(footer)
     };
+    let lift = if info.video { 2. } else { 1. } * info::IMG_DELTA;
     let pill_at = |footer| {
         pill(footer)
             .absolute()
             .right(px(info::IMG_DELTA))
-            .bottom(px(info::IMG_DELTA))
+            .bottom(px(lift))
+            .when(info.on_hover, |this| {
+                this.invisible()
+                    .group_hover(MEDIA_INFO_GROUP, |style| style.visible())
+            })
     };
     match rebuild {
         // Over an inline video the history's animation layer draws: it
         // draws the pill again, above the video.
         Some(rebuild) => super::anim_layer::mirror(pill_at(footer), move || {
-            pill(rebuild().unwrap_or_else(|| Empty.into_any_element())).into_any_element()
+            pill(rebuild().unwrap_or_else(|| Empty.into_any_element()))
+                .when(info.on_hover, |this| {
+                    this.invisible()
+                        .group_hover(MEDIA_INFO_GROUP, |style| style.visible())
+                })
+                .into_any_element()
         })
         .into_any_element(),
         None => pill_at(footer).into_any_element(),
@@ -485,6 +515,7 @@ fn message_bubble_with_quote(
         footer_inline,
         footer_overlay,
         footer_rebuild,
+        media_info,
         media_led,
         media_bleed,
         text_width,
@@ -662,7 +693,7 @@ fn message_bubble_with_quote(
             };
             match footer {
                 Some(footer) if footer_overlay => {
-                    this.child(media_footer_pill(footer, footer_rebuild))
+                    this.child(media_footer_pill(footer, footer_rebuild, media_info))
                 }
                 Some(footer) if footer_inline => this.child(placed(footer)),
                 Some(footer) => this
@@ -743,6 +774,9 @@ fn message_bubble_with_quote(
     // (`render_history_row_body`).
     div()
         .id(("row", row.id))
+        // `Element::isUnderCursor`: the whole row reveals a hover-only
+        // time pill.
+        .group(MEDIA_INFO_GROUP)
         .w_full()
         .pb(px(super::td::st::chat::MSG_MARGIN_BOTTOM))
         .child(message)

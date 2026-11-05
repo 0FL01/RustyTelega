@@ -577,3 +577,9 @@ The Quill project also changed it in 2026 to follow the power mode
 (`docs/decisions/gpui-kit-0-9-0.md`): `src/app.rs` adds `App::on_power_mode_change`
 and `App::set_low_power_frame_cap`, and applies the platform's report in a
 foreground task that waits for the app, since it can arrive with the app borrowed.
+
+The Quill project changed it in 2026 so bubble widths count kerning, as
+Telegram Desktop's shaped word blocks do
+(`docs/goal/2026-11-04-tdesktop-pixel-exact.md`): `src/text_system.rs` adds
+`TextSystem::shaped_width`, the width of one shaped line in one font without a
+window's layout cache.

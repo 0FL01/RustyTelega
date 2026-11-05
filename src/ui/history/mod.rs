@@ -521,6 +521,7 @@ mod fast_share;
 mod file_album;
 mod file_album_demo;
 pub(super) use file_album::{FileAlbum, file_album_history_row};
+mod row_parts;
 mod session_history_row;
 mod wrap;
 #[allow(unused_imports)]

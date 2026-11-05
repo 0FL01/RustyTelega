@@ -1,5 +1,5 @@
 // Modified by the Quill project (2026) from gpui-pre 0.3.10 (Apache-2.0):
-// `ShapedLine` keeps one decoration run inline. See third_party/gpui-pre/QUILL-CHANGES.md.
+// `ShapedLine` keeps one decoration run inline; `TextSystem::shaped_width`. See third_party/gpui-pre/QUILL-CHANGES.md.
 mod font_fallbacks;
 mod font_features;
 mod line;
@@ -424,6 +424,21 @@ impl TextSystem {
                 font_size,
                 &[FontRun {
                     len: buffer.len(),
+                    font_id,
+                }],
+            )
+            .width
+    }
+
+    /// The shaped width of `text` on one line in one font, kerning and
+    /// ligatures applied, without a window's layout cache.
+    pub fn shaped_width(&self, font_id: FontId, font_size: Pixels, text: &str) -> Pixels {
+        self.platform_text_system
+            .layout_line(
+                text,
+                font_size,
+                &[FontRun {
+                    len: text.len(),
                     font_id,
                 }],
             )

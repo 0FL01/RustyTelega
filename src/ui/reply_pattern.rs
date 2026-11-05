@@ -53,24 +53,23 @@ const PATTERN: [Glyph; 9] = [
 ];
 
 /// A quote strip shifts the pattern left by the quote icon's width and
-/// adds two copies on the left.
+/// adds two copies, shifted the same way (`paintImage` adds the 12 to every
+/// copy).
 const QUOTE_SHIFT: i32 = 12;
 const QUOTE_EXTRA: [Glyph; 2] = [glyph(4, 23, 1, 0.28), glyph(0, 48, 0, 0.24)];
 
 /// The glyphs to draw, at their positions from the strip's right edge.
 pub(super) fn glyphs(quote: bool) -> Vec<Glyph> {
     let shift = if quote { QUOTE_SHIFT } else { 0 };
-    let mut out: Vec<Glyph> = PATTERN
+    let extra: &[Glyph] = if quote { &QUOTE_EXTRA } else { &[] };
+    PATTERN
         .iter()
+        .chain(extra)
         .map(|g| Glyph {
             x: g.x + shift,
             ..*g
         })
-        .collect();
-    if quote {
-        out.extend(QUOTE_EXTRA);
-    }
-    out
+        .collect()
 }
 
 /// `mask` with its color replaced by `rgb` (its alpha kept), scaled to a
@@ -164,8 +163,8 @@ mod tests {
         let quote = glyphs(true);
         assert_eq!(quote.len(), 11);
         assert_eq!((quote[0].x, quote[0].y), (40, 4));
-        // The two extras sit on the left and are not shifted.
-        assert_eq!((quote[9].x, quote[10].x), (4, 0));
+        // The two extras take the quote's shift too (`paintImage`).
+        assert_eq!((quote[9].x, quote[10].x), (16, 12));
     }
 
     #[test]

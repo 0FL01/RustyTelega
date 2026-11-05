@@ -27,6 +27,7 @@ use quill::telegram::envelope::{
 };
 use quill::text::TextEntity;
 mod forum_titles_demo;
+mod mini_thumbs;
 mod row_badges;
 mod topic_fit;
 mod topic_titles;
@@ -426,7 +427,7 @@ pub(super) fn session_chat_row(
     let combine_prefix = preview_sender.is_some()
         && from_last
         && activity.is_none()
-        && chat.last_preview_thumb.is_none()
+        && chat.last_preview_thumbs.is_empty()
         && quill::text::has_rtl_text(&preview);
     let icon: Option<&str> = if row_style.media_icons && from_last {
         chat.last_preview_style.icon
@@ -597,7 +598,11 @@ pub(super) fn session_chat_row(
             div()
                 .flex()
                 .items_center()
-                .gap(px(14.))
+                // `nameLeft` / `textLeft` (68) past `padding.left` (10) and
+                // the 46px photo.
+                .gap(px(crate::ui::td::st::dialogs::NAME_LEFT
+                    - crate::ui::td::st::dialogs::ROW_PADDING_LEFT
+                    - CHAT_ROW_AVATAR))
                 // Parity slice: circular chat photo or colored initials for
                 // every chat-list row / chat type.
                 // Slice CL3: the select-mode check circle precedes the
@@ -671,17 +676,7 @@ pub(super) fn session_chat_row(
                                             },
                                         )
                                         .when_some(kind_icon, |this, icon| {
-                                            let mask = match icon {
-                                                IconName::Megaphone => Some(crate::ui::td::TdIcon::DialogsChannel),
-                                                IconName::Users => Some(crate::ui::td::TdIcon::DialogsChat),
-                                                IconName::Bot => Some(crate::ui::td::TdIcon::DialogsBot),
-                                                _ => None,
-                                            };
-                                            if let Some(mask) = mask {
-                                                this.child(crate::ui::td::td_icon(mask, crate::ui::td::td(quill::app_theme::PaletteKey::DialogsChatIconFg)))
-                                            } else {
-                                                this.child(row_glyph(icon, muted_fg))
-                                            }
+                                            this.child(mini_thumbs::chat_type_icon(icon, muted_fg))
                                         })
                                         .when_some(verify_icon, |this, path| {
                                             this.child(super::bot_verify_icon::bot_verify_icon(path))
@@ -724,7 +719,7 @@ pub(super) fn session_chat_row(
                                             .when(status != RowStatus::None, |this| {
                                                 this.child(row_status_mark(status, cx))
                                             })
-                                            .child(stamp),
+                                            .child(crate::ui::td::label::label(stamp)),
                                     )
                                 }),
                         )
@@ -793,28 +788,12 @@ pub(super) fn session_chat_row(
                                                 )
                                             },
                                         )
-                                        .when_some(
-                                            chat.last_preview_thumb
-                                                .clone()
-                                                .filter(|_| from_last),
-                                            |this, mini| {
-                                                this.child(
-                                                    img(super::image_budget::sized_image(
-                                                        super::image_budget::SizedSource::Mini(
-                                                            mini,
-                                                        ),
-                                                        px(crate::ui::td::st::dialogs::DIALOGS_MINI_PREVIEW_SIZE),
-                                                    ))
-                                                    .id(("preview-thumb", id.0 as u64))
-                                                    .size(px(crate::ui::td::st::dialogs::DIALOGS_MINI_PREVIEW_SIZE))
-                                                    .aspect_square()
-                                                    .flex_none()
-                                                    .mr(px(crate::ui::td::st::dialogs::DIALOGS_MINI_PREVIEW_RIGHT))
-                                                    .rounded(px(crate::ui::td::st::dialogs::DIALOGS_MINI_PREVIEW_RADIUS))
-                                                    .object_fit(ObjectFit::Cover),
-                                                )
-                                            },
-                                        )
+                                        .when(from_last, |this| {
+                                            this.children(mini_thumbs::mini_previews(
+                                                id,
+                                                &chat.last_preview_thumbs,
+                                            ))
+                                        })
                                         .child(match activity {
                                             // Typing / recording / uploading replaces
                                             // the preview, in the accent color.

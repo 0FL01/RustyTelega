@@ -1,0 +1,125 @@
+# Goal: Pixel-exact main window after Telegram Desktop (Night)
+
+Status: in progress
+Source: user instruction 2026-11-04 ("Идём за пиксель пёрфектом", then "Реализовать и коммит пуш потом, так же документируй в репо прогресс в цель"); reference `artifacts/telegram-donor.png`; follows `2026-11-04-tdesktop-pixel-perfect-main-window.md`
+Last updated: 2026-11-05
+
+## Objective
+
+The previous goal left 2.11% of the main window differing at tolerance 24, with avatars, photos and the GIF masked out, and called the rest glyph antialiasing and fixture content. A per-run alignment check showed part of it is geometry: seven text runs sit 1 to 3 px off. This goal takes the window to the reference without masks: every text run at shift (0,0), glyphs rasterised the way Qt/FreeType draws them, emoji from Telegram Desktop's sprite sheets, and fixture pictures taken from the reference.
+
+## Execution Directive
+
+Complete the frozen Required Outcomes using the listed Change Envelope and Primary Evidence. Work on the smallest unresolved outcome. Do not add requirements from reviews, tests, tools, speculative risks, or optional source text. Finish when every required outcome is resolved and affected constraints remain satisfied.
+
+## Frozen Contract
+
+### Required Outcomes
+
+Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tdesktop_parity/build.sh`, then `capture.sh`) checked with `align.py` (text-run shift and ink) and `diff.py --no-masks` (share at tolerances 24, 8 and 0).
+
+- **R1: Strict tooling.**
+  - Acceptance:
+    - `align.py` reports every text run's best shift and ink ratio against the reference.
+    - `diff.py` reports tolerances 24, 8 and 0 and the largest delta per region, and has `--no-masks`.
+    - `build.sh` builds the capture binary in its own target directory (a `cargo test` relink no longer breaks captures).
+  - Status: verified
+  - Evidence: baseline on the previous commit — 7 runs shifted (search placeholder (0,+1), list date (+1,0), header name and status (0,+1), message time (+1,0), GIF time (0,+3), composer placeholder (−1,+1)); ink ratio 1.06–1.22; `diff.py` total 2.11% masked, 7.26% `--no-masks`.
+- **R2: Geometry.**
+  - Source: plan, Phase 1.
+  - Acceptance:
+    - `align.py` reports (0,0) for every run.
+    - Media timestamps follow `Photo::needInfoDisplay`, `Gif::needInfoDisplay` and the grouped variant.
+    - Album previews show up to three mini thumbnails with tdesktop metrics.
+    - The quote extras of the reply pattern take the +12 shift.
+  - Status: in progress
+  - Evidence (2026-11-05 capture): 21 of 22 runs at (0,0). Fixed from tdesktop sources:
+    - header name and status on 18px lines at top 8 and 28;
+    - search field at `filterTop = (54-35)/2` (integer), 18px lines;
+    - composer field min height `historySendSize.height - 2*padding` (28, `InitMessageFieldGeometry`), document margin 4 plus placeholder margin 2, 18px lines (the kit input set its own 1.25rem line height, so the line height goes on the textarea);
+    - bubble width from shaped words, kerning included (`ceil(400.21)` = 401, where the per-character sum gave 402), which moved the message time;
+    - GIF and video info `msgDateImgDelta` higher (`Gif::draw` passes `fullBottom - msgDateImgDelta`);
+    - photo time only under the pointer, while sending or failed, or on the last own message (`Photo::needInfoDisplay`);
+    - up to three album mini previews with `dialogsMiniPreviewSkip`;
+    - row text at `textLeft` 68 with chat type icons at their own offsets (3/1 px) and `dialogsChatTypeSkip`;
+    - quote extras shifted by 12;
+    - right-aligned labels ceiled (`style::font::width`, `src/ui/td/label.rs`).
+  - Left: "list date 1" shows +1 from sub-pixel glyph placement inside "10:13PM" (the string's end matches, its start does not); revisit after R3.
+  - Region diff (tolerance 24, masks on): rail 1.43, list 1.45, header 0.55, pinned 2.69, history 2.46, composer 0.47, total 2.00 (was 2.11).
+- **R3: Glyph rasterisation.**
+  - Source: plan, Phase 2 (user: FreeType LIGHT on Linux).
+  - Acceptance:
+    - On Linux, grayscale glyphs are rasterised by FreeType with light (hintslight) hinting.
+    - Blending matches Qt's.
+    - `align.py` ink ratios are within 1.00 ± 0.03.
+  - Status: open
+- **R4: Telegram emoji set.**
+  - Source: plan, Phase 3 (user: bundle the sheets, default).
+  - Acceptance:
+    - The tdesktop sheets `emoji_1..8.webp` are bundled as the default "Telegram" set, indexed as `codegen_emoji` indexes `emoji.txt`.
+    - Inline emoji use 18 px plus 1 px padding, vertically centred.
+    - 🤖 draws in the chat list.
+    - Saved choices are kept.
+  - Status: open
+- **R5: Fixture from the reference.**
+  - Source: plan, Phase 4 (user: crop from the reference).
+  - Acceptance:
+    - With `QUILL_PARITY_DONOR` set, the demo crops avatars, mini thumbnails, the photo, the reply thumbnail, the GIF frame and the reply pattern emoji from the reference.
+    - Nothing is committed.
+    - The photo is 322 px wide.
+    - `capture.sh` sets the variable.
+    - `diff.py` masks only the reference's mouse pointer.
+  - Status: open
+- **R6: Delivery.**
+  - Source: user instruction "коммит пуш".
+  - Acceptance: committed and pushed to `origin/main`, with this document recording progress.
+  - Status: open
+
+### Constraints
+
+- C1: Geometry and colours from the tdesktop sources, not from measuring the picture (the picture is the check).
+- C2: The narrow layout (history pane under 880px) keeps working.
+- C3: Existing user settings stay switchable; a saved emoji set or other choice is not overwritten.
+- C4: No committed screenshots or crops of the reference.
+
+### Non-goals
+
+- Other screens beyond what the rasteriser and emoji change touch globally.
+- The light theme.
+- macOS and Windows glyph rasterisation (R3 is Linux only).
+
+## Change Envelope
+
+- Target: main window rendering, its demo fixture, the Linux glyph rasteriser and the emoji set.
+- Expected paths:
+  - `scripts/tdesktop_parity/*`
+  - `src/ui/{search_ui/chat_search_bar.rs,conversation/*,chat_row/*,synthetic.rs,history/*,reply_pattern.rs,td/*,tdesktop_parity_demo.rs,app.rs,emoji_sprites.rs,emoji_style_ui.rs,chatlist_style.rs,message_text/*}`
+  - `src/state/{chat_types.rs,session_apply.rs}`
+  - `src/emoji_sets_style/*`
+  - `third_party/gpui-pre-wgpu/src/{cosmic_text_system.rs,wgpu_renderer.rs}`
+  - `assets/emoji/telegram/`
+  - `THIRD_PARTY.md`
+- Forbidden: committed screenshots or reference crops.
+
+## Current Checkpoint
+
+- Closes: R2 (one sub-pixel run left), then R3.
+
+## Current State
+
+- Resolved: R1. R2 in progress (21/22 runs aligned).
+- Last relevant evidence: the 2026-11-05 capture in R2.
+- Blocker: none.
+
+## Material Decisions
+
+- 2026-11-04: fixture pictures are cropped from the reference at run time, never committed (user).
+- 2026-11-04: Telegram Desktop's emoji sheets are bundled and become the default set (user).
+- 2026-11-04: Linux glyphs go through FreeType with light hinting (user). The donor's desktop uses hintslight, grayscale, according to `kdeglobals` and fontconfig on the capture machine, and the reference has no colour fringes.
+
+## Checkpoint History
+
+- 2026-11-05: captures froze on the first frame because the nested KWin locked with the desktop (logind) and stopped sending frame callbacks; `capture.sh` passes `--no-lockscreen`. `build.sh` builds without `demo-capture` into `target/parity` (`QUILL_NATIVE_ROOT` for a local alsa-lib RPM root).
+- 2026-11-05: Phase 1 committed. `cargo test --lib` 7139 passed; `cargo test --features demo-capture --bin quill` 2726 passed, 1 failed (`every_setting_has_a_place_to_land`, load-dependent as before). Two clock tests (`*_reads_the_pickers_clock`) need a 24-hour `LC_TIME`; they fail under `en_US` before and after this change.
+
+- 2026-11-04: plan approved (`/home/stfu/.claude/plans/linear-snuggling-dahl.md`). Open Sans in `assets/fonts` is byte-identical to `lib_ui/fonts`.

@@ -372,8 +372,6 @@ impl QuillApp {
                                         .flex_1()
                                         .min_w_0()
                                         .mb(px(super::td::st::compose::HISTORY_SEND_PADDING))
-                                        .relative()
-                                        .top(px(-4.))
                                         .map(|field| self.emoji_words_hover(field, cx))
                                         // tdesktop hides the field behind a
                                         // rich draft's preview.
@@ -388,7 +386,11 @@ impl QuillApp {
                                                 .text_size(px(13.))
                                                 .appearance(false)
                                                 .bordered(false)
-                                                .editor_padding(gpui_kit::Edges { top: px(0.), right: px(5.), bottom: px(0.), left: px(5.) })
+                                                .editor_padding(super::td::st::compose::history_field_padding())
+                                                // historyTextStyle lines are
+                                                // the font height
+                                                // (BlockLineHeight).
+                                                .line_height(px(super::td::st::font::HEIGHT))
                                                 .placeholder_color(super::td::td(quill::app_theme::PaletteKey::PlaceholderFg))
                                                 .placeholder_focus_color(super::td::td(quill::app_theme::PaletteKey::PlaceholderFgActive))
                                                 .aria_label(tr(keys::SR_CHAT_COLUMN_MESSAGE))
