@@ -579,6 +579,7 @@ mod suggestions_block;
 mod system_unlock;
 pub(crate) mod td;
 mod tdesktop_parity_demo;
+mod tdesktop_parity_donor;
 mod text_rows;
 mod threads;
 mod threads_demo;

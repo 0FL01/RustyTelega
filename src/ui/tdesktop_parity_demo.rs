@@ -50,20 +50,30 @@ fn file(id: i32, name: &str, size: i64) -> Value {
 }
 
 fn photo(id: i32, name: &str, caption: &str) -> Value {
-    let mini = image::open(demo_media_allowlist().join(name))
-        .ok()
-        .and_then(|image| {
-            let image = image.thumbnail(40, 40);
-            let mut bytes = std::io::Cursor::new(Vec::new());
-            image.write_to(&mut bytes, image::ImageFormat::Jpeg).ok()?;
-            Some(
-                json!({"@type":"minithumbnail", "width":image.width(), "height":image.height(),
+    photo_sized(id, name, caption, (1100, 740))
+}
+
+fn photo_sized(id: i32, name: &str, caption: &str, (width, height): (u32, u32)) -> Value {
+    let donor_mini = std::path::Path::new(name)
+        .is_absolute()
+        .then(|| super::tdesktop_parity_donor::minithumbnail(std::path::Path::new(name)))
+        .flatten();
+    let mini = donor_mini.or_else(|| {
+        image::open(demo_media_allowlist().join(name))
+            .ok()
+            .and_then(|image| {
+                let image = image.thumbnail(40, 40);
+                let mut bytes = std::io::Cursor::new(Vec::new());
+                image.write_to(&mut bytes, image::ImageFormat::Jpeg).ok()?;
+                Some(
+                    json!({"@type":"minithumbnail", "width":image.width(), "height":image.height(),
             "data":base64::engine::general_purpose::STANDARD.encode(bytes.into_inner())}),
-            )
-        });
+                )
+            })
+    });
     json!({"@type":"messagePhoto", "photo":{"@type":"photo", "has_stickers":false,
         "minithumbnail":mini,"sizes":[{"@type":"photoSize","type":"m",
-        "photo":file(id,name,24),"width":1100,"height":740,"progressive_sizes":[]}]},
+        "photo":file(id,name,24),"width":width,"height":height,"progressive_sizes":[]}]},
         "caption":{"@type":"formattedText","text":caption,"entities":[]},
         "show_caption_above_media":false,"has_spoiler":false,"is_secret":false})
 }
@@ -120,6 +130,34 @@ fn voice(id: i32, duration: i32, size: i64) -> Value {
 }
 
 fn seed(sink: Arc<MemorySink>) -> Session {
+    // With `QUILL_PARITY_DONOR`, the pictures come from the reference.
+    let donor = super::tdesktop_parity_donor::prepare();
+    let pick = |path: Option<&std::path::PathBuf>, fallback: &str| -> String {
+        path.map_or_else(
+            || fallback.to_string(),
+            |path| path.to_string_lossy().into_owned(),
+        )
+    };
+    let me_avatar = pick(donor.as_ref().map(|d| &d.me_avatar), "showcase/av05.png");
+    let lain_avatar = pick(donor.as_ref().map(|d| &d.lain_avatar), "showcase/av01.png");
+    let reply_thumb = pick(donor.as_ref().map(|d| &d.reply_thumb), "showcase/p5.jpg");
+    let photo_file = pick(donor.as_ref().map(|d| &d.photo), "showcase/p6.jpg");
+    let photo_size = if donor.is_some() {
+        super::tdesktop_parity_donor::PHOTO_SIZE
+    } else {
+        (1100, 740)
+    };
+    let gif_still = pick(donor.as_ref().map(|d| &d.gif), "demo-gif-1.png");
+    // The reference shows one frame: the clip is that frame.
+    let gif_clip = pick(donor.as_ref().map(|d| &d.gif_clip), "demo-gif.gif");
+    let list_avatar = |n: usize, fallback: &str| {
+        pick(donor.as_ref().and_then(|d| d.list_avatars.get(n)), fallback)
+    };
+    let row_mini =
+        |n: usize, fallback: &str| pick(donor.as_ref().and_then(|d| d.row_minis.get(n)), fallback);
+    let album_mini = |n: usize, fallback: &str| {
+        pick(donor.as_ref().and_then(|d| d.album_minis.get(n)), fallback)
+    };
     let mut session = seed_ready_chats_session(sink.clone());
     let seq = AtomicU64::new(session.last_seq);
     let dyn_sink: Arc<dyn DiagnosticSink> = sink;
@@ -156,14 +194,14 @@ fn seed(sink: Arc<MemorySink>) -> Session {
             ME,
             "Andrey",
             "Bash",
-            "showcase/av05.png",
+            me_avatar.as_str(),
             json!({"@type":"userStatusRecently"}),
         ),
         (
             CHAT,
             "Lain",
             "",
-            "showcase/av01.png",
+            lain_avatar.as_str(),
             json!({"@type":"userStatusOffline","was_online":now-60}),
         ),
     ] {
@@ -176,7 +214,7 @@ fn seed(sink: Arc<MemorySink>) -> Session {
     }
     updates.push(json!({"@type":"updateOption","name":"my_id","value":{"@type":"optionValueInteger","value":ME}}));
     updates.push(json!({"@type":"updateNewChat","chat":{"id":CHAT,"title":"Lain",
-        "type":{"@type":"chatTypePrivate","user_id":CHAT},"photo":avatar(6201,"showcase/av01.png"),"unread_count":0}}));
+        "type":{"@type":"chatTypePrivate","user_id":CHAT},"photo":avatar(6201,&lain_avatar),"unread_count":0}}));
     let rows = [
         (
             301,
@@ -212,10 +250,16 @@ fn seed(sink: Arc<MemorySink>) -> Session {
         ),
     ];
     for (n, (id, title, date, caption, av, pic)) in rows.iter().enumerate() {
+        let av = list_avatar(n, av);
+        let pic = if *id == 304 {
+            album_mini(2, pic)
+        } else {
+            row_mini(n, pic)
+        };
         updates.push(
             json!({"@type":"updateNewChat","chat":{"id":id,"title":title,
             "type":{"@type":"chatTypeSupergroup","supergroup_id":id,"is_channel":true},
-            "photo":avatar(6300+n as i32,av),"unread_count":0}}),
+            "photo":avatar(6300+n as i32,&av),"unread_count":0}}),
         );
         updates.push(json!({"@type":"updateSupergroup","supergroup":{"@type":"supergroup","id":id,
             "is_channel":true,"status":{"@type":"chatMemberStatusMember"},"member_count":1000,
@@ -228,17 +272,18 @@ fn seed(sink: Arc<MemorySink>) -> Session {
                 .iter()
                 .enumerate()
             {
+                let name = album_mini(index, name);
                 updates.push(json!({"@type":"updateNewMessage","message":{
                     "id": (index as i64 + 1) * STEP,"chat_id":id,
                     "sender_id":{"@type":"messageSenderChat","chat_id":id},
                     "date":date,"is_channel_post":true,"media_album_id":"88001",
-                    "content":photo(6600 + index as i32,name,if index == 2 { caption } else { "" })}}));
+                    "content":photo(6600 + index as i32,&name,if index == 2 { caption } else { "" })}}));
             }
         }
         updates.push(json!({"@type":"updateChatLastMessage","chat_id":id,"last_message":{
             "id":if *id == 304 { 3*STEP } else { STEP },"chat_id":id,"sender_id":{"@type":"messageSenderChat","chat_id":id},
             "media_album_id":if *id == 304 { "88001" } else { "0" },
-            "date":date,"is_outgoing":false,"is_channel_post":true,"content":photo(6400+n as i32,pic,caption)},
+            "date":date,"is_outgoing":false,"is_channel_post":true,"content":photo(6400+n as i32,&pic,caption)},
             "positions":[{"@type":"chatPosition","list":{"@type":"chatListMain"},"order":order,"is_pinned":false},
             {"@type":"chatPosition","list":{"@type":"chatListFolder","chat_folder_id":FOLDER},"order":order,"is_pinned":false}]}));
     }
@@ -248,7 +293,7 @@ fn seed(sink: Arc<MemorySink>) -> Session {
         "display_url":"github.com/shinycake/quill","site_name":"GitHub","title":"quill",
         "description":{"@type":"formattedText","text":"","entities":[]},"author":"",
         "type":{"@type":"linkPreviewTypeArticle","photo":{"@type":"photo","sizes":[{"@type":"photoSize",
-        "type":"m","photo":file(6500,"showcase/p5.jpg",24),"width":1100,"height":740}]}},
+        "type":"m","photo":file(6500,&reply_thumb,24),"width":1100,"height":740}]}},
         "has_large_media":true,"show_large_media":true,"show_media_above_description":false,
         "skip_confirmation":true,"show_above_text":false,"instant_view_version":0}));
     }
@@ -276,7 +321,7 @@ fn seed(sink: Arc<MemorySink>) -> Session {
         4 * STEP,
         ME,
         at(10, 40),
-        photo(6502, "showcase/p6.jpg", ""),
+        photo_sized(6502, &photo_file, "", photo_size),
         None,
     ));
     updates.push(message(5*STEP, CHAT, at(11,3), text("DHCP-сервер LAN включён, три LAN-порта объединены в мост.\nWAN настроен на DHCP, WAN6 — DHCPv6.\nWi-Fi выключен; постоянный flow offloading оставлен выключенным по умолчанию.\nСтарые пароли, наши разрешённые SSH-ключи, тестовые настройки и дополнительное лабораторное логирование удалены.\nСерверные SSH-ключи созданы заново.\nСобственные MAC, калибровки, загрузчики и разметка сохранены."), None));
@@ -301,20 +346,20 @@ fn seed(sink: Arc<MemorySink>) -> Session {
     updates.push(message(9*STEP, CHAT, at(11,18), json!({"@type":"messageAnimation","animation":{"@type":"animation",
         "duration":1,"width":480,"height":270,"file_name":"demo-gif.gif","mime_type":"image/gif","has_stickers":false,
         "minithumbnail":null,"thumbnail":{"@type":"thumbnail","format":{"@type":"thumbnailFormatJpeg"},
-        "width":480,"height":270,"file":file(6506,"demo-gif-1.png",24)},"animation":file(6507,"demo-gif.gif",24)},
+        "width":480,"height":270,"file":file(6506,&gif_still,24)},"animation":file(6507,&gif_clip,24)},
         "caption":{"@type":"formattedText","text":"","entities":[]},"show_caption_above_media":false,
         "has_spoiler":false,"is_secret":false}), Some(7*STEP)));
     for (id, name, size) in [
-        (6500, "showcase/p5.jpg", 24),
-        (6502, "showcase/p6.jpg", 24),
+        (6500, reply_thumb.as_str(), 24),
+        (6502, photo_file.as_str(), 24),
         (6503, "demo-voice.ogg", 338750),
         (6504, "demo-voice.ogg", 144282),
         (6505, "demo-voice.ogg", 24000),
-        (6506, "demo-gif-1.png", 24),
-        (6507, "demo-gif.gif", 24),
+        (6506, gif_still.as_str(), 24),
     ] {
         updates.push(json!({"@type":"updateFile", "file":file(id, name, size)}));
     }
+    updates.push(json!({"@type":"updateFile", "file":file(6507, &gif_clip, 24)}));
     updates.push(
         json!({"@type":"updateChatReadOutbox","chat_id":CHAT,"last_read_outbox_message_id":8*STEP}),
     );

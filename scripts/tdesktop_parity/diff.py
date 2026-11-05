@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare a Quill capture with the Telegram Desktop reference, region by region.
 
-Usage: python3 -I diff.py [--no-masks] <reference.png> <capture.png> <out-dir>
+Usage: python3 -I diff.py [--masks] <reference.png> <capture.png> <out-dir>
 
 Both images are cropped to the reference size from the top-left corner. For
 each region of the main window it prints the share of pixels whose colour
@@ -9,10 +9,10 @@ differs by more than a small tolerance, and writes:
   <out>/heat.png      differing pixels in red over a dimmed reference
   <out>/side-<region>.png  reference and capture of one region, side by side
   <out>/blend.png     50/50 overlay (misaligned edges show up doubled)
-Avatars and photos are masked, they are fixture content, not chrome;
---no-masks compares them too (the demo crops them from the reference when
-QUILL_PARITY_DONOR is set). The mouse pointer in the reference is always
-masked. The table also gives the share at the strict tolerances and the
+The demo cuts avatars, photos and the GIF frame from the reference
+(QUILL_PARITY_DONOR, set by capture.sh), so everything is compared; --masks
+leaves those pictures out, for a capture made without the reference. The
+mouse pointer in the reference is always masked. The table also gives the share at the strict tolerances and the
 largest summed delta of each region.
 """
 import sys
@@ -47,8 +47,8 @@ POINTER = (378, 702, 398, 730)  # the mouse pointer in the reference
 
 def main() -> int:
     args = sys.argv[1:]
-    masked = "--no-masks" not in args
-    args = [a for a in args if a != "--no-masks"]
+    masked = "--masks" in args
+    args = [a for a in args if a not in ("--masks", "--no-masks")]
     ref_path, cap_path, out = (Path(a) for a in args[:3])
     out.mkdir(parents=True, exist_ok=True)
     ref = Image.open(ref_path).convert("RGB")

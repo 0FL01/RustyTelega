@@ -12,8 +12,17 @@
 # and pictures decoded after it never show, hence --no-lockscreen. Needs
 # kwin_wayland, spectacle and dbus-run-session.
 #
+# The demo cuts its pictures (avatars, photo, GIF frame, mini previews) from
+# the reference when QUILL_PARITY_DONOR names it; this script sets it to
+# artifacts/telegram-donor.png unless it is set already or the file is
+# missing.
+#
 # Usage: capture.sh <quill-binary> <out.png> [kind]
 set -euo pipefail
+DONOR_DEFAULT="$(cd "$(dirname "$0")/../.." && pwd)/artifacts/telegram-donor.png"
+if [ -z "${QUILL_PARITY_DONOR+set}" ] && [ -f "$DONOR_DEFAULT" ]; then
+  export QUILL_PARITY_DONOR="$DONOR_DEFAULT"
+fi
 
 BIN=$(realpath "${1:?quill binary}")
 PNG=$(realpath -m "${2:?output png}")

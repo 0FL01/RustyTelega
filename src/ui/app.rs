@@ -277,6 +277,7 @@ impl QuillApp {
             let mut roots = vec![demo_media_allowlist()];
             roots.extend(super::demo::demo_stress_avatar_dir());
             roots.extend(super::demo::demo_stress_photo_dir());
+            roots.extend(super::tdesktop_parity_donor::dir());
             roots
         } else {
             Vec::new()

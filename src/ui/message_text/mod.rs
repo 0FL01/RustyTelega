@@ -8,7 +8,6 @@ use super::message_payments::inline_keyboard_button;
 use super::pressable::PressableDiv;
 use super::sticker_player::StickerView;
 use super::*;
-use gpui_kit::component::avatar::Avatar;
 use gpui_kit::component::button::*;
 use gpui_kit::component::*;
 use gpui_kit::prelude::FluentBuilder;
@@ -413,15 +412,19 @@ pub(super) fn kit_avatar_element(
     size: Pixels,
 ) -> AnyElement {
     if let Some(path) = photo {
-        return Avatar::new()
-            .name(name)
-            .with_size(size)
+        // Telegram Desktop's userpic: the photo in a circle, no frame
+        // (`PeerData::paintUserpic`). The kit avatar draws a border.
+        return img(super::image_budget::sized_image(
             // Decoded at the drawn size, not the file's (`image_budget`).
-            .src(super::image_budget::sized_image(
-                super::image_budget::SizedSource::Path(std::sync::Arc::from(path)),
-                size,
-            ))
-            .into_any_element();
+            super::image_budget::SizedSource::Path(std::sync::Arc::from(path)),
+            size,
+        ))
+        .id(SharedString::from(format!("userpic-{name}")))
+        .size(size)
+        .flex_none()
+        .rounded_full()
+        .object_fit(ObjectFit::Cover)
+        .into_any_element();
     }
     initials_circle(name, size)
 }
