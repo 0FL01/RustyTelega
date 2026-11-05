@@ -4,6 +4,9 @@ src/ui/rtl_demo.rs|Telegram Desktop
 src/ui/demos/privacy_media.rs|Telegram Desktop
 # Screenshot fixture compares Quill with the official app.
 src/ui/tdesktop_parity_demo.rs|Telegram Desktop parity
+# Name and attribution of the official app's emoji artwork.
+src/emoji_sets_style/catalog.rs|Self::Tdesktop => "Telegram Desktop",
+src/emoji_sets_style/catalog.rs|Self::Tdesktop => Some("Emoji art from Telegram Desktop"),
 # Detecting another app registered as the tg: link handler.
 src/link_handler.rs|Telegram Desktop
 # Names the official app's theme file format (Quill does not use it).
