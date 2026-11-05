@@ -76,7 +76,7 @@ fn demo_install(root: &std::path::Path) {
     let Ok(dir) = std::env::var("QUILL_DEMO_EMOJI_PACKS") else {
         return;
     };
-    for id in EmojiSetId::ALL.into_iter().filter(|id| !id.is_system()) {
+    for id in EmojiSetId::ALL.into_iter().filter(|id| id.is_download()) {
         if let Ok(zip) =
             std::fs::read(PathBuf::from(&dir).join(format!("emoji-set-{}.zip", id.key())))
         {
@@ -102,11 +102,14 @@ struct Loaded {
 }
 
 fn load_state(root: &std::path::Path, wanted: Option<EmojiSetId>) -> Loaded {
+    let wanted = wanted.unwrap_or_else(|| load_current(root));
+    if wanted.is_bundled() {
+        let _ = quill::emoji_sets_style::bundled::ensure_installed(root);
+    }
     let ready: HashSet<EmojiSetId> = EmojiSetId::ALL
         .into_iter()
         .filter(|id| !id.is_system() && is_ready(&set_dir(root, *id)))
         .collect();
-    let wanted = wanted.unwrap_or_else(|| load_current(root));
     let pack = (!wanted.is_system())
         .then(|| {
             let dir = set_dir(root, wanted);
@@ -229,7 +232,7 @@ impl QuillApp {
             let _ = this.update(cx, |this, cx| {
                 if loaded.current == id {
                     this.apply_emoji_state(loaded, cx);
-                } else {
+                } else if id.is_download() {
                     this.settings.emoji_style.ready.remove(&id);
                     this.download_emoji_set(id, cx);
                 }
@@ -533,6 +536,7 @@ thread_local! {
 fn preview_images(id: EmojiSetId) -> Option<Vec<Arc<RenderImage>>> {
     let bytes: &[u8] = match id {
         EmojiSetId::System => return None,
+        EmojiSetId::Tdesktop => quill::emoji_sets_style::bundled::PREVIEW,
         EmojiSetId::Noto => include_bytes!("../../assets/emoji/sets/emoji-set-noto-preview.png"),
         EmojiSetId::Twemoji => {
             include_bytes!("../../assets/emoji/sets/emoji-set-twemoji-preview.png")
@@ -546,9 +550,7 @@ fn preview_images(id: EmojiSetId) -> Option<Vec<Arc<RenderImage>>> {
     }) {
         return Some(found);
     }
-    let strip = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
-        .ok()?
-        .to_rgba8();
+    let strip = image::load_from_memory(bytes).ok()?.to_rgba8();
     let edge = strip.height();
     let mut images = Vec::with_capacity(PREVIEW.len());
     for i in 0..PREVIEW.len() as u32 {

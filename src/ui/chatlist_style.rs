@@ -207,11 +207,7 @@ pub(crate) fn chat_list_preview_line_layered(
             if let Some(image) = sprite {
                 parts.push((
                     false,
-                    div().child(
-                        img(ImageSource::Render(image))
-                            .size(px(14.))
-                            .object_fit(ObjectFit::Contain),
-                    ),
+                    super::emoji_sprites::inline_glyph(image, px(crate::ui::td::st::basic::FSIZE)),
                 ));
                 continue;
             }

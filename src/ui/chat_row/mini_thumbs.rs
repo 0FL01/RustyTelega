@@ -11,19 +11,23 @@ use quill::telegram::envelope::MiniThumbnail;
 use std::sync::Arc;
 
 /// The chat type icon (`ChatTypeIcon`): its mask at the icon's own offset
-/// from the name's left, the name `dialogsChatTypeSkip` after it (the row's
-/// gap less one).
+/// from the name's left, the name `dialogsChatTypeSkip` after it.
 pub(super) fn chat_type_icon(icon: IconName, muted_fg: Hsla) -> AnyElement {
     let (mask, left) = match icon {
         IconName::Megaphone => (TdIcon::DialogsChannel, 3.),
         IconName::Users => (TdIcon::DialogsChat, 1.),
         IconName::Bot => (TdIcon::DialogsBot, 1.),
-        _ => return row_glyph(icon, muted_fg).into_any_element(),
+        _ => {
+            return div()
+                .mr_1()
+                .child(row_glyph(icon, muted_fg))
+                .into_any_element();
+        }
     };
     div()
         .flex_none()
         .pl(px(left))
-        .mr(px(st::CHAT_TYPE_SKIP - 4.))
+        .mr(px(st::CHAT_TYPE_SKIP))
         .child(td::td_icon(
             mask,
             td::td(quill::app_theme::PaletteKey::DialogsChatIconFg),

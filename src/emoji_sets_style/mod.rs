@@ -15,8 +15,12 @@
 //! - [`pack`]: the pack format (`config.json` + WebP sheets) and unpacking.
 //! - [`split`]: cutting text into plain stretches and pack emoji.
 //! - [`download`]: fetching and installing a pack.
+//! - [`bundled`]: Telegram Desktop's own sheets, shipped inside Quill and
+//!   the default set (`assets/emoji/tdesktop`,
+//!   `scripts/tdesktop_parity/emoji_index`).
 #![deny(clippy::indexing_slicing)]
 
+pub mod bundled;
 pub mod catalog;
 pub mod download;
 pub mod font_probe;

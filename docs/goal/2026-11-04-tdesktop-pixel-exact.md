@@ -66,7 +66,14 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
     - Inline emoji use 18 px plus 1 px padding, vertically centred.
     - 🤖 draws in the chat list.
     - Saved choices are kept.
-  - Status: open
+  - Status: verified
+  - Evidence (2026-11-05):
+    - `codegen` and `lib_base` submodules fetched; `scripts/tdesktop_parity/emoji_index` builds tdesktop's emoji data code against Qt 6 and lists 3900 emoji in sprite order (🤖 = 118: sheet 0, row 3, column 22). `assets/emoji/tdesktop/` holds the sheets (renumbered from 0), the preview and `config.json`.
+    - `EmojiSetId::Tdesktop` ("Telegram Desktop") is the default; `bundled::ensure_installed` writes it once as an ordinary pack. A saved choice (System, Noto, Twemoji) is kept; the Noto fallback for systems without a colour emoji font no longer triggers.
+    - Inline emoji in chat titles and previews: 18 px with 1 px padding (`emoji_sprites::inline_glyph`), shrunk on the CPU by area averaging as `Qt::SmoothTransformation` does (`emoji_inline.rs`); against the reference the robot differs by 1.97 mean grey levels (GPU minification gave 5.3).
+    - The title row has no gap: the verified badge starts at `nameWidth` and the row's top (`drawVerifyCheck`, `rectForName.y()`); badge diff 0.1.
+    - Message text keeps its em-space placeholder width for sprite emoji (the reference has none); tdesktop's 20 px advance there is not done.
+    - Left in "Denis Sexy IT": the reference has ~0.45 px more between "I" and "T" than HarfBuzz's advances; not explained from the sources.
 - **R5: Fixture from the reference.**
   - Source: plan, Phase 4 (user: crop from the reference).
   - Acceptance:

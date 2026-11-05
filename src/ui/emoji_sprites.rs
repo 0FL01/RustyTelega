@@ -63,6 +63,7 @@ pub(super) fn install(set: Option<(EmojiSetId, PathBuf, Arc<SpritePack>)>, cx: &
         })
     });
     let previous = ACTIVE.with(|a| a.replace(next));
+    super::emoji_inline::forget_all();
     if let Some(previous) = previous {
         let sheets = std::mem::take(&mut *previous.sheets.borrow_mut());
         let images: Vec<Arc<RenderImage>> = sheets
@@ -205,6 +206,18 @@ pub(super) fn edge_for(font: Pixels) -> Pixels {
     font * 1.15
 }
 
+/// An emoji in a line of `font` text as Telegram Desktop places it: an
+/// `emojiSize` (18 px at the 13 px interface font) picture with
+/// `emojiPadding` (1 px) on each side, vertically centred in the line
+/// (`text_block.cpp`, `text_renderer.cpp`).
+pub(super) fn inline_glyph(image: Arc<RenderImage>, font: Pixels) -> Div {
+    let scale = f32::from(font) / crate::ui::td::st::basic::FSIZE;
+    div()
+        .flex_none()
+        .px(px(scale))
+        .child(super::emoji_inline::inline_emoji(image, px(18. * scale)))
+}
+
 /// One emoji as a picture `size` wide, when the active set draws it.
 pub(super) fn glyph(emoji: &str, size: Pixels) -> Option<AnyElement> {
     let image = sprite(emoji)?;
@@ -229,7 +242,6 @@ pub(super) fn one_line(text: &str, font: Pixels) -> Option<AnyElement> {
     }
     let pieces = pieces(text)?;
     let last_text = pieces.iter().rposition(|p| p.image.is_none());
-    let edge = edge_for(font);
     let mut line = div()
         .flex()
         .flex_row()
@@ -239,11 +251,7 @@ pub(super) fn one_line(text: &str, font: Pixels) -> Option<AnyElement> {
         .whitespace_nowrap();
     for (position, piece) in pieces.into_iter().enumerate() {
         line = line.child(match piece.image {
-            Some(image) => img(ImageSource::Render(image))
-                .size(edge)
-                .flex_none()
-                .object_fit(ObjectFit::Contain)
-                .into_any_element(),
+            Some(image) => inline_glyph(image, font).into_any_element(),
             None => {
                 let text = text.get(piece.range).unwrap_or_default().to_string();
                 let part = div().whitespace_nowrap().child(text);

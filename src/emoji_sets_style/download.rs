@@ -22,7 +22,7 @@ pub fn is_allowed_url(url: &str) -> bool {
 /// Check `zip` against the pack's hash and install it into
 /// `<app_root>/emoji-sets/<key>`.
 pub fn install(app_root: &Path, id: EmojiSetId, zip: &[u8]) -> Result<(), String> {
-    if id.is_system() {
+    if !id.is_download() {
         return Err("Unknown emoji set.".into());
     }
     let hash = Sha256::digest(zip);
@@ -52,7 +52,7 @@ pub fn install_file(app_root: &Path, file: &Path) -> Result<EmojiSetId, String> 
     let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
     let id = EmojiSetId::ALL
         .into_iter()
-        .find(|id| !id.is_system() && id.sha256() == hex)
+        .find(|id| id.is_download() && id.sha256() == hex)
         .ok_or(NOT_A_PACK)?;
     install(app_root, id, &zip)?;
     Ok(id)
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn only_quill_release_urls() {
-        for id in EmojiSetId::ALL.into_iter().filter(|id| !id.is_system()) {
+        for id in EmojiSetId::ALL.into_iter().filter(|id| id.is_download()) {
             assert!(is_allowed_url(&id.download_url()));
         }
         assert!(!is_allowed_url(
@@ -174,7 +174,7 @@ mod built_packs {
             return;
         };
         let root = std::env::temp_dir().join(format!("quill-emoji-built-{}", std::process::id()));
-        for id in EmojiSetId::ALL.into_iter().filter(|id| !id.is_system()) {
+        for id in EmojiSetId::ALL.into_iter().filter(|id| id.is_download()) {
             let zip = std::fs::read(Path::new(&dir).join(format!("emoji-set-{}.zip", id.key())))
                 .expect("pack");
             assert_eq!(zip.len() as u64, id.bytes(), "{id:?} size");

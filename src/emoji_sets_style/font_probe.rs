@@ -1,8 +1,8 @@
 //! Is a color emoji font installed? Linux ships none by default, so minimal
 //! installs draw tofu for every emoji with the "System" set. tdesktop avoids
-//! this by shipping its own emoji art everywhere; Quill falls back to its
-//! downloadable Noto pack when no color font is found and the user has not
-//! chosen a set.
+//! this by shipping its own emoji art everywhere, and so does Quill now: the
+//! bundled Telegram Desktop set is the default. The Noto fallback only
+//! applies while the default set is the system font.
 #![deny(clippy::indexing_slicing)]
 
 use super::catalog::EmojiSetId;
@@ -37,7 +37,7 @@ pub fn color_emoji_font_installed() -> Option<bool> {
 /// An explicit saved choice always wins; otherwise only a definite "no
 /// color font" answer picks the Noto pack.
 pub fn fallback_set(has_saved_choice: bool, font_installed: Option<bool>) -> Option<EmojiSetId> {
-    if has_saved_choice {
+    if has_saved_choice || !EmojiSetId::default().is_system() {
         return None;
     }
     (font_installed == Some(false)).then_some(EmojiSetId::Noto)
@@ -55,8 +55,9 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_only_without_choice_and_without_font() {
-        assert_eq!(fallback_set(false, Some(false)), Some(EmojiSetId::Noto));
+    fn the_bundled_default_needs_no_fallback() {
+        // The default draws everywhere, so no answer switches sets.
+        assert_eq!(fallback_set(false, Some(false)), None);
         assert_eq!(fallback_set(false, Some(true)), None);
         assert_eq!(fallback_set(false, None), None);
         assert_eq!(fallback_set(true, Some(false)), None);

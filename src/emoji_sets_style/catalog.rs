@@ -12,11 +12,14 @@ pub const RELEASE_TAG: &str = "emoji-sets-v1";
 /// Upper bound for one downloaded pack; a bigger answer is not a pack.
 pub const MAX_PACK_BYTES: u64 = 32 * 1024 * 1024;
 
-/// One emoji set. `System` draws emoji with the platform's emoji font
-/// (tdesktop's built-in set); the others are sprite packs Quill downloads.
+/// One emoji set. `Tdesktop` is Telegram Desktop's own sprite sheets,
+/// bundled with Quill and the default, as tdesktop draws every emoji from
+/// them; `System` draws emoji with the platform's emoji font; the others are
+/// sprite packs Quill downloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum EmojiSetId {
     #[default]
+    Tdesktop,
     System,
     Noto,
     Twemoji,
@@ -24,11 +27,12 @@ pub enum EmojiSetId {
 
 impl EmojiSetId {
     /// In the box's order (tdesktop lists the built-in set first).
-    pub const ALL: [EmojiSetId; 3] = [Self::System, Self::Noto, Self::Twemoji];
+    pub const ALL: [EmojiSetId; 4] = [Self::Tdesktop, Self::System, Self::Noto, Self::Twemoji];
 
     /// The id used in file names and the saved choice.
     pub fn key(self) -> &'static str {
         match self {
+            Self::Tdesktop => "tdesktop",
             Self::System => "system",
             Self::Noto => "noto",
             Self::Twemoji => "twemoji",
@@ -43,6 +47,7 @@ impl EmojiSetId {
     /// emoji, as tdesktop names its built-in set after the art ("Mac").
     pub fn name(self) -> &'static str {
         match self {
+            Self::Tdesktop => "Telegram Desktop",
             Self::System if cfg!(target_os = "macos") => "Apple",
             Self::System if cfg!(target_os = "windows") => "Segoe",
             Self::System => "System",
@@ -51,10 +56,11 @@ impl EmojiSetId {
         }
     }
 
-    /// The pack's size in bytes ("Download 4.3 MB"); 0 for the system set.
+    /// The pack's size in bytes ("Download 4.3 MB"); 0 for the system and
+    /// bundled sets.
     pub fn bytes(self) -> u64 {
         match self {
-            Self::System => 0,
+            Self::Tdesktop | Self::System => 0,
             Self::Noto => 4_477_582,
             Self::Twemoji => 3_126_471,
         }
@@ -64,7 +70,7 @@ impl EmojiSetId {
     /// is thrown away.
     pub fn sha256(self) -> &'static str {
         match self {
-            Self::System => "",
+            Self::Tdesktop | Self::System => "",
             Self::Noto => "5901f09e92fac8ebf905f9ff15de51e823bd590b26a9646605ee2a824a03ef92",
             Self::Twemoji => "f767bf24fb1c3dc8fb1d1a4cf884599ae2e2b4b838397d27db4ea0ade0ea9b6f",
         }
@@ -72,6 +78,16 @@ impl EmojiSetId {
 
     pub fn is_system(self) -> bool {
         self == Self::System
+    }
+
+    /// Shipped inside Quill: never downloaded, always ready.
+    pub fn is_bundled(self) -> bool {
+        self == Self::Tdesktop
+    }
+
+    /// A pack fetched from the release (not the system font, not bundled).
+    pub fn is_download(self) -> bool {
+        !self.is_system() && !self.is_bundled()
     }
 
     /// Where the pack is downloaded from.
@@ -86,6 +102,7 @@ impl EmojiSetId {
     /// attribution).
     pub fn credit(self) -> Option<&'static str> {
         match self {
+            Self::Tdesktop => Some("Emoji art from Telegram Desktop"),
             Self::System => None,
             Self::Noto => Some("Noto Emoji by Google, Apache License 2.0, resized by Quill"),
             Self::Twemoji => {
@@ -107,7 +124,7 @@ pub fn set_dir(app_root: &Path, id: EmojiSetId) -> PathBuf {
 const CURRENT_FILE: &str = "current";
 
 /// The chosen set. App-wide, like tdesktop's (not per account). A missing
-/// or unknown value is the system set.
+/// or unknown value is the default, the bundled Telegram Desktop set.
 pub fn load_current(app_root: &Path) -> EmojiSetId {
     std::fs::read_to_string(sets_dir(app_root).join(CURRENT_FILE))
         .ok()
@@ -167,7 +184,7 @@ impl SetState {
                 total: id.bytes(),
             };
         }
-        if id.is_system() || ready {
+        if !id.is_download() || ready {
             return Self::Ready;
         }
         if let Some((failed, reason)) = failed
@@ -248,7 +265,7 @@ mod tests {
 
     #[test]
     fn packs_have_a_url_size_and_hash() {
-        for id in EmojiSetId::ALL.into_iter().filter(|id| !id.is_system()) {
+        for id in EmojiSetId::ALL.into_iter().filter(|id| id.is_download()) {
             assert!(
                 id.download_url()
                     .starts_with("https://github.com/shinycake/quill/")
@@ -290,6 +307,10 @@ mod tests {
             SetState::of(Twemoji, System, false, None, Some((Twemoji, "Nope."))),
             SetState::Failed("Nope.".into())
         );
+        assert_eq!(
+            SetState::of(Tdesktop, Noto, false, None, None),
+            SetState::Ready
+        );
         assert!(!SetState::Active.clickable());
         assert!(SetState::Ready.clickable());
     }
@@ -316,11 +337,14 @@ mod tests {
     fn current_set_persists() {
         let root = std::env::temp_dir().join(format!("quill-emoji-current-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
-        assert_eq!(load_current(&root), EmojiSetId::System);
+        // Nothing saved: the bundled Telegram Desktop set.
+        assert_eq!(load_current(&root), EmojiSetId::Tdesktop);
         save_current(&root, EmojiSetId::Twemoji).unwrap();
         assert_eq!(load_current(&root), EmojiSetId::Twemoji);
-        std::fs::write(sets_dir(&root).join(CURRENT_FILE), "joypixels").unwrap();
+        save_current(&root, EmojiSetId::System).unwrap();
         assert_eq!(load_current(&root), EmojiSetId::System);
+        std::fs::write(sets_dir(&root).join(CURRENT_FILE), "joypixels").unwrap();
+        assert_eq!(load_current(&root), EmojiSetId::Tdesktop);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

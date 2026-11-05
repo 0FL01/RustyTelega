@@ -59,8 +59,8 @@ fn switching_sets_draws_emoji_from_sprites(cx: &mut TestAppContext) {
     vcx.run_until_parked();
     app.update(&mut vcx, |app, cx| app.open_emoji_set_style(cx));
     vcx.run_until_parked();
-    assert_eq!(emoji_sprites::active_set(), EmojiSetId::System);
-    assert!(emoji_sprites::pieces("hi 😀").is_none());
+    // Nothing saved: the bundled Telegram Desktop sheets draw.
+    assert_eq!(emoji_sprites::active_set(), EmojiSetId::Tdesktop);
 
     app.update(&mut vcx, |app, cx| {
         app.choose_emoji_set(EmojiSetId::Noto, cx)

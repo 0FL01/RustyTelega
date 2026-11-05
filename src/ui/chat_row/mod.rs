@@ -659,27 +659,35 @@ pub(super) fn session_chat_row(
                                 .h(px(crate::ui::td::st::font::HEIGHT))
                                 .gap_2()
                                 .child(
+                                    // No gap: the icons before the name end in
+                                    // `dialogsChatTypeSkip`, and the badge after
+                                    // it starts at `nameWidth` (`drawVerifyCheck`).
                                     div()
                                         .flex()
                                         .items_center()
-                                        .gap_1()
+                                        .h_full()
+                                        .line_height(px(crate::ui::td::st::font::HEIGHT))
                                         .min_w_0()
                                         .flex_1()
                                         // Phase B1: lock for secret chats (E2E).
                                         .when(
                                             matches!(chat.kind, ChatKind::Secret { .. }),
                                             |this| {
-                                                this.child(row_glyph(
+                                                this.child(div().mr_1().child(row_glyph(
                                                     IconName::Lock,
                                                     success().into(),
-                                                ))
+                                                )))
                                             },
                                         )
                                         .when_some(kind_icon, |this, icon| {
                                             this.child(mini_thumbs::chat_type_icon(icon, muted_fg))
                                         })
                                         .when_some(verify_icon, |this, path| {
-                                            this.child(super::bot_verify_icon::bot_verify_icon(path))
+                                            this.child(
+                                                div()
+                                                    .mr(px(crate::ui::td::st::dialogs::CHAT_TYPE_SKIP))
+                                                    .child(super::bot_verify_icon::bot_verify_icon(path)),
+                                            )
                                         })
                                         .child(
                                             div()
@@ -698,13 +706,13 @@ pub(super) fn session_chat_row(
                                         )
                                         .when_some(title_badge, |this, badge| {
                                             if matches!(badge, TitleBadge::Verified) {
-                                                this.child(div().relative().flex_none().child(crate::ui::td::td_icon(crate::ui::td::TdIcon::DialogsVerifiedStar, crate::ui::td::td(quill::app_theme::PaletteKey::DialogsVerifiedIconBg))).child(div().absolute().top_0().left_0().child(crate::ui::td::td_icon(crate::ui::td::TdIcon::DialogsVerifiedCheck, crate::ui::td::td(quill::app_theme::PaletteKey::DialogsVerifiedIconFg)))))
+                                                this.child(div().relative().flex_none().self_start().child(crate::ui::td::td_icon(crate::ui::td::TdIcon::DialogsVerifiedStar, crate::ui::td::td(quill::app_theme::PaletteKey::DialogsVerifiedIconBg))).child(div().absolute().top_0().left_0().child(crate::ui::td::td_icon(crate::ui::td::TdIcon::DialogsVerifiedCheck, crate::ui::td::td(quill::app_theme::PaletteKey::DialogsVerifiedIconFg)))))
                                             } else {
                                                 this.child(title_badge_element(badge, badge_emoji, cx))
                                             }
                                         })
                                         .when(chat.is_forum_chat(), |this| {
-                                            this.child(forum_badge(id, cx))
+                                            this.child(div().ml_1().child(forum_badge(id, cx)))
                                         }),
                                 )
                                 .when_some(stamp, |this, (status, stamp)| {

@@ -300,6 +300,7 @@ pub mod early_connect;
 mod edit_media_tools;
 mod emoji_bar;
 mod emoji_effect;
+mod emoji_inline;
 mod emoji_sets;
 mod emoji_sprites;
 mod emoji_style_demo;
