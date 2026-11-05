@@ -17,6 +17,8 @@ const CHAT: i64 = 201;
 const ME: i64 = 200;
 const FOLDER: i32 = 5;
 const STEP: i64 = 1_048_576;
+/// The custom emoji behind replies to Andrey (cut from the reference).
+const PATTERN_EMOJI: i64 = 777_001;
 
 register_demos![
     DemoSpec::ready(
@@ -207,8 +209,15 @@ fn seed(sink: Arc<MemorySink>) -> Session {
     ] {
         let small = file(id as i32 + 6000, picture, 24);
         updates.push(json!({"@type":"updateFile","file":small}));
+        // The reference's replies to Andrey show his background emoji.
+        let background = if id == ME && donor.is_some() {
+            PATTERN_EMOJI
+        } else {
+            0
+        };
         updates.push(json!({"@type":"updateUser","user":{"@type":"user","id":id,"first_name":first,
-            "last_name":last,"accent_color_id":0,"status":status,"profile_photo":{"@type":"profilePhoto",
+            "last_name":last,"accent_color_id":0,"background_custom_emoji_id":background,
+            "status":status,"profile_photo":{"@type":"profilePhoto",
             "id":id,"small":small,"big":null,"minithumbnail":null,"has_animation":false,"is_personal":false},
             "is_contact":true,"type":{"@type":"userTypeRegular"}}}));
     }
@@ -367,6 +376,28 @@ fn seed(sink: Arc<MemorySink>) -> Session {
         if let Some(owned) = copy_and_parse(&update.to_string(), &seq, &dyn_sink) {
             session.apply(owned);
         }
+    }
+    if let Some(donor) = donor.as_ref() {
+        let path = donor.pattern_emoji.to_string_lossy().into_owned();
+        let update = json!({"@type":"updateFile","file":file(6508, &path, 24)});
+        if let Some(owned) = copy_and_parse(&update.to_string(), &seq, &dyn_sink) {
+            session.apply(owned);
+        }
+        session.accept_custom_emoji_stickers(vec![quill::telegram::envelope::StickerItem {
+            custom_emoji_id: Some(PATTERN_EMOJI),
+            id: PATTERN_EMOJI,
+            set_id: 0,
+            emoji: "🍌".into(),
+            width: 20,
+            height: 20,
+            format: quill::telegram::envelope::StickerFormat::Webp,
+            file_id: quill::ids::FileId(6508),
+            thumb_file_id: None,
+            thumb_width: 0,
+            thumb_height: 0,
+            requires_premium: false,
+            premium_animation: None,
+        }]);
     }
     session.my_user_id = Some(ME);
     session.settings.proxy.list = Some(vec![quill::proxy::ProxyEntry {

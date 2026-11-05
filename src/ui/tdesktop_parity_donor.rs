@@ -40,6 +40,16 @@ const ALBUM_MINIS: [Rect; 3] = [
     (176, 299, 192, 315),
 ];
 
+/// The first reply strip's 20 px pattern copy: `FillBackgroundEmoji`'s
+/// first entry, 28 px in from the strip's right edge (985) and 4 px down
+/// from its top (459), at opacity 0.32.
+const PATTERN_COPY: Rect = (957, 463, 977, 483);
+const PATTERN_OPACITY: f32 = 0.32;
+/// The strip's fill under the copy, and the tint the copy reads as at full
+/// coverage (its strongest pixel, divided back by the opacity).
+const PATTERN_BG: [f32; 3] = [50., 94., 135.];
+const PATTERN_TINT: [f32; 3] = [100., 185., 244.];
+
 /// The photo's size as the fixture declares it: 320 px wide in a 430 px
 /// box (`photo_current`), its unseen top filled in.
 pub(super) const PHOTO_SIZE: (u32, u32) = (320, 430);
@@ -62,6 +72,8 @@ pub(super) struct DonorFiles {
     /// The same frame as a one-frame GIF: the clip the bubble plays.
     pub(super) gif_clip: PathBuf,
     pub(super) row_minis: [PathBuf; 3],
+    /// The reply pattern's emoji: its alpha read back from the 20 px copy.
+    pub(super) pattern_emoji: PathBuf,
     pub(super) album_minis: [PathBuf; 3],
 }
 
@@ -110,7 +122,32 @@ pub(super) fn prepare() -> Option<DonorFiles> {
         },
         row_minis: cut_all(&ROW_MINIS, "row-mini")?.try_into().ok()?,
         album_minis: cut_all(&ALBUM_MINIS, "album-mini")?.try_into().ok()?,
+        pattern_emoji: save("pattern-emoji.png", &pattern_mask(&cut(PATTERN_COPY)))?,
     })
+}
+
+/// The emoji's alpha from a tinted copy: how far each pixel moved from the
+/// strip's fill towards the tint, over the copy's opacity.
+fn pattern_mask(copy: &RgbaImage) -> RgbaImage {
+    let axis: Vec<f32> = PATTERN_TINT
+        .iter()
+        .zip(PATTERN_BG)
+        .map(|(t, b)| t - b)
+        .collect();
+    let norm: f32 = axis.iter().map(|v| v * v).sum();
+    let mut out = RgbaImage::new(copy.width(), copy.height());
+    for (x, y, pixel) in copy.enumerate_pixels() {
+        let moved: f32 = pixel
+            .0
+            .iter()
+            .zip(PATTERN_BG)
+            .zip(&axis)
+            .map(|((p, b), a)| (f32::from(*p) - b) * a)
+            .sum();
+        let alpha = (moved / norm / PATTERN_OPACITY).clamp(0., 1.);
+        out.put_pixel(x, y, Rgba([255, 255, 255, (alpha * 255.).round() as u8]));
+    }
+    out
 }
 
 fn crop(image: &RgbaImage, (x0, y0, x1, y1): Rect) -> RgbaImage {

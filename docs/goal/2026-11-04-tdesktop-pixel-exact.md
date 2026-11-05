@@ -82,12 +82,13 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
     - The photo is 322 px wide.
     - `capture.sh` sets the variable.
     - `diff.py` masks only the reference's mouse pointer.
-  - Status: in progress
+  - Status: verified
   - Evidence (2026-11-05): `src/ui/tdesktop_parity_donor.rs` cuts the list avatars, both history avatars (Andrey, Lain), the photo's visible part (declared 320x430 so `photo_current` gives the reference's 320 px), the reply thumbnail, the GIF frame (the badge and time pill taken back out by undoing the `msgDateImgBg` blend, plus the same frame as a one-frame GIF clip) and the six mini previews into a temp folder the demo's media roots allow. `capture.sh` sets `QUILL_PARITY_DONOR`; `diff.py` compares everything unless `--masks`.
     - Userpics drop the kit avatar's border (tdesktop paints the photo in a circle, no frame).
     - Per picture, mean grey-level difference: photo 0.00, reply thumb 0.15, GIF 0.46 (GIF palette), avatars 0.18–0.87.
     - Diff without masks: total 0.46% (tolerance 24), was 7.26% at the start of this goal; history 0.54, list 0.32.
-    - Left: the reply pattern emoji (needs the sender's background custom emoji).
+    - The reply pattern: Andrey gets a background custom emoji whose sticker is the alpha read back from the reference's first 20 px copy (`FillBackgroundEmoji` entry 0, opacity 0.32, tint from its strongest pixel).
+    - Diff without masks after the pattern: total 0.37%, history 0.39%.
 - **R6: Delivery.**
   - Source: user instruction "коммит пуш".
   - Acceptance: committed and pushed to `origin/main`, with this document recording progress.
