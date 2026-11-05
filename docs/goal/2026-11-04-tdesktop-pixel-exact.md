@@ -92,7 +92,8 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
 - **R6: Delivery.**
   - Source: user instruction "коммит пуш".
   - Acceptance: committed and pushed to `origin/main`, with this document recording progress.
-  - Status: open
+  - Status: verified
+  - Evidence: commits a069fa33b (R1, R2), a2447124e (R3), 5b1314ec2 (R4), bb651d408 and 318014906 (R5), and this document, pushed to `origin/main`.
 
 ### Constraints
 
@@ -116,19 +117,30 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
   - `src/state/{chat_types.rs,session_apply.rs}`
   - `src/emoji_sets_style/*`
   - `third_party/gpui-pre-wgpu/src/{cosmic_text_system.rs,wgpu_renderer.rs}`
-  - `assets/emoji/telegram/`
+  - `assets/emoji/tdesktop/`
   - `THIRD_PARTY.md`
 - Forbidden: committed screenshots or reference crops.
 
 ## Current Checkpoint
 
-- Closes: R2 (one sub-pixel run left), then R3.
+- Closes: R2 and R3 (sub-pixel leftovers below).
 
 ## Current State
 
-- Resolved: R1. R2 in progress (21/22 runs aligned). R3 in progress (FreeType LIGHT, gamma 1.0).
-- Last relevant evidence: the 2026-11-05 capture in R2.
-- Blocker: none.
+- Resolved: R1, R4, R5, R6. R2 and R3 are in progress, with the leftovers below.
+- Last relevant evidence (2026-11-05 capture, `align.py` and `diff.py`):
+  - 21 of 22 runs are at (0,0). Ink is 1.00 ± 0.01 on 18 of 22 runs.
+  - Without masks: total 0.37% at tolerance 24, 0.76% at 8, 3.27% at 0. With `--masks`: 0.34%.
+  - Regions: titlebar 0.00, rail 0.59, list 0.32, header 0.09, pinned 0.60, history 0.39, composer 0.46.
+- Leftovers, none explained from the sources yet:
+  - "10:13PM" in the list: glyphs drift from +1.25 px at the start to 0 at the end.
+  - Text after "Wi-" in the DHCP message's third line sits about 0.5 px left of tdesktop's glyphs, while "DHCP-сервер" and "LAN-порта" match.
+  - In "Denis Sexy IT", "I" sits +0.4 px and "T" +0.85 px off.
+  - The rail's "Edit" label is 1 px right of the reference, though the same centring matches "All chats".
+  - Preview runs show ink 0.93 next to the mini pictures; the header name shows 0.94.
+  - Some waveform bars are 1 px shorter at the top, within tolerance.
+  - The file title's ellipsis sits about 1 px off.
+- Blocker: none. Next step: find Qt's glyph positioning rule from a run that differs (QTextEngine positions with FreeType light hinting, lsb/rsb deltas), since HarfBuzz's own advances already match on line 1.
 
 ## Material Decisions
 
@@ -139,6 +151,7 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
 ## Checkpoint History
 
 - 2026-11-05: captures froze on the first frame because the nested KWin locked with the desktop (logind) and stopped sending frame callbacks; `capture.sh` passes `--no-lockscreen`. `build.sh` builds without `demo-capture` into `target/parity` (`QUILL_NATIVE_ROOT` for a local alsa-lib RPM root).
+- 2026-11-05: Phases 2–4 committed (FreeType LIGHT raster with gamma 1.0; the bundled Telegram Desktop emoji set; the fixture cut from the reference with the reply pattern). `cargo test --lib` 7140 passed; `cargo test --features demo-capture --bin quill` (with `LC_TIME=C.UTF-8`) 2728 passed, 1 failed (`every_setting_has_a_place_to_land`, which passes alone 3 of 3, as before); clippy clean; file sizes OK.
 - 2026-11-05: Phase 1 committed. `cargo test --lib` 7139 passed; `cargo test --features demo-capture --bin quill` 2726 passed, 1 failed (`every_setting_has_a_place_to_land`, load-dependent as before). Two clock tests (`*_reads_the_pickers_clock`) need a 24-hour `LC_TIME`; they fail under `en_US` before and after this change.
 
 - 2026-11-04: plan approved (`/home/stfu/.claude/plans/linear-snuggling-dahl.md`). Open Sans in `assets/fonts` is byte-identical to `lib_ui/fonts`.
