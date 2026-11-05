@@ -13,12 +13,15 @@ The main window copies Telegram Desktop's Night look exactly. The reference is a
 ## Checking
 
 ```sh
-cargo build --features demo-capture --bin quill
-scripts/tdesktop_parity/capture.sh target/debug/quill /tmp/quill.png   # needs kwin_wayland and spectacle
-python3 -I scripts/tdesktop_parity/diff.py artifacts/telegram-donor.png /tmp/quill.png /tmp/diff
+WORK=$(mktemp -d)
+BIN=$(scripts/tdesktop_parity/build.sh)
+scripts/tdesktop_parity/capture.sh "$BIN" "$WORK/quill-full.png"   # needs kwin_wayland and spectacle
+magick "$WORK/quill-full.png" -crop 1919x1034+0+0 +repage "$WORK/quill.png"
+python3 -I scripts/tdesktop_parity/align.py artifacts/telegram-donor.png "$WORK/quill.png"
+python3 -I scripts/tdesktop_parity/diff.py --masks artifacts/telegram-donor.png "$WORK/quill.png" "$WORK/diff"
 ```
 
-The `ready-tdesktop-parity` demo reproduces the reference state: the same folders, the same four channels, and the chat with Lain. The capture runs the demo maximized in a nested, headless KWin with a 1920×1036 output (the reference's screen less its panel) and grabs the window with Spectacle, so it does not touch the desktop. It is compared from the top-left corner. `diff.py` prints, per region, the share of pixels that differ and writes heat maps. Avatars, the photo, the GIF and the reference's mouse pointer are masked.
+The `ready-tdesktop-parity` demo reproduces the reference state: the same folders, the same four channels, and the chat with Lain. The capture runs the demo maximized in a nested, headless KWin with a 1920×1036 output (the reference's screen less its panel) and grabs the window with Spectacle, so it does not touch the desktop. The historical donor omits the last column and two bottom rows: crop the capture from the top-left as shown, without reducing the rendering viewport. Both comparison tools reject mismatched image sizes. `diff.py` prints, per region, the share of pixels that differ and writes heat maps. Avatars, the photo, the GIF and the reference's mouse pointer are masked.
 
 ## Values
 

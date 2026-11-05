@@ -16,6 +16,7 @@ credentials.json
 .idea
 .vscode
 quill.local.env
+__pycache__/
 
 # Native build outputs (FFmpeg from scripts/build-ffmpeg.sh, the call library
 # from scripts/build-tgcalls.sh) and their work trees, NEVER committed

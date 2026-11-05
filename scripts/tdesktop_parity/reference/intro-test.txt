@@ -1,0 +1,41 @@
+# Test servers (intro Settings, "testmode"): Code and Signup for a test
+# number 99966XYYYY, whose code is X five times.
+maximize
+sleep 1500
+click 960 614
+sleep 2500
+click 1861 51
+sleep 1500
+type testmode
+sleep 1500
+key esc
+sleep 2000
+click 960 614
+sleep 3000
+click 958 696
+sleep 1500
+click 860 528
+key backspace
+key backspace
+key backspace
+type 999
+sleep 300
+click 997 528
+type 6637391
+sleep 500
+move 5 1030
+shot t-phone-filled
+click 960 614
+sleep 5000
+move 5 1030
+shot t-code
+sleep 15000
+shot t-code2
+type 99999
+sleep 3000
+move 5 1030
+shot t-code-error
+type 33333
+sleep 4000
+move 5 1030
+shot t-next

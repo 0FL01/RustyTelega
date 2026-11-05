@@ -1,0 +1,33 @@
+# Production servers: Start, QR, Phone (empty, invalid number), Settings.
+maximize
+sleep 1500
+move 5 1030
+shot start
+click 960 614
+sleep 3000
+move 5 1030
+sleep 500
+shot qr
+click 958 696
+sleep 1500
+move 5 1030
+sleep 500
+shot phone
+type 1234
+sleep 300
+shot phone-filled
+key enter
+sleep 3000
+shot phone-error
+click 1861 51
+sleep 1500
+move 5 1030
+sleep 500
+shot settings
+key esc
+sleep 1000
+click 28 51
+sleep 1500
+move 5 1030
+sleep 500
+shot qr-back
