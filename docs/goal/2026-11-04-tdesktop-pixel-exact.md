@@ -1,6 +1,6 @@
 # Goal: Pixel-exact main window after Telegram Desktop (Night)
 
-Status: active
+Status: complete
 Source: user instruction 2026-11-04 ("Идём за пиксель пёрфектом", then "Реализовать и коммит пуш потом, так же документируй в репо прогресс в цель"); reference `artifacts/telegram-donor.png`; follows `2026-11-04-tdesktop-pixel-perfect-main-window.md`
 Last updated: 2026-11-05
 
@@ -92,8 +92,8 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
 - **R6: Delivery.**
   - Source: user instruction "коммит пуш".
   - Acceptance: committed and pushed to `origin/main`, with this document recording progress.
-  - Status: in_progress
-  - Evidence: earlier phases (a069fa33b, a2447124e, 5b1314ec2, bb651d408, 318014906) were pushed. The user approved the reviewed continuation on 2026-11-05 and reaffirmed commit/push; delivery of this continuation remains pending.
+  - Status: verified
+  - Evidence: earlier phases (a069fa33b, a2447124e, 5b1314ec2, bb651d408, 318014906) were pushed. The approved continuation, including permanent test-notification silence and documented progress, is committed as `217ecf20467036bab67db0c30ab3eddc62c6cfe7` and pushed to `origin/main`; `git ls-remote origin refs/heads/main` confirmed that exact SHA. This closure record is a docs-only follow-up.
 - **R7: Silent notification audio in tests.**
   - Source: user addition 2026-11-05: disable notification sounds during tests permanently, not through a forgotten manual mute/environment override; document and commit the rule.
   - Acceptance: ordinary test builds cannot reach real notification audio playback; production notifications and saved/system volume settings are unchanged.
@@ -131,13 +131,13 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
 
 ## Current Checkpoint
 
-- Closes: R6.
-- Smallest next action: commit/push the eight scoped files, then record delivery/closure in this document. Sol's final qualification approves this scoped delivery with the failures below explicitly qualified. Preserve the unrelated user WIP unstaged; no further implementation or cache/shaping work is needed.
-- Expected evidence: current qualified checks/review and scoped commits reachable from `origin/main`; the canonical 22-run, ink and notification-silence gates pass. Known unrelated failures are explicitly qualified, not called PASS. Global diff is reported, not a mandatory 0.3% gate.
+- Closed: R1–R7.
+- Next: none. Publish this delivery-only closure record and stop; no further implementation, cache/shaping work or adjacent audit is part of this goal.
+- Evidence: current qualified checks/review and implementation/progress commit `217ecf20467036bab67db0c30ab3eddc62c6cfe7` reachable from `origin/main`. The canonical 22-run, ink and notification-silence gates pass. Known unrelated failures are explicitly qualified, not called PASS. Global diff is reported, not a mandatory 0.3% gate.
 
 ## Current State
 
-- Resolved: R1–R5 and R7. Only this continuation's R6 commit/push remains.
+- Resolved: R1–R7. Implementation/progress is published to `origin/main`; the unrelated original user WIP remains outside the commits.
 - Current primary artifacts: `/home/stfu/.cache/opencode-tmp/opencode/pixel-exact.2loeuz/{separator.png,align-separator.txt,ink-final.json,diff-final/}`. Raw capture is fresh (2026-11-05 12:50 +0300), 1920×1036, compared against the 1919×1034 reference with top-left cropping; no shaping/raster overrides were set.
   - All 22 canonical runs at (0,0); exact ink range 0.983416–1.005492.
   - No content masks; only the reference pointer excluded. Total 0.36% at tolerance 24, 0.57% at 8, 3.16% at 0; largest delta 255.
@@ -148,7 +148,7 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
 - The actual targeted pull-module filter is `ui::pull_next_ui::tests` (the supplied filename filter selected zero tests). Its isolated run is **not PASS** (5 passed / 1 failed: one unexpected conversation render). An external HEAD-plus-original-theme-WIP probe reproduces the identical assertion and render-count map, also 5 passed / 1 failed (`test-head-pull-ready.log`). All task source changes are absent there and hashes match HEAD (`head-probe-provenance.txt`); only external workspace/dependency paths are adjusted, with no new dependency versions. Both baseline narrow/wide layout tests pass. The current full suite passes this assertion too; no deterministic regression or reason to edit neighboring cache code is established.
 - The post-fix notification-output regression and unfocused incoming-call regression each pass 1 test (`test-notification-final.log`, `test-call-postfix2.log`). Permanent silence comes from test-only code, not environment flags. Local verification additionally uses process-local ALSA Null PCM and an isolated session-bus address; user system settings are untouched.
 - `cargo clippy --features demo-capture --all-targets --locked -p quill -p quill-calls-sys -p quill-webview-protocol -- -D warnings`: PASS (`clippy-postfix.log`). `cargo fmt --all -- --check`, `bash scripts/check-file-size.sh`, `git diff --check`: PASS. Cargo uses the existing native root's ALSA pkg-config files; no dependencies are added.
-- Sol's actual-code review corrected the raw-capture dimension note and found the separate incoming-call OS dispatcher bypassing the first message guard. That P2 is fixed and re-reviewed. Final verdict: approved for the scoped commit/push, with the explicit preexisting library/pull qualifications above; no blocking or other open-scope findings remain. The interrupted verification was not called PASS; the subsequent full run above completed. Only delivery remains pending.
+- Sol's actual-code review corrected the raw-capture dimension note and found the separate incoming-call OS dispatcher bypassing the first message guard. That P2 is fixed and re-reviewed. Final verdict: approved for the scoped commit/push, with the explicit preexisting library/pull qualifications above; no blocking or other open-scope findings remain. The interrupted verification was not called PASS; the subsequent full run above completed. Source code has not changed since that review; this later closure edit changes documentation only.
 
 ## Material Decisions
 
@@ -160,6 +160,7 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
 
 ## Checkpoint History
 
+- 2026-11-05 closure: scoped implementation/progress commit `217ecf20467036bab67db0c30ab3eddc62c6cfe7` pushed to `origin/main`, remote SHA verified. Closure check resolves R1–R7, preserves the frozen tolerances and constraints, and excludes the original WIP. No further substantive work remains.
 - 2026-11-05 R7: reused the device-free output backend and guarded both message and incoming-call OS dispatchers under `cfg(test)`, preserving notification decisions/bookkeeping and production settings. Targeted regressions pass; post-fix full UI 2730 passed / 2 ignored, clippy/format/file-size clean. The known parallel settings failure recurred in an intermediate run; final serialized verification passes it. The isolated pull render-count failure reproduces without this task's changes; no adjacent fix is made.
 - 2026-11-05 continuation: preserving U+202F closes the canonical date alignment gate without a shared text-system change. The installed Qt probe (`locale.txt`) returns `10:13 U+202F PM` with that separator (no ASCII spaces) for en_US short time, confirming the source-derived string. Fresh capture: 22/22 zero shifts, ink 0.983416–1.005492, unmasked total 0.36%/0.57%/3.16% at 24/8/0. `cargo test --lib local_time::tests::chat_list_stamps --locked`: 1 passed. The Qt probe confirms that subpixel-flooring and 26.6 truncation differ from GPUI; they do not need to be ported to satisfy the frozen gates. No guessed quarter-space, side-bearing compensation, screenshot offset or gamma resweep was used.
 - 2026-11-05 continuation: fresh native-root build/capture reproduced 21/22 zero shifts and unmasked diff 0.37%/0.76%/3.27% at 24/8/0. Scratch evidence: `/home/stfu/.cache/opencode-tmp/opencode/pixel-exact.2loeuz/`. Source-derived palette corrections (`dialogsNameFg` in the header, `dialogsTextFg` for previews) bring all 22 ink ratios into [0.97, 1.03] (previews/header now 1.00); date shift remains +1. A same-face Open Sans 13px Qt/cosmic/FreeType probe rejects LIGHT side-bearing-delta compensation: Qt uses design advances truncated to 26.6. It also exposes `chat_list_stamp` deleting the locale separator entirely; `FormatDialogsDate` instead returns `QLocale::ShortFormat`. Preserve that separator next, then recapture before deciding whether a shared shaping/phase change is necessary. The old main donor's backend/version remains unattributed; the separately downloaded 7.3.5 Pango binary is not proof of its provenance.
@@ -168,3 +169,10 @@ Primary evidence for R2–R5: a capture of `ready-tdesktop-parity` (`scripts/tde
 - 2026-11-05: Phase 1 committed. `cargo test --lib` 7139 passed; `cargo test --features demo-capture --bin quill` 2726 passed, 1 failed (`every_setting_has_a_place_to_land`, load-dependent as before). Two clock tests (`*_reads_the_pickers_clock`) need a 24-hour `LC_TIME`; they fail under `en_US` before and after this change.
 
 - 2026-11-04: plan approved (`/home/stfu/.claude/plans/linear-snuggling-dahl.md`). Open Sans in `assets/fonts` is byte-identical to `lib_ui/fonts`.
+
+## Completion
+
+- Resolved outcomes: R1–R7, with the current reference capture and permanent notification-silence regressions above.
+- Evidence: scratch `/home/stfu/.cache/opencode-tmp/opencode/pixel-exact.2loeuz/`; `align-separator.txt`, `ink-final.json`, `diff-final/`, `test-ui-postfix.log`, `clippy-postfix.log`, and qualified baseline failure logs. This is not a claim of a bit-identical whole window, live-account readiness or release-package validation.
+- Constraint/scope check: source-derived palette roles and locale separator; narrow/wide layout and settings checks pass in the final UI suite; production audio/settings and the existing LIGHT/blend/emoji/media behavior are unchanged. Exactly eight scoped code/test/docs files were delivered; no dependencies, screenshots, crops or unrelated WIP were committed. Original WIP hashes remain intact.
+- Final status: complete. The implementation/progress push is verified; the follow-up commit only publishes this closure record, with no runtime change or reason to rerun behavior gates/review.
