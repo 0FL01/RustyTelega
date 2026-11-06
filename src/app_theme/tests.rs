@@ -266,7 +266,7 @@ fn custom_themes_are_stored_by_name() {
     assert_eq!(again, "Ocean Blue 2");
     // A file with nothing Quill uses is refused.
     let useless = source.join("x.tdesktop-palette");
-    std::fs::write(&useless, b"lightButtonBgRipple: #ff0000;").unwrap();
+    std::fs::write(&useless, b"notARealPaletteKey: #ff0000;").unwrap();
     assert!(matches!(
         store::import(&themes, &useless, &[]),
         Err(store::StoreError::File(ThemeFileError::NothingToApply))
