@@ -953,7 +953,8 @@ mod tests {
     fn zoom_for_percent_clamps_like_the_setting() {
         assert_eq!(zoom_for_percent(100), 1.);
         assert_eq!(zoom_for_percent(150), 1.5);
-        assert_eq!(zoom_for_percent(0), 1.);
+        assert_eq!(zoom_for_percent(0), 0.5);
+        assert_eq!(zoom_for_percent(50), 0.5);
         assert_eq!(zoom_for_percent(999), 3.);
     }
 

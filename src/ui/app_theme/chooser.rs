@@ -22,7 +22,7 @@ use quill::theme_colorize::Colorizer;
 
 /// tdesktop `ColorsFromScheme`: the tile colours, recoloured like the
 /// palette when the theme has an accent of its own.
-fn builtin_preview(theme: BuiltinTheme, accent: Option<u32>) -> [u32; 3] {
+pub(in crate::ui) fn builtin_preview(theme: BuiltinTheme, accent: Option<u32>) -> [u32; 3] {
     let colors = theme.preview();
     match accent {
         // Quill's accent only re-points the kit's primary colours.

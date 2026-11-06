@@ -411,6 +411,7 @@ impl QuillApp {
     pub(super) fn disk_full_cover(
         &mut self,
         auth: &AuthView,
+        window: &mut gpui_kit::Window,
         cx: &mut Context<Self>,
     ) -> Option<gpui_kit::AnyElement> {
         self.disk.shows_screen().then(|| {
@@ -424,7 +425,7 @@ impl QuillApp {
                 .bottom_0()
                 .occlude()
                 .bg(cx.theme().background)
-                .child(self.onboarding(auth, false, false, false, false, cx))
+                .child(self.intro_view(auth, window, cx))
                 .into_any_element()
         })
     }

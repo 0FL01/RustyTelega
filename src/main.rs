@@ -121,7 +121,9 @@ fn main() {
     #[cfg(feature = "ui")]
     {
         if args.iter().any(|a| a == "--check-updates") {
-            let state = quill::updater::check_latest_release();
+            let state = quill::updater::check_latest_release(
+                quill::settings::load_update_preferences().beta,
+            );
             println!("{}", state.label());
             std::process::exit(i32::from(matches!(
                 state,

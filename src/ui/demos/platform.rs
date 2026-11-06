@@ -64,6 +64,7 @@ impl QuillApp {
             quill::update_install::force_self_update_available(Some(availability));
         }
         let release = quill::updater::ReleaseInfo {
+            prerelease: false,
             version: "0.2.0".into(),
             notes: "Update complete: improved navigation, video playback and accessibility.".into(),
             url: format!("{}/tag/v0.2.0", quill::updater::RELEASES_URL),
@@ -91,6 +92,7 @@ impl QuillApp {
             }
             UpdateDemo::Staged => quill::updater::UpdateState::Staged(
                 quill::updater::ReleaseInfo {
+                    prerelease: false,
                     notes: "Improved navigation, video playback and accessibility.".into(),
                     ..release
                 },

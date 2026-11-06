@@ -87,9 +87,7 @@ fn wrong_number_resubmits_the_phone_from_the_code_step() {
         json!({"@type":"ok","@extra":id.as_extra()}),
     );
     // Not from steps that do not accept a phone.
-    driver.session.auth = AuthorizationState::WaitPassword {
-        has_recovery_email: false,
-    };
+    driver.session.auth = AuthorizationState::Ready;
     assert!(driver.submit_phone("+15550100196").is_err());
 }
 

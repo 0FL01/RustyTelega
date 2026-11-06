@@ -149,6 +149,26 @@ fn a_dead_receive_loop_keeps_the_account_closed_for_the_run(cx: &mut TestAppCont
 }
 
 #[gpui_kit::test]
+fn intro_reset_opening_holds_the_database_until_handed_to_closing(cx: &mut TestAppContext) {
+    let (app, mut vcx) = new_app(cx);
+    let fake = Fake::default();
+    app.update_in(&mut vcx, |app, _, cx| {
+        let key = account(1);
+        app.background.begin_intro_open(&key);
+        assert!(app.background.preparing(&key));
+        assert_eq!(app.open_wait(&key), CloseWait::Wait);
+        app.background.end_intro_open(&key);
+        app.background
+            .closing
+            .push(key.clone(), fake.boxed(), false);
+        assert_eq!(app.open_wait(&key), CloseWait::Wait);
+        fake.close();
+        app.reap_closing(cx);
+        assert_eq!(app.open_wait(&key), CloseWait::Go);
+    });
+}
+
+#[gpui_kit::test]
 fn work_waiting_on_a_close_runs_once_the_client_is_closed(cx: &mut TestAppContext) {
     let (app, mut vcx) = new_app(cx);
     let fake = Fake::default();

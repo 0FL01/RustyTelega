@@ -89,13 +89,15 @@ impl QuillApp {
         .detach();
         let email_input = cx.new(|cx| {
             TextareaState::new(window, cx)
-                .placeholder("Email address")
+                .placeholder(quill::lang::tr(
+                    quill::lang::keys::SETTINGS_CLOUD_LOGIN_EMAIL_PLACEHOLDER,
+                ))
                 .auto_grow(1, 1)
                 .submit_on_enter(true)
         });
         let phone_input = cx.new(|cx| {
             TextareaState::new(window, cx)
-                .placeholder("Phone (+country code)")
+                .placeholder("")
                 .auto_grow(1, 1)
                 .submit_on_enter(true)
         });
@@ -112,19 +114,19 @@ impl QuillApp {
         .detach();
         let code_input = cx.new(|cx| {
             TextareaState::new(window, cx)
-                .placeholder("Verification code")
+                .placeholder(quill::lang::tr(quill::lang::keys::CODE_PH))
                 .auto_grow(1, 1)
                 .submit_on_enter(true)
         });
         let password_input = cx.new(|cx| {
             InputState::new(window, cx)
                 .masked(true)
-                .placeholder("Two-step password")
+                .placeholder(quill::lang::tr(quill::lang::keys::SIGNIN_PASSWORD))
                 .submit_on_enter(true)
         });
         let recovery_code_input = cx.new(|cx| {
             TextareaState::new(window, cx)
-                .placeholder("Recovery code from email")
+                .placeholder(quill::lang::tr(quill::lang::keys::SIGNIN_CODE))
                 .auto_grow(1, 1)
                 .submit_on_enter(true)
         });
@@ -190,6 +192,9 @@ impl QuillApp {
             &code_input,
             window,
             |this, state, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::Change) {
+                    this.intro_code_changed(window, cx);
+                }
                 if let InputEvent::PressEnter { secondary, shift } = event {
                     let marked = state.update(cx, |input, cx| input.marked_text_range(window, cx));
                     if should_send_on_enter(
@@ -286,7 +291,7 @@ impl QuillApp {
             stories,
             shared_media_grid: super::shared_media_grid_state::SharedMediaGridUi::new(),
             premium_preview: Default::default(),
-            first_run: super::first_run_ui::initial_first_run(demo.is_some(), &credentials, cx),
+            intro: super::intro::IntroUi::new(demo.is_some()),
             history: super::history_state::HistoryUi::new(cx),
             frame: super::frame_state::FrameUi::new(cx),
             group_call: super::group_call_state::GroupCallUi::new(group_call_composer),

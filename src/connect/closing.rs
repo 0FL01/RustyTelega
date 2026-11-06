@@ -175,6 +175,43 @@ pub(crate) fn drain_bridged<S: JsonSender>(
     }
 }
 
+/// A discarded auth generation observes only Closed. In particular, a QR
+/// success queued behind the reset must not reach `ingest` or its Ready work.
+pub(crate) fn drain_discarded_auth<S: JsonSender>(
+    driver: &mut ConnectDriver<S>,
+    bridge: &ReceiveBridge,
+    budget: Duration,
+) -> CloseProgress {
+    use crate::telegram::envelope::{AuthPayload, EnvelopePayload};
+    if matches!(driver.session.auth, AuthorizationState::Closed) {
+        return CloseProgress::Closed;
+    }
+    if bridge.is_joined() {
+        return CloseProgress::Lost;
+    }
+    let stopped = bridge.stopped_unexpectedly();
+    let started = Instant::now();
+    while started.elapsed() < budget {
+        let Some(owned) = bridge.next_timeout(Duration::ZERO) else {
+            return if stopped {
+                CloseProgress::Lost
+            } else {
+                CloseProgress::Pending
+            };
+        };
+        if matches!(
+            owned.envelope.payload,
+            EnvelopePayload::Auth(AuthPayload::UpdateAuthorizationState(
+                AuthorizationState::Closed
+            ))
+        ) {
+            driver.session.set_auth(AuthorizationState::Closed);
+            return CloseProgress::Closed;
+        }
+    }
+    CloseProgress::Pending
+}
+
 /// One client on its way out.
 pub struct ClosingClient {
     pub key: AccountKey,

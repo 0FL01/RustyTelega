@@ -572,6 +572,7 @@ fn a_running_update_download_waits_for_space_and_starts_again(cx: &mut TestAppCo
     use quill::updater::{DownloadProgress, ReleaseInfo, UpdateState};
     let (app, mut vcx) = new_app(cx);
     let release = ReleaseInfo {
+        prerelease: false,
         version: "99.0.0".into(),
         notes: String::new(),
         url: String::new(),
@@ -584,7 +585,13 @@ fn a_running_update_download_waits_for_space_and_starts_again(cx: &mut TestAppCo
     read(&app, &mut vcx, Some(FLOORS.warn - 1));
     assert!(progress.is_held(), "the low disk stops the download");
     app.update_in(&mut vcx, |app, _, cx| {
-        app.finish_update_download(release.clone(), &progress, Err("stopped"), cx);
+        app.finish_update_download(
+            app.settings.update_generation,
+            release.clone(),
+            &progress,
+            Err("stopped"),
+            cx,
+        );
         assert_eq!(
             app.settings.update_state,
             UpdateState::Available(release.clone()),

@@ -73,8 +73,12 @@ impl UpdateControl {
         let UpdateState::Available(release) = state else {
             return None;
         };
-        (availability.is_ok() && crate::update_install::valid_release(release))
-            .then(|| release.clone())
+        (availability.is_ok()
+            && crate::update_install::valid_release(
+                release,
+                crate::settings::load_update_preferences().beta,
+            ))
+        .then(|| release.clone())
     }
 
     /// Whether the title bar shows it: only while there is an update to act
@@ -103,6 +107,7 @@ mod tests {
 
     fn release(with_asset: bool) -> ReleaseInfo {
         ReleaseInfo {
+            prerelease: false,
             version: "999.0.0".into(),
             notes: String::new(),
             url: format!("{RELEASES_URL}/tag/v999.0.0"),

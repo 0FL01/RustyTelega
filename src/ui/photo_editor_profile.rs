@@ -300,7 +300,9 @@ impl QuillApp {
                     dialog.photo_note = Some(text.into());
                 }
             }
-            PhotoTarget::Profile => self.connection.set_note(StatusNote::error(text)),
+            PhotoTarget::Profile | PhotoTarget::Registration(_) => {
+                self.connection.set_note(StatusNote::error(text))
+            }
         }
         cx.notify();
     }

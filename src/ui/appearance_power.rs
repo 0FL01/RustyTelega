@@ -19,7 +19,14 @@ const DEFAULT_LABEL: &str = "Default";
 /// Installed font families, from the kit's list (enumerated once per run).
 fn installed_fonts(cx: &App) -> &'static [String] {
     static FONTS: OnceLock<Vec<String>> = OnceLock::new();
-    FONTS.get_or_init(|| quill::font_choice::choices(installed_font_names(cx).iter().cloned()))
+    FONTS.get_or_init(|| {
+        quill::font_choice::choices(
+            installed_font_names(cx)
+                .iter()
+                .filter(|name| name.as_str() != super::td::fonts::INTRO_FAMILY)
+                .cloned(),
+        )
+    })
 }
 
 /// The family to draw the interface in: the stored choice when it is still

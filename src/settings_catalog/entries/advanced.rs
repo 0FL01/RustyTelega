@@ -20,11 +20,6 @@ pub(super) const ENTRIES: &[Entry] = &[
         .section(keys::SETTINGS_EXPERIMENTAL)
         .keywords(&["inline keyboard", "1-9", "bots"])
         .experimental(),
-    Entry::new("advanced.welcome_intro", P, keys::Q_FIRST_RUN_REPLAY).keywords(&[
-        "first run",
-        "onboarding",
-        "tour",
-    ]),
     Entry::new(
         "advanced.restore_defaults",
         P,

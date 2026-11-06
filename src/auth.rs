@@ -287,6 +287,20 @@ pub fn can_request_qr_login(state: &AuthorizationState) -> bool {
     )
 }
 
+/// TDLib's phone setter accepts these states with no authentication query pending.
+pub fn can_submit_phone(state: &AuthorizationState) -> bool {
+    matches!(
+        state,
+        AuthorizationState::WaitPhoneNumber
+            | AuthorizationState::WaitPremiumPurchase { .. }
+            | AuthorizationState::WaitEmailAddress
+            | AuthorizationState::WaitEmailCode { .. }
+            | AuthorizationState::WaitCode { .. }
+            | AuthorizationState::WaitRegistration { .. }
+            | AuthorizationState::WaitPassword { .. }
+    )
+}
+
 /// Live login is disabled until the owner supplies api_id/api_hash out of tree.
 pub fn credentials_ready(api_id: Option<i32>, api_hash: Option<&str>) -> bool {
     matches!(api_id, Some(id) if id > 0)

@@ -11,6 +11,24 @@ HERE = Path(__file__).resolve().parent
 
 
 class CaptureSizeTests(unittest.TestCase):
+    def test_qr_dynamic_mask_keeps_the_static_disc(self):
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            ref, cap = root / "ref.png", root / "cap.png"
+            image = Image.new("RGB", (1920, 1036), "white")
+            image.save(ref)
+            image.putpixel((880, 330), (0, 0, 0))  # dynamic matrix
+            image.putpixel((960, 411), (0, 0, 0))  # static disc/plane
+            image.save(cap)
+            subprocess.run(
+                [sys.executable, "-I", str(HERE / "diff.py"), "--profile", "intro-qr",
+                 "--masks", str(ref), str(cap), str(root / "diff")],
+                capture_output=True, text=True, check=True,
+            )
+            heat = Image.open(root / "diff" / "heat.png")
+            self.assertNotEqual(heat.getpixel((880, 330)), (255, 0, 0))
+            self.assertEqual(heat.getpixel((960, 411)), (255, 0, 0))
+
     def test_mismatched_capture_is_an_error_in_both_tools(self):
         with tempfile.TemporaryDirectory() as work:
             root = Path(work)

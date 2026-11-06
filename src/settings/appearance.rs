@@ -51,7 +51,7 @@ pub fn clamp_font_size(px: u8) -> u8 {
 
 /// tdesktop's interface scale range (`style::kScaleMin` / `kScaleMax`), in
 /// percent. 100 is the unscaled interface.
-pub const INTERFACE_SCALE_MIN: u16 = 100;
+pub const INTERFACE_SCALE_MIN: u16 = 50;
 pub const INTERFACE_SCALE_MAX: u16 = 300;
 pub const INTERFACE_SCALE_DEFAULT: u16 = 100;
 /// The scales the Appearance dialog offers.
@@ -136,6 +136,8 @@ pub struct AppearancePrefs {
     /// in fixed pixels do not.
     #[serde(default = "default_interface_scale")]
     pub interface_scale_pct: u16,
+    #[serde(default = "default_true")]
+    pub interface_scale_auto: bool,
     /// Message text size in px.
     #[serde(default = "default_font_size")]
     pub font_size_px: u8,
@@ -249,6 +251,7 @@ impl Default for AppearancePrefs {
             adaptive_for_wide: true,
             follow_omarchy: true,
             interface_scale_pct: INTERFACE_SCALE_DEFAULT,
+            interface_scale_auto: true,
             font_size_px: FONT_SIZE_DEFAULT,
             bubbles: true,
             preview_lines: crate::chatlist_style::PREVIEW_LINES_DEFAULT,
@@ -318,6 +321,7 @@ pub fn load_appearance_prefs(paths: &AccountPaths) -> AppearancePrefs {
     let mut prefs: AppearancePrefs = load_json_prefs(paths, "appearance_prefs.json");
     prefs.font_size_px = clamp_font_size(prefs.font_size_px);
     prefs.interface_scale_pct = clamp_interface_scale(prefs.interface_scale_pct);
+    prefs.interface_scale_auto &= prefs.interface_scale_pct == INTERFACE_SCALE_DEFAULT;
     prefs.font_family = crate::font_choice::clean_family(&prefs.font_family);
     prefs.power_saving = crate::power_saving::sanitize(prefs.power_saving);
     prefs.preview_lines = crate::chatlist_style::clamp_preview_lines(prefs.preview_lines);
@@ -381,7 +385,7 @@ mod tests {
 
     #[test]
     fn interface_scale_clamps_and_snaps() {
-        assert_eq!(clamp_interface_scale(0), 100);
+        assert_eq!(clamp_interface_scale(0), 50);
         assert_eq!(clamp_interface_scale(100), 100);
         assert_eq!(clamp_interface_scale(133), 135);
         assert_eq!(clamp_interface_scale(150), 150);
@@ -430,6 +434,7 @@ mod tests {
             adaptive_for_wide: true,
             follow_omarchy: false,
             interface_scale_pct: 150,
+            interface_scale_auto: false,
             font_size_px: 17,
             bubbles: false,
             preview_lines: 3,

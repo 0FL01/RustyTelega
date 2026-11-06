@@ -8,6 +8,17 @@ as such.
 
 Sources read on 2026-10-08:
 
+**Owner override, 2026-11-05:** the signed-out intro now deliberately copies
+Telegram Desktop branding: “Telegram Desktop”, the description “Welcome to the
+official Telegram Desktop app”, official plane artwork, and no Quill third-party
+intro notice. The owner explicitly chose this in
+[`2026-11-05-tdesktop-auth-pixel-exact.md`](../goal/2026-11-05-tdesktop-auth-pixel-exact.md).
+The historical compliance conclusions for API terms 2.2/2.4 below no longer apply
+to that intro; the official-app wording also creates an identity/2.3 risk. This
+decision is not permission from Telegram or legal advice, and continued
+compliance with those clauses is not claimed. Package/app identity outside the
+intro is unchanged.
+
 - Telegram API Terms of Service: https://core.telegram.org/api/terms (no date
   on the page)
 - Obtaining api_id: https://core.telegram.org/api/obtaining_api_id

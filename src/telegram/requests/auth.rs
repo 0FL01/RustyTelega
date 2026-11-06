@@ -46,6 +46,11 @@ pub fn get_authorization_state(extra: RequestId) -> String {
     .to_string()
 }
 
+/// Discard an explicitly unauthenticated TDLib database; never an app root.
+pub fn destroy_request(extra: RequestId) -> String {
+    json!({ "@type": "destroy", "@extra": extra.as_extra() }).to_string()
+}
+
 /// Slice A3: `getActiveSessions = Sessions;` (TDLib 1.8.67,
 /// `schema/td_api.tl:15102`): "Returns all active sessions of the current
 /// user."

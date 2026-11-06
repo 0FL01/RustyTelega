@@ -39,9 +39,14 @@ macro_rules! layer {
 /// popups above the panels they were opened from.
 pub(super) static ESC_LAYERS: &[EscLayer] = &[
     layer!(
-        "first-run-intro",
-        |app| app.first_run.intro_skippable(std::time::Instant::now()),
-        |app, _, cx| app.skip_first_run_intro(cx)
+        "intro-settings",
+        |app| app.intro.settings_open,
+        |app, window, cx| app.close_intro_settings(window, cx)
+    ),
+    layer!(
+        "intro-country-picker",
+        |app| app.pane_mode() == super::app::PaneMode::Connecting && app.auth_ui.signin.picker_open,
+        |app, window, cx| app.signin_close_picker(window, cx)
     ),
     layer!(
         "instant-view",

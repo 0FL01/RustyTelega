@@ -11,6 +11,7 @@
 
 pub(crate) mod call_chrome;
 mod chooser;
+pub(super) use chooser::builtin_preview;
 mod editor;
 pub(crate) mod kit_colors;
 mod omarchy;

@@ -74,6 +74,7 @@ impl QuillApp {
             show_code,
             show_password,
             show_qr,
+            window,
             cx,
         )
     }
@@ -501,6 +502,7 @@ impl QuillApp {
         show_code: bool,
         show_password: bool,
         show_qr: bool,
+        window: &Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let list = list
@@ -529,7 +531,7 @@ impl QuillApp {
             );
         let list = list.when(
             matches!(auth.action, quill::auth::AuthAction::Register) && self.live.is_some(),
-            |this| this.child(self.registration_form(cx)),
+            |this| this.child(self.registration_form(window, cx)),
         );
         list.when(
             matches!(auth.action, quill::auth::AuthAction::EnterEmail) && self.live.is_some(),
@@ -620,7 +622,7 @@ impl QuillApp {
         .when(show_password, |this| {
             // Slice A10: password / recovery-code entry lives in
             // `ui/auth_recovery.rs` (kit-first, named module).
-            this.child(self.auth_password_section(cx))
+            this.child(self.intro_password(false, window, cx))
         })
         .when(show_qr, |this| {
             // Slice A1: the QR payload rides on the auth state (envelope.rs

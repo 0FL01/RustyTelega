@@ -23,6 +23,7 @@ pub(crate) mod window_title {
 pub(crate) mod chat;
 pub(crate) mod compose;
 pub(crate) mod dialogs;
+pub(crate) mod intro;
 pub(crate) mod top_bar;
 pub(crate) mod window;
 

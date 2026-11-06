@@ -1,11 +1,7 @@
 #![deny(clippy::indexing_slicing)]
 use super::app::QuillApp;
 use crate::ui::status_note::StatusNote;
-use gpui_kit::component::button::*;
-use gpui_kit::component::input::{Input, InputContentType};
-use gpui_kit::component::input::{InputEvent, Textarea, TextareaState};
-use gpui_kit::component::*;
-use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::component::input::{InputEvent, TextareaState};
 use gpui_kit::*;
 use quill::composer::should_send_on_enter;
 use quill::lang::{keys, tr};
@@ -74,8 +70,12 @@ impl QuillApp {
             Ok(_) => {
                 self.auth_ui.recovery_mode = true;
                 self.auth_ui
-                    .recovery_code_input
+                    .password_input
                     .update(cx, |input, cx| input.set_value("", window, cx));
+                self.auth_ui.recovery_code_input.update(cx, |input, cx| {
+                    input.set_value("", window, cx);
+                    input.focus(window, cx);
+                });
                 self.connection.set_note(StatusNote::silent(tr(
                     keys::Q_MISC_RECOVERY_CODE_SENT_CHECK_YOUR,
                 )));
@@ -127,104 +127,14 @@ impl QuillApp {
     }
 
     /// Slice A10: leave recovery-code entry, back to password entry.
-    pub(crate) fn cancel_password_recovery(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn cancel_password_recovery(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.auth_ui.recovery_mode = false;
+        self.auth_ui
+            .recovery_code_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.auth_ui
+            .password_input
+            .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
-    }
-
-    /// Slice A10: the auth password-screen section — password entry, or
-    /// recovery-code entry when `recovery_mode` is set. "Forgot password?"
-    /// only appears when the server advertised a recovery email.
-    pub(crate) fn auth_password_section(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let recovery_mode = self.auth_ui.recovery_mode;
-        let has_recovery_email = matches!(
-            self.current_auth(),
-            AuthorizationState::WaitPassword {
-                has_recovery_email: true
-            }
-        );
-        if recovery_mode {
-            div()
-                .child(
-                    div()
-                        .mt_2()
-                        .font_semibold()
-                        .text_sm()
-                        .child(tr(keys::Q_MISC_RECOVERY_CODE)),
-                )
-                .child(
-                    Textarea::new(&self.auth_ui.recovery_code_input)
-                        .aria_label(tr(keys::Q_MISC_PASSWORD_RECOVERY_CODE))
-                        .h(px(40.)),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground)
-                        .child(tr(keys::Q_MISC_SENT_SECURELY_TO_TELEGRAM)),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap_2()
-                        .child(
-                            Button::new("submit-recovery-code")
-                                .label(tr(keys::CONTINUE))
-                                .primary()
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.submit_recovery_code(window, cx);
-                                })),
-                        )
-                        .child(
-                            Button::new("resend-recovery-code")
-                                .label(tr(keys::Q_MISC_RESEND_CODE))
-                                .ghost()
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.request_password_recovery(window, cx);
-                                })),
-                        )
-                        .child(
-                            Button::new("cancel-recovery")
-                                .label(tr(keys::Q_MISC_BACK))
-                                .ghost()
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.cancel_password_recovery(cx);
-                                })),
-                        ),
-                )
-        } else {
-            div()
-                .flex()
-                .flex_col()
-                .gap_3()
-                .child(
-                    Input::new(&self.auth_ui.password_input)
-                        .aria_label(tr(keys::Q_MISC_TWO_STEP_VERIFICATION_PASSWORD))
-                        .content_type(InputContentType::Password)
-                        .h(px(40.)),
-                )
-                .child(
-                    Button::new("submit-password")
-                        .label(tr(keys::CONTINUE))
-                        .primary()
-                        .w_full()
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.submit_password(window, cx);
-                        })),
-                )
-                .when(has_recovery_email, |this| {
-                    this.child(
-                        Button::new("forgot-password")
-                            .label(tr(keys::Q_MISC_FORGOT_PASSWORD))
-                            .ghost()
-                            .w_full()
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.request_password_recovery(window, cx);
-                            })),
-                    )
-                })
-        }
     }
 }

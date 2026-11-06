@@ -35,7 +35,7 @@ Visitors compare Quill to the official Telegram Desktop app and to other unoffic
 
 ## Brand Commitments
 
-- The app is always called Quill. "Telegram" is used only for the actual service, accounts, TDLib/API and official apps.
+- App/package identity remains Quill. Owner override (2026-11-05): the signed-out intro deliberately copies Telegram Desktop, including the “Telegram Desktop” title, “official Telegram Desktop app” description and official paper-plane, without a third-party notice. This exception supersedes the older intro-branding rule; see `docs/goal/2026-11-05-tdesktop-auth-pixel-exact.md` and the remaining API-terms/identity risks in `docs/decisions/codex-legal-compliance.md`. No continued compliance with the overridden clauses is claimed.
 - Unofficial and not affiliated with Telegram; the page must say so plainly.
 - Plain, direct, human copy; no marketing hype and no generated-sounding prose.
 - Performance claims against Telegram Desktop are limited to measured memory and launch time, stated as relative comparisons (no absolute MB or seconds), each with machine, app versions, date and method. No CPU claims.

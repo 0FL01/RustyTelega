@@ -49,6 +49,20 @@ macro_rules! td_icons {
 }
 
 td_icons! {
+    IntroLeft => "intro_left",
+    IntroRight => "intro_right",
+    IntroPlaneTrace => "intro_plane_trace",
+    IntroPlaneInner => "intro_plane_inner",
+    IntroPlaneOuter => "intro_plane_outer",
+    IntroPlaneTop => "intro_plane_top",
+    IntroQrPlane => "intro_qr_plane",
+    IntroCountry => "intro_country_dropdown",
+    IntroPhoto => "new_chat_photo",
+    IntroLanguage => "menu/translate",
+    IntroSettingsClose => "info/info_close",
+    IntroConnection => "menu/network",
+    IntroCheckboxCheck => "default_checkbox_check",
+    Back => "box_button_back",
     ConnectingLeft => "connecting_left",
     ConnectingLeftShadow => "connecting_left_shadow",
     ConnectingRight => "connecting_right",

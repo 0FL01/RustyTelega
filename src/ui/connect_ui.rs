@@ -98,6 +98,7 @@ impl super::app::QuillApp {
         if self.background.wiping {
             return;
         }
+        self.cancel_intro_reset();
         quill::startup_trace::mark("connect_start");
         self.connection.generation += 1;
         let generation = self.connection.generation;

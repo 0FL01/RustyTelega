@@ -1,10 +1,10 @@
-# One update button, no update switches
+# One update button, stable by default
 
 Owner, 2026-10-23: the in-app update was annoying. A found update showed a banner with no install button, installing lived in Settings behind three switches ("Check for updates on launch", "Install updates automatically", "Install beta versions"), and a downloaded update had no visible way to restart.
 
 ## What Quill does now
 
-- It checks GitHub for the latest stable release at launch and every four hours while it runs.
+- By default it checks GitHub for the latest stable release at launch and every four hours while it runs.
 - A newer release that this copy can install downloads right away, without a click (tdesktop's default, `cAutoUpdate` on).
 - One button follows the update. It is derived from `UpdateState` on every render (`updater::UpdateControl::of`):
   Check for updates, then Update Quill (only when the download has not started, for example after it failed), then the download with progress ("Downloading update 19.0 / 48.0 MB…"), then Restart to update.
@@ -17,3 +17,25 @@ Owner, 2026-10-23: the in-app update was annoying. A found update showed a banne
 - All three switches and their stored files (`auto_update.json`, `update_channel.json`, the `check_updates_on_launch` appearance field). Old files are ignored.
 - The beta channel (`interpret_release_list` for updates). What's new still reads the releases list.
 - The top banner for an available or ready update. The banner stays only for "Updated to Quill X" with its notes.
+
+## Explicit intro-settings opt-in (owner, 2026-11-05)
+
+The signed-out Settings::Intro copy restores functional **Update automatically**
+and **Install beta versions** controls. Automatic updates stay on and beta stays
+off for new and existing installations. Turning automatic updates off stops
+scheduled checks and holds a running download; manual checks remain available.
+The held worker retains its download/staging ownership until it actually exits;
+re-enabling updates cannot start a second writer on the same partial archive.
+An already staged stable update still applies at the next start, as before.
+The switches are disabled once an installer hand-off is running: a preference
+change must not replace that in-flight install state with Idle.
+
+Only explicit beta opt-in uses the release list and may select a prerelease
+(including a GitHub prerelease with a stable-looking version tag). Drafts are
+never selected. Turning beta off invalidates in-flight checks/downloads and
+prevents beta staging, handoff and startup installation; a staged beta is
+discarded by the normal startup plan validation. Opting in changes only channel
+eligibility: version precedence, asset digest, manifest, private plan ownership,
+platform signature verification, CI and release publishing are unchanged.
+The two preferences live in `update_preferences.json` under the device's primary
+account root; the removed legacy preference files remain ignored.

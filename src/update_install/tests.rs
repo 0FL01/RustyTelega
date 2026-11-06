@@ -83,6 +83,7 @@ fn every_reason_has_its_own_hint_and_demo_name() {
 fn release() -> ReleaseInfo {
     let base = crate::updater::RELEASES_URL;
     ReleaseInfo {
+        prerelease: false,
         version: "999.0.0".into(),
         notes: String::new(),
         url: format!("{base}/tag/v999.0.0"),

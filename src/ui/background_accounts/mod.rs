@@ -155,6 +155,16 @@ impl BackgroundAccounts {
         self.preparing.get(key).is_some_and(|count| *count > 0)
     }
 
+    pub(super) fn begin_intro_open(&mut self, key: &AccountKey) {
+        self.starting.insert(key.clone());
+        *self.preparing.entry(key.clone()).or_insert(0) += 1;
+    }
+
+    pub(super) fn end_intro_open(&mut self, key: &AccountKey) {
+        self.starting.remove(key);
+        self.prepared(key);
+    }
+
     fn prepared(&mut self, key: &AccountKey) {
         if let Some(count) = self.preparing.get_mut(key) {
             *count = count.saturating_sub(1);
@@ -250,6 +260,7 @@ impl QuillApp {
             if key == active
                 || self.background.client(&key).is_some()
                 || self.background.starting.contains(&key)
+                || self.background.preparing(&key)
                 || self.background.closing.may_be_open(&key)
                 || self.background.deleting.contains(&key)
                 || pending.contains(&key)
@@ -303,6 +314,7 @@ impl QuillApp {
                         || active_account(&root) == key
                         || this.background.client(&key).is_some()
                         || this.background.closing.may_be_open(&key)
+                        || this.background.preparing(&key)
                     {
                         return;
                     }

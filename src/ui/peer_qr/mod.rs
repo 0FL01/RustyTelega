@@ -21,7 +21,7 @@ mod gift_view;
 mod gifts_panel;
 mod panels;
 mod pattern_view;
-mod qr_path;
+pub(in crate::ui) mod qr_path;
 mod surface;
 mod view_model;
 

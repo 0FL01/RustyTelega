@@ -368,7 +368,15 @@ impl QuillShell {
         let app = app.clone();
         let shell = shell.clone();
         move |_, window, cx: &mut App| {
-            app.update(cx, |this, cx| clear(this, window, cx));
+            app.update(cx, |this, cx| {
+                clear(this, window, cx);
+                if this.intro.settings_open
+                    && this.pane_mode() == PaneMode::Connecting
+                    && !this.kit_dialog_open()
+                {
+                    window.focus(&this.settings.focus, cx);
+                }
+            });
             shell.update(cx, |shell, _| {
                 if shell.open_dialog == Some(kind) {
                     shell.open_dialog = None;
@@ -423,6 +431,12 @@ impl QuillApp {
     ) {
         if !QuillShell::dialog_is_open(self, kind) {
             window.close_dialog(cx);
+            if self.intro.settings_open
+                && self.pane_mode() == PaneMode::Connecting
+                && !self.kit_dialog_open()
+            {
+                window.focus(&self.settings.focus, cx);
+            }
         }
     }
 

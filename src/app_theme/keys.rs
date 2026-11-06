@@ -179,6 +179,30 @@ palette_keys! {
     HistoryPeer7NameFg = "historyPeer7NameFg", Messages, "Sender name colour 7";
     HistoryPeer8NameFg = "historyPeer8NameFg", Messages, "Sender name colour 8";
     WindowShadowFg = "windowShadowFg", Window, "Floating panel shadow";
+    IntroBg = "introBg", Window, "Sign-in background";
+    IntroTitleFg = "introTitleFg", Window, "Sign-in titles";
+    IntroDescriptionFg = "introDescriptionFg", Window, "Sign-in descriptions and errors";
+    IntroCoverTopBg = "introCoverTopBg", Window, "Sign-in cover top";
+    IntroCoverBottomBg = "introCoverBottomBg", Window, "Sign-in cover bottom";
+    IntroCoverIconsFg = "introCoverIconsFg", Window, "Sign-in cover pictures";
+    IntroCoverPlaneTrace = "introCoverPlaneTrace", Window, "Sign-in plane trace";
+    IntroCoverPlaneInner = "introCoverPlaneInner", Window, "Sign-in plane inner side";
+    IntroCoverPlaneOuter = "introCoverPlaneOuter", Window, "Sign-in plane outer side";
+    IntroCoverPlaneTop = "introCoverPlaneTop", Window, "Sign-in plane top";
+    ActiveButtonBgRipple = "activeButtonBgRipple", Controls, "Main button pressed";
+    ActiveButtonFgOver = "activeButtonFgOver", Controls, "Main button text under the pointer";
+    ActiveLineFg = "activeLineFg", Controls, "Focused field line";
+    ActiveLineFgError = "activeLineFgError", Controls, "Field line with an error";
+    LightButtonBg = "lightButtonBg", Controls, "Light button";
+    LightButtonBgOver = "lightButtonBgOver", Controls, "Light button under the pointer";
+    LightButtonBgRipple = "lightButtonBgRipple", Controls, "Light button pressed";
+    LightButtonFg = "lightButtonFg", Controls, "Light button text";
+    LightButtonFgOver = "lightButtonFgOver", Controls, "Light button text under the pointer";
+    IntroLayerBg = "layerBg", Window, "Intro settings backdrop";
+    IntroDividerBg = "boxDividerBg", Controls, "Intro settings section divider";
+    IntroSettingsTitleFg = "boxTitleFg", Window, "Intro settings title";
+    IntroSliderInactiveFg = "mediaPlayerInactiveFg", Controls, "Intro settings scale track";
+    IntroSettingsCloseFg = "boxTitleCloseFg", Controls, "Intro settings close icon";
 }
 
 impl PaletteKey {
@@ -238,6 +262,13 @@ impl PaletteKey {
             PaletteKey::HistoryLinkInFg => Some(PaletteKey::WindowActiveTextFg),
             PaletteKey::HistoryLinkOutFg => Some(PaletteKey::WindowActiveTextFg),
             PaletteKey::HistoryPeer4NameFg => Some(PaletteKey::WindowActiveTextFg),
+            PaletteKey::IntroBg => Some(PaletteKey::WindowBg),
+            PaletteKey::IntroTitleFg => Some(PaletteKey::WindowBoldFg),
+            PaletteKey::IntroDescriptionFg => Some(PaletteKey::WindowSubTextFg),
+            PaletteKey::ActiveButtonFgOver => Some(PaletteKey::ActiveButtonFg),
+            PaletteKey::LightButtonBg => Some(PaletteKey::WindowBg),
+            PaletteKey::LightButtonFg => Some(PaletteKey::WindowActiveTextFg),
+            PaletteKey::LightButtonFgOver => Some(PaletteKey::LightButtonFg),
             _ => None,
         }
     }

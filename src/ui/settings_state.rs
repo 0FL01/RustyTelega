@@ -83,6 +83,8 @@ pub(crate) struct SettingsUi {
     /// the bar's toast.
     pub(super) translate: super::translate_ui::TranslateUi,
     pub(super) update_state: quill::updater::UpdateState,
+    pub(super) update_preferences: quill::settings::UpdatePreferences,
+    pub(super) update_generation: u64,
     pub(super) update_banner_dismissed: bool,
     /// The What's New window and the release notes it shows.
     pub(super) whats_new: super::whats_new::WhatsNewUi,
@@ -134,6 +136,8 @@ impl SettingsUi {
             storage_selected: Default::default(),
             proxy: Default::default(),
             translate: super::translate_ui::TranslateUi::load(),
+            update_preferences: quill::settings::load_update_preferences(),
+            update_generation: 0,
             update_state: if demo.is_none() {
                 quill::update_install::startup_state()
             } else {

@@ -57,13 +57,7 @@ impl QuillApp {
         let Some(live) = self.live.as_ref() else {
             return;
         };
-        let allowed = match live.driver.session.auth {
-            AuthorizationState::WaitPhoneNumber => true,
-            // "Wrong number?" re-sends from the code step.
-            AuthorizationState::WaitCode { .. } => self.auth_ui.signin.editing_phone,
-            _ => false,
-        };
-        if !allowed {
+        if !self.signin_phone_visible(&live.driver.session.auth) || !self.signin_can_edit_phone() {
             return;
         }
         let Some((number, shown)) = self.signin_checked_phone(cx) else {
@@ -76,7 +70,7 @@ impl QuillApp {
             Ok(_) => {
                 // The field keeps the number so "Wrong number?" can edit it.
                 self.auth_ui.signin.submitted_phone = shown;
-                self.auth_ui.signin.editing_phone = false;
+                self.auth_ui.signin.phone_submitted = true;
                 self.auth_ui.signin.code_clock = None;
                 self.auth_ui.signin.error_clock = None;
                 self.auth_ui.signin.banned_dismissed = false;
@@ -94,6 +88,9 @@ impl QuillApp {
     }
 
     pub(super) fn submit_code(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.auth_ui.signin.editing_phone {
+            return;
+        }
         let Some(live) = self.live.as_mut() else {
             return;
         };

@@ -15,7 +15,6 @@
 use super::agent_state::{active_account, is_secret_chat_id};
 use super::app::{PaneMode, QuillApp};
 use super::esc_stack::ESC_LAYERS;
-use super::first_run_state::FirstRun;
 use super::shell::QuillShell;
 use gpui_kit::{App, Entity, Window};
 use quill::agent::grants::{self, ChatClass, Scope};
@@ -27,6 +26,7 @@ use quill::telegram::envelope::{ChannelMemberStatus, ChatKind};
 /// Kit dialogs agents never see or use, in any mode (`register_dialogs!`
 /// names). A test checks every name is registered.
 pub(super) const HARD_DIALOGS: &[&str] = &[
+    "PhoneBanned",
     "AgentRequest",
     "AgentConsent",
     "AgentResetToken",
@@ -83,7 +83,8 @@ pub(super) const HARD_DIALOGS: &[&str] = &[
 
 /// Hand-drawn layers (`esc_stack::ESC_LAYERS` names) blocked in any mode.
 pub(super) const HARD_LAYERS: &[&str] = &[
-    "first-run-intro",
+    "intro-settings",
+    "intro-country-picker",
     "payment-dialog",
     "payment-receipt",
     "sessions",
@@ -224,7 +225,7 @@ fn layer_name(layer: &str) -> String {
         "media-viewer" => "the media viewer".to_string(),
         "info-panel" | "shared-media" => "a chat's info".to_string(),
         "forward-picker" => "the forward picker".to_string(),
-        "first-run-intro" => "the welcome screen".to_string(),
+        "intro-settings" => "Settings".to_string(),
         other => format!("an overlay ({})", other.replace('-', " ")),
     }
 }
@@ -293,9 +294,6 @@ impl QuillApp {
         }
         if self.account.passcode.locked {
             return blocked("the passcode lock screen");
-        }
-        if !matches!(self.first_run, FirstRun::Done) {
-            return blocked("the welcome screen");
         }
         if self.settings.open {
             return blocked("Settings");

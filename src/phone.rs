@@ -143,6 +143,7 @@ fn groups_for(code: &str) -> &'static [usize] {
         "34" | "351" | "380" => &[3, 3, 3],
         "39" => &[3, 3, 4],
         "44" => &[4, 6],
+        "46" => &[2, 3, 4],
         "49" => &[4, 8],
         "52" => &[3, 3, 4],
         "55" => &[2, 5, 4],
@@ -202,6 +203,20 @@ pub struct Formatted {
     pub digits: String,
     /// Calling code recognised at the start of the digits.
     pub calling_code: Option<String>,
+}
+
+impl Formatted {
+    /// National-part mask, using the same groups as the edited number.
+    pub fn national_placeholder(&self) -> String {
+        self.calling_code
+            .as_deref()
+            .map_or_else(String::new, |code| {
+                groups_for(code)
+                    .iter()
+                    .map(|count| format!(" {}", "−".repeat(*count)))
+                    .collect()
+            })
+    }
 }
 
 /// Format `input` as an international number. Always international: a
@@ -474,10 +489,15 @@ mod tests {
             ("15550100", "+1 555 010 0"),
             ("15550100199", "+1 555 010 0199"),
             ("447911123456", "+44 7911 123456"),
+            ("461234", "+46 12 34"),
         ];
         for (typed, expected) in steps {
             assert_eq!(format_international(typed, &list).text, expected, "{typed}");
         }
+        assert_eq!(
+            format_international("+461234", &list).national_placeholder(),
+            " −− −−− −−−−"
+        );
     }
 
     #[test]

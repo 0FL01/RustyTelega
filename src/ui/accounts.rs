@@ -134,6 +134,9 @@ impl QuillApp {
         self.clear_device_qr();
         self.close_accounts(window, cx);
         self.auth_ui.accepted_registration_terms = None;
+        self.auth_ui.registration_photo = None;
+        self.auth_ui.registration_submitted = false;
+        self.auth_ui.registration_terms_open = false;
         self.auth_ui.registration_notify_contacts = false;
         self.auth_ui
             .registration_first_input

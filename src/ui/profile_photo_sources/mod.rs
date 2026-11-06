@@ -40,6 +40,9 @@ pub(crate) enum PhotoTarget {
     Chat(ChatId),
     /// The photo of a group or channel being created, set once it exists.
     NewChat,
+    /// Intro's pending signup; the generation prevents a late picker result
+    /// from crossing an account switch or reset.
+    Registration(u64),
 }
 
 /// How a chosen photo looks before it is sent.
@@ -169,6 +172,14 @@ impl QuillApp {
         if self.new_chat_photo_open() {
             return Some(PhotoTarget::NewChat);
         }
+        if matches!(
+            self.current_auth(),
+            quill::telegram::envelope::AuthorizationState::WaitRegistration { .. }
+        ) && !self.auth_ui.signin.editing_phone
+            && !self.auth_ui.registration_submitted
+        {
+            return Some(PhotoTarget::Registration(self.connection.generation));
+        }
         self.dialogs
             .edit_profile_dialog
             .as_ref()
@@ -177,6 +188,7 @@ impl QuillApp {
 
     fn sources_mut(&mut self) -> Option<&mut PhotoSources> {
         match self.photo_target()? {
+            PhotoTarget::Registration(_) => None,
             PhotoTarget::Chat(_) => self.group_edit_box_mut().map(|edit| &mut edit.sources),
             PhotoTarget::NewChat => self.new_chat_dialog_mut().map(|dialog| &mut dialog.sources),
             PhotoTarget::Profile => self
@@ -189,6 +201,7 @@ impl QuillApp {
 
     fn sources(&self) -> Option<&PhotoSources> {
         match self.photo_target()? {
+            PhotoTarget::Registration(_) => None,
             PhotoTarget::Chat(_) => self.group_edit_box().map(|edit| &edit.sources),
             PhotoTarget::NewChat => self.new_chat_dialog().map(|dialog| &dialog.sources),
             PhotoTarget::Profile => self
@@ -302,6 +315,20 @@ impl QuillApp {
         photo: ChosenPhoto,
     ) -> Result<(), String> {
         match target {
+            PhotoTarget::Registration(generation) => {
+                if generation != self.connection.generation
+                    || self.auth_ui.signin.editing_phone
+                    || self.auth_ui.registration_submitted
+                    || !matches!(
+                        self.current_auth(),
+                        quill::telegram::envelope::AuthorizationState::WaitRegistration { .. }
+                    )
+                {
+                    return Err(tr(keys::Q_NOTES_FAILED_SET_PHOTO).into());
+                }
+                self.auth_ui.registration_photo = Some(photo);
+                Ok(())
+            }
             PhotoTarget::Chat(chat_id) => match self.group_edit_box_mut() {
                 Some(edit) if edit.chat_id == chat_id => {
                     edit.photo = Some(photo);

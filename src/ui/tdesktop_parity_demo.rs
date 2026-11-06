@@ -31,6 +31,13 @@ register_demos![
 
 impl QuillApp {
     fn demo_tdesktop_parity(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Match the reference's hidden native-caret phase, without changing production timing.
+        cx.defer(|cx| {
+            gpui_kit::component::Theme::update(cx, |theme| {
+                theme.cursor_blink =
+                    gpui_kit::base::input::CursorBlink::blinking(std::time::Duration::from_secs(3));
+            });
+        });
         self.appearance.folder_tabs_view = quill::folder_icons::FolderTabsView::Left;
         self.frame.sidebar_width = gpui_kit::px(454.);
         self.open_folder_tab(Some(FOLDER), cx);

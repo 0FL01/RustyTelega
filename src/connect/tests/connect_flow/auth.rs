@@ -140,6 +140,70 @@ fn driver_submits_code_and_password_only_in_matching_states() {
     assert!(!sink.rendered().contains("unit-pw"));
     assert!(!sink.rendered().contains("CANARY_HINT"));
 
+    assert_eq!(
+        driver.submit_phone("+15551212"),
+        Err(ConnectSendError::InvalidRequest)
+    );
+    let password_error = copy_and_parse(
+        &format!(
+            r#"{{"@type":"error","code":400,"message":"PASSWORD_HASH_INVALID","@extra":"{}"}}"#,
+            pw_extra.0
+        ),
+        &seq,
+        &dyn_sink,
+    )
+    .unwrap();
+    driver.ingest(password_error).unwrap();
+    assert!(crate::auth::can_submit_phone(&driver.session.auth));
+    assert!(!driver.session.requests.has_auth_submit());
+    assert!(
+        !driver
+            .session
+            .requests
+            .has_purpose(RequestPurpose::CheckAuthenticationPassword)
+    );
+    let phone_extra = driver.submit_phone("+15551212").unwrap();
+    assert_ne!(phone_extra, pw_extra);
+    assert!(
+        driver
+            .session
+            .requests
+            .has_purpose(RequestPurpose::SetPhoneNumber)
+    );
+    assert!(
+        !driver
+            .session
+            .requests
+            .has_purpose(RequestPurpose::CheckAuthenticationPassword)
+    );
+    assert!(
+        recorder
+            .snapshot()
+            .last()
+            .unwrap()
+            .contains("setAuthenticationPhoneNumber")
+    );
+    assert!(!sink.rendered().contains("+15551212"));
+    let phone_error = copy_and_parse(
+        &format!(
+            r#"{{"@type":"error","code":400,"message":"PHONE_NUMBER_INVALID","@extra":"{}"}}"#,
+            phone_extra.0
+        ),
+        &seq,
+        &dyn_sink,
+    )
+    .unwrap();
+    driver.ingest(phone_error).unwrap();
+    assert!(matches!(
+        driver.session.auth,
+        AuthorizationState::WaitPassword { .. }
+    ));
+    assert!(!driver.session.requests.has_auth_submit());
+    assert_eq!(
+        driver.session.auth_state.last_auth_error.unwrap().purpose,
+        RequestPurpose::SetPhoneNumber
+    );
+
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -212,6 +276,69 @@ fn driver_resend_code_and_qr_login_only_in_matching_states() {
     assert!(!sink.rendered().contains("unit-test-token"));
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn reset_qr_login_requires_unconfirmed_idle_pre_auth() {
+    let store = MemorySecretStore::new();
+    let (dir, prepared) = prepared_tmp(&store);
+    let sink: Arc<dyn DiagnosticSink> = Arc::new(MemorySink::new());
+    let recorder = Arc::new(RecordingSender::new());
+    let session = Session::new(AccountKey::primary(), sink);
+    let mut driver = ConnectDriver::new(session, recorder.clone(), test_credentials(), prepared);
+    for state in [
+        AuthorizationState::WaitPhoneNumber,
+        AuthorizationState::Ready,
+        AuthorizationState::WaitPassword {
+            has_recovery_email: false,
+        },
+        AuthorizationState::Closed,
+    ] {
+        driver.session.auth = state;
+        assert_eq!(
+            driver.reset_qr_login(),
+            Err(ConnectSendError::InvalidRequest)
+        );
+    }
+    driver.session.auth = AuthorizationState::WaitOtherDeviceConfirmation {
+        link: "canary-qr".into(),
+    };
+    let pending = driver.session.request(RequestPurpose::SetPhoneNumber, None);
+    assert_eq!(
+        driver.reset_qr_login(),
+        Err(ConnectSendError::InvalidRequest)
+    );
+    driver.session.requests.take(pending);
+    driver.session.settings.passkeys.login.checking = true;
+    assert_eq!(
+        driver.reset_qr_login(),
+        Err(ConnectSendError::InvalidRequest)
+    );
+    driver.session.settings.passkeys.login.checking = false;
+    driver.session.my_user_id = Some(42);
+    assert_eq!(
+        driver.reset_qr_login(),
+        Err(ConnectSendError::InvalidRequest)
+    );
+    driver.session.my_user_id = None;
+    assert!(
+        recorder.snapshot().is_empty(),
+        "rejected resets send nothing"
+    );
+    driver.reset_qr_login().unwrap();
+    assert_eq!(
+        driver.reset_qr_login(),
+        Err(ConnectSendError::InvalidRequest)
+    );
+    assert_eq!(recorder.snapshot().len(), 1);
+    assert!(
+        recorder
+            .snapshot()
+            .first()
+            .unwrap()
+            .contains("\"@type\":\"destroy\"")
+    );
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

@@ -38,16 +38,22 @@ struct TestClient {
     finished: Arc<AtomicBool>,
     auth: Arc<Mutex<AuthorizationState>>,
     dir: std::path::PathBuf,
+    discarded_auth: bool,
 }
 
 impl Closable for TestClient {
     fn begin_close(&mut self) {
-        crate::connect::closing::begin_close_bridged(&mut self.driver, &self.bridge);
+        if !self.discarded_auth {
+            crate::connect::closing::begin_close_bridged(&mut self.driver, &self.bridge);
+        }
     }
 
     fn drain(&mut self, budget: Duration) -> CloseProgress {
-        let progress =
-            crate::connect::closing::drain_bridged(&mut self.driver, &self.bridge, budget);
+        let progress = if self.discarded_auth {
+            crate::connect::closing::drain_discarded_auth(&mut self.driver, &self.bridge, budget)
+        } else {
+            crate::connect::closing::drain_bridged(&mut self.driver, &self.bridge, budget)
+        };
         *self.auth.lock().expect("auth") = self.driver.session.auth.clone();
         progress
     }
@@ -146,6 +152,7 @@ fn test_client(hub: Arc<TdHub>, tx: Sender<String>) -> (TestClient, Handle) {
         finished: finished.clone(),
         auth: auth.clone(),
         dir,
+        discarded_auth: false,
     };
     let handle = Handle {
         recorder,
@@ -155,6 +162,91 @@ fn test_client(hub: Arc<TdHub>, tx: Sender<String>) -> (TestClient, Handle) {
         auth,
     };
     (client, handle)
+}
+
+#[test]
+fn reset_qr_login_discards_late_ready_and_confirms_only_closed() {
+    let (hub, tx) = channel_hub();
+    let (mut client, handle) = test_client(hub, tx);
+    client.driver.session.auth = AuthorizationState::WaitOtherDeviceConfirmation {
+        link: "unit-test-token".into(),
+    };
+    client.driver.session.my_user_id = None;
+    client.driver.session.requests.invalidate_auth();
+    let before = handle.sent().len();
+    client.driver.reset_qr_login().expect("pre-auth destroy");
+    client.discarded_auth = true;
+    let sent = handle.sent();
+    assert_eq!(sent.len(), before + 1);
+    assert!(sent.last().unwrap().contains("\"@type\":\"destroy\""));
+    let mut set = ClosingSet::new();
+    let key = key(9);
+    set.push(key.clone(), Box::new(client), false);
+    assert!(set.may_be_open(&key));
+    handle.answer("authorizationStateReady");
+    handle.answer("authorizationStateClosed");
+    let done = poll_until_done(&mut set);
+    assert_eq!(
+        done,
+        vec![ClosedClient {
+            key: key.clone(),
+            restart: false,
+            confirmed: true
+        }]
+    );
+    assert!(!set.may_be_open(&key));
+    assert!(handle.finished());
+    assert_eq!(handle.auth(), AuthorizationState::Closed);
+    assert_eq!(
+        handle.sent(),
+        sent,
+        "late Ready must not issue any startup/auth work"
+    );
+}
+
+#[test]
+fn reset_qr_login_fresh_client_requires_phone_and_rejects_ready_before_ingest() {
+    for state in [
+        "authorizationStateReady",
+        "authorizationStateWaitPhoneNumber",
+    ] {
+        let (hub, tx) = channel_hub();
+        let (mut client, handle) = test_client(hub, tx);
+        client.driver.session.auth = AuthorizationState::WaitTdlibParameters;
+        client.driver.session.my_user_id = None;
+        let before = handle.sent();
+        handle.answer(state);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let phone = loop {
+            if let Some(phone) = crate::connect::live::poll_reset_phone(
+                &mut client.driver,
+                &client.bridge,
+                Duration::from_millis(4),
+            ) {
+                break phone;
+            }
+            assert!(Instant::now() < deadline, "auth update was not routed");
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        assert_eq!(phone, state == "authorizationStateWaitPhoneNumber");
+        if !phone {
+            assert_eq!(
+                client.driver.session.auth,
+                AuthorizationState::WaitTdlibParameters
+            );
+            assert_eq!(
+                handle.sent(),
+                before,
+                "Ready must not reach ingestion/startup work"
+            );
+        } else {
+            assert_eq!(
+                client.driver.session.auth,
+                AuthorizationState::WaitPhoneNumber
+            );
+        }
+        client.bridge.shutdown();
+    }
 }
 
 fn client() -> (Box<dyn Closable>, Handle) {

@@ -4,6 +4,9 @@
 use gpui_kit::App;
 use std::borrow::Cow;
 
+mod intro;
+pub(crate) const INTRO_FAMILY: &str = intro::FAMILY;
+
 /// The family name the embedded files register.
 pub(crate) const FAMILY: &str = "Open Sans";
 
@@ -16,7 +19,7 @@ pub(crate) const FSIZE: f32 = 13.;
 pub(crate) fn register(cx: &mut App) {
     cx.set_text_rendering_mode(gpui_kit::TextRenderingMode::Grayscale);
     super::install_window_controls(cx);
-    let faces: Vec<Cow<'static, [u8]>> = vec![
+    let mut faces: Vec<Cow<'static, [u8]>> = vec![
         Cow::Borrowed(include_bytes!("../../../assets/fonts/OpenSans-Regular.ttf")),
         Cow::Borrowed(include_bytes!(
             "../../../assets/fonts/OpenSans-SemiBold.ttf"
@@ -26,6 +29,11 @@ pub(crate) fn register(cx: &mut App) {
             "../../../assets/fonts/OpenSans-SemiBoldItalic.ttf"
         )),
     ];
+    let intro_faces: Vec<_> = faces
+        .iter()
+        .filter_map(|face| intro::alias_face(face))
+        .collect();
+    faces.extend(intro_faces.into_iter().map(Cow::Owned));
     if let Err(error) = cx.text_system().add_fonts(faces) {
         log::warn!("could not register the embedded Open Sans faces: {error}");
     }

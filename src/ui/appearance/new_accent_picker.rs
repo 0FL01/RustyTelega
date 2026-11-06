@@ -59,7 +59,12 @@ impl QuillApp {
                 format!("{pct}%"),
                 current == pct,
                 cx,
-                move |this, cx| this.set_appearance(cx, |a| a.interface_scale_pct = pct),
+                move |this, cx| {
+                    this.set_appearance(cx, |a| {
+                        a.interface_scale_pct = pct;
+                        a.interface_scale_auto = false;
+                    })
+                },
             ));
         }
         self.setting_spot(

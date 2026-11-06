@@ -457,6 +457,7 @@ fn a_refused_bundle_keeps_its_quarantine_mark() {
     let layout = Layout::of(&executable(&running)).unwrap();
     ensure_private_dir(&layout.stage_root).unwrap();
     let release = |version: &str| crate::updater::ReleaseInfo {
+        prerelease: false,
         version: version.into(),
         notes: String::new(),
         url: format!("{}/tag/v{version}", crate::updater::RELEASES_URL),

@@ -371,6 +371,16 @@ impl QuillApp {
             progressed = true;
         }
         while let Some(owned) = live.bridge.next_timeout(Duration::from_millis(0)) {
+            if owned.envelope.extra.is_none()
+                && matches!(
+                    &owned.envelope.payload,
+                    quill::telegram::envelope::EnvelopePayload::Auth(
+                        quill::telegram::envelope::AuthPayload::UpdateAuthorizationState(_)
+                    )
+                )
+            {
+                self.auth_ui.signin.auth_updated();
+            }
             if super::frame_clock::trace_notify() {
                 let payload = format!("{:?}", owned.envelope.payload);
                 let name = payload
@@ -491,6 +501,7 @@ impl QuillApp {
             self.video_pip_account_ended(&account, cx);
         }
         self.forget_sends_after_auth(&prev_auth, saw_logging_out);
+        self.finish_registration_photo(cx);
         self.poll_device_qr(cx);
         self.drain_account_notices();
         if ingested {

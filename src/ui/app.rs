@@ -30,8 +30,8 @@ pub struct QuillApp {
     pub(super) stories: super::stories_state::StoryUi,
     /// The Premium feature preview's clip player (`ui/premium_preview_state.rs`).
     pub(super) premium_preview: super::premium_preview_state::PremiumPreviewUi,
-    /// The first-run onboarding before sign-in (`ui/first_run_state.rs`).
-    pub(super) first_run: super::first_run_state::FirstRun,
+    /// Signed-out presentation only; TDLib remains the auth state owner.
+    pub(super) intro: super::intro::IntroUi,
     /// Message history: rows, window, scroll probes, highlights and pinned bar (`ui/history_state.rs`).
     pub(super) history: super::history_state::HistoryUi,
     /// Window and per-frame bookkeeping: animation demand, focus restore, quit guard (`ui/frame_state.rs`).

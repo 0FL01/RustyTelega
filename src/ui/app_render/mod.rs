@@ -652,32 +652,17 @@ impl Render for QuillApp {
             .when(
                 self.pane_mode() == super::app::PaneMode::Connecting && !self.disk.shows_screen(),
                 |this| {
-                    // Sign-in replaces the chat layout until the account is
-                    // ready; the first-run onboarding comes before it.
-                    let page = match self.first_run_view(cx) {
-                        Some(first_run) => first_run,
-                        None => self.onboarding(
-                            &auth,
-                            show_phone,
-                            show_code,
-                            show_password,
-                            show_qr,
-                            cx,
-                        ),
-                    };
+                    let page = self.intro_view(&auth, window, cx);
                     this.child(div().flex_1().min_h_0().child(page))
                 },
             )
             .when(
                 self.pane_mode() != super::app::PaneMode::Connecting,
                 |this| {
-                    // The onboarding replayed from Settings takes the
-                    // signed-in layout's place until it is finished.
-                    match self.first_run_view(cx) {
-                        Some(first_run) => this.child(div().flex_1().min_h_0().child(first_run)),
-                        // Settings covers the chat list and the chat.
-                        None if self.settings.open => this.child(self.settings_window(window, cx)),
-                        None => this.child(self.shell_columns(
+                    if self.settings.open {
+                        this.child(self.settings_window(window, cx))
+                    } else {
+                        this.child(self.shell_columns(
                             &auth,
                             show_phone,
                             show_code,
@@ -685,7 +670,7 @@ impl Render for QuillApp {
                             show_qr,
                             window,
                             cx,
-                        )),
+                        ))
                     }
                 },
             )
@@ -714,7 +699,6 @@ impl Render for QuillApp {
             .when(self.viewer.state.is_open(), |this| {
                 this.child(self.media_viewer_overlay(window, cx))
             })
-            .children(self.first_run_window_cover(cx))
             // Live: the latest status note is a transient toast floating
             // above the composer — no layout shift, no click capture, gone
             // after a few seconds. It paints above the media viewer too
@@ -882,7 +866,7 @@ impl Render for QuillApp {
                     cx.listener(|this, _, _, cx| this.autoscroll_stop(cx)),
                 )
             });
-        let root = root.children(self.disk_full_cover(&auth, cx));
+        let root = root.children(self.disk_full_cover(&auth, window, cx));
         // The lock screen covers the whole window, above every overlay.
         let root = root.when(self.account.passcode.locked, |this| {
             this.child(self.lock_overlay(cx))

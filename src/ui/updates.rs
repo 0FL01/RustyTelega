@@ -32,12 +32,18 @@ impl QuillApp {
         }
         self.settings.update_state = UpdateState::Checking;
         self.settings.update_banner_dismissed = false;
+        let generation = self.settings.update_generation;
+        let beta = self.settings.update_preferences.beta;
         let check = cx
             .background_executor()
-            .spawn(async move { check_latest_release() });
+            .spawn(async move { check_latest_release(beta) });
         cx.spawn(async move |this, cx| {
             let state = check.await;
-            let _ = this.update(cx, |this, cx| this.apply_check_result(state, cx));
+            let _ = this.update(cx, |this, cx| {
+                if this.settings.update_generation == generation {
+                    this.apply_check_result(state, cx);
+                }
+            });
         })
         .detach();
         cx.notify();
@@ -48,14 +54,20 @@ impl QuillApp {
     /// session opens on "Updated to Quill X"; a check only starts when
     /// nothing is in flight (`check_for_updates`).
     pub(super) fn start_update_checks(&mut self, cx: &mut Context<Self>) {
-        if self.settings.update_state == UpdateState::Idle {
+        if self.settings.update_preferences.automatic
+            && self.settings.update_state == UpdateState::Idle
+        {
             self.check_for_updates(cx);
         }
         cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(RECHECK_EVERY).await;
                 if this
-                    .update(cx, |this, cx| this.check_for_updates(cx))
+                    .update(cx, |this, cx| {
+                        if this.settings.update_preferences.automatic {
+                            this.check_for_updates(cx);
+                        }
+                    })
                     .is_err()
                 {
                     break;
@@ -76,7 +88,7 @@ impl QuillApp {
     /// Starts the found release's download, unless the disk bar says
     /// automatic downloads wait: then the disk's return to healthy starts it.
     pub(super) fn auto_download_update(&mut self, cx: &mut Context<Self>) {
-        if self.disk.holds_auto_downloads() {
+        if !self.settings.update_preferences.automatic || self.disk.holds_auto_downloads() {
             return;
         }
         if let Some(release) = UpdateControl::auto_download(
@@ -92,11 +104,38 @@ impl QuillApp {
     /// bytes it kept (`auto_download_update`).
     pub(super) fn finish_update_download(
         &mut self,
+        generation: u64,
         release: quill::updater::ReleaseInfo,
         progress: &DownloadProgress,
         result: Result<std::path::PathBuf, &'static str>,
         cx: &mut Context<Self>,
     ) {
+        if self.settings.update_generation != generation {
+            if matches!(&self.settings.update_state, UpdateState::Downloading(_, current) if current == progress)
+            {
+                self.settings.update_state = UpdateState::Idle;
+                if self.settings.update_preferences.automatic
+                    && matches!(
+                        self.connection.status,
+                        crate::ui::connect_ui::ConnectUiStatus::Live
+                            | crate::ui::connect_ui::ConnectUiStatus::NeedCredentials
+                            | crate::ui::connect_ui::ConnectUiStatus::Blocked
+                    )
+                {
+                    self.check_for_updates(cx);
+                }
+                cx.notify();
+            }
+            return;
+        }
+        if (release.prerelease
+            || semver::Version::parse(&release.version).is_ok_and(|v| !v.pre.is_empty()))
+            && !self.settings.update_preferences.beta
+        {
+            self.settings.update_state = UpdateState::Idle;
+            cx.notify();
+            return;
+        }
         self.settings.update_state = match result {
             Ok(plan) => UpdateState::Staged(release, plan),
             Err(_) if progress.is_held() => UpdateState::Available(release),
@@ -146,6 +185,12 @@ impl QuillApp {
     /// button then offers "Restart to update", and the next start applies it
     /// too (`update_install::apply_on_start`). Quill never restarts itself.
     fn download_update(&mut self, release: quill::updater::ReleaseInfo, cx: &mut Context<Self>) {
+        if (release.prerelease
+            || semver::Version::parse(&release.version).is_ok_and(|v| !v.pre.is_empty()))
+            && !self.settings.update_preferences.beta
+        {
+            return;
+        }
         if matches!(
             self.settings.update_state,
             UpdateState::Downloading(..) | UpdateState::Installing(_) | UpdateState::Staged(..)
@@ -156,6 +201,7 @@ impl QuillApp {
         self.settings.update_state = UpdateState::Downloading(release.clone(), progress.clone());
         let download_release = release.clone();
         let download_progress = progress.clone();
+        let generation = self.settings.update_generation;
         let download = cx.background_executor().spawn(async move {
             quill::update_install::download_and_stage(&download_release, &download_progress)
         });
@@ -163,7 +209,7 @@ impl QuillApp {
         cx.spawn(async move |this, cx| {
             let result = download.await;
             let _ = this.update(cx, |this, cx| {
-                this.finish_update_download(release, &held, result, cx);
+                this.finish_update_download(generation, release, &held, result, cx);
             });
         })
         .detach();
@@ -208,6 +254,38 @@ impl QuillApp {
                 self.settings.update_state =
                     UpdateState::InstallFailed(release, tr(keys::Q_OPS_COULD_NOT_START_THE_UPDATE));
             }
+        }
+        cx.notify();
+    }
+
+    pub(super) fn set_update_preferences(
+        &mut self,
+        automatic: bool,
+        beta: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let prefs = quill::settings::UpdatePreferences { automatic, beta };
+        if prefs == self.settings.update_preferences
+            || matches!(self.settings.update_state, UpdateState::Installing(_))
+        {
+            return;
+        }
+        self.hold_update_download();
+        self.settings.update_generation += 1;
+        self.settings.update_preferences = prefs;
+        quill::settings::save_update_preferences(&prefs);
+        if !matches!(self.settings.update_state, UpdateState::Downloading(..)) {
+            self.settings.update_state = UpdateState::Idle;
+        }
+        if automatic
+            && matches!(
+                self.connection.status,
+                crate::ui::connect_ui::ConnectUiStatus::Live
+                    | crate::ui::connect_ui::ConnectUiStatus::NeedCredentials
+                    | crate::ui::connect_ui::ConnectUiStatus::Blocked
+            )
+        {
+            self.check_for_updates(cx);
         }
         cx.notify();
     }

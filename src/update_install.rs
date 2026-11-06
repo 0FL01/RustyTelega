@@ -258,7 +258,7 @@ fn digest_file(path: &Path) -> std::io::Result<String> {
         .collect())
 }
 
-pub(crate) fn valid_release(release: &ReleaseInfo) -> bool {
+pub(crate) fn valid_release(release: &ReleaseInfo, beta: bool) -> bool {
     let Some(tag) = release
         .url
         .strip_prefix(&format!("{}/tag/", crate::updater::RELEASES_URL))
@@ -274,7 +274,7 @@ pub(crate) fn valid_release(release: &ReleaseInfo) -> bool {
         return false;
     };
     version == tag_version
-        && version.pre.is_empty()
+        && ((!release.prerelease && version.pre.is_empty()) || beta)
         && version.cmp_precedence(&current).is_gt()
         && crate::updater::valid_asset(asset, tag)
 }
@@ -556,7 +556,7 @@ pub fn download_and_stage(
     {
         return Err("Download failed. Check your connection and retry.");
     }
-    if !valid_release(release) {
+    if !valid_release(release, crate::settings::load_update_preferences().beta) {
         return Err(
             "The release has no valid newer binary for this platform. Retry the release check.",
         );
@@ -620,6 +620,11 @@ pub fn download_and_stage(
         // checks every file against this first.
         let files = manifest::of(&staged)
             .map_err(|_| "The downloaded package could not be unpacked. Nothing was installed.")?;
+        if progress.is_held()
+            || !valid_release(release, crate::settings::load_update_preferences().beta)
+        {
+            return Err("Update download paused by the current settings.");
+        }
         let plan = InstallPlan {
             target,
             staged: staged.clone(),
@@ -950,7 +955,10 @@ fn install(
         return Err(std::io::Error::other("Invalid update handoff"));
     }
     wait_for_parent(plan.parent)?;
-    if !valid_release(&plan.release) {
+    if !valid_release(
+        &plan.release,
+        crate::settings::load_update_preferences().beta,
+    ) {
         return Err(std::io::Error::other("Invalid update release"));
     }
     install_bundle(plan, target, &layout, launch)

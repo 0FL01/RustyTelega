@@ -99,7 +99,9 @@ INTRO_QR = {
         "phone link": (874, 687, 1046, 707),
         "passkey link": (896, 714, 1024, 734),
     }),
-    "masks": [],
+    # Integer-scaled 41-module matrix; preserve the static disc and plane.
+    "masks": [(878, 329, 1041, 492)],
+    "keep_ellipses": [(938, 389, 981, 432)],
     "always": [],
 }
 

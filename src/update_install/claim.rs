@@ -287,6 +287,7 @@ mod tests {
             staged: PathBuf::from("staged"),
             parent: 1,
             release: ReleaseInfo {
+                prerelease: false,
                 version: "999.0.0".into(),
                 notes: String::new(),
                 url: String::new(),

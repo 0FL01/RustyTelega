@@ -88,9 +88,13 @@ impl QuillApp {
                             .small()
                             .tooltip(tr(keys::Q_SETTINGS_BACK_TO_CHATS))
                             .accessibility_label(tr(keys::Q_SETTINGS_BACK_TO_CHATS))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.close_settings();
-                                cx.notify();
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if this.intro.settings_open {
+                                    this.close_intro_settings(window, cx);
+                                } else {
+                                    this.close_settings();
+                                    cx.notify();
+                                }
                             })),
                     )
                     .child(

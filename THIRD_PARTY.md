@@ -83,6 +83,7 @@ the exact commits and a written offer in `LGPL-SOURCES.txt`
 | Call tones | Quill project | Synthesized in code (`src/ui/call_tones.rs`); no audio files and none of Telegram's GPL sounds. |
 | Fonts `assets/fonts/OpenSans-*.ttf` (compiled in) | Apache-2.0 (`licenses/open-sans-Apache-2.0.txt`) | Open Sans 1.10 by Google, the copy Telegram Desktop ships in `lib_ui/fonts`. The interface face. |
 | Interface icon masks `assets/tdesktop-icons/` (compiled in) | GPL-3.0 (`licenses/GPL-3.0.txt`) | Telegram Desktop's icons (`Telegram/Resources/icons`, `lib_ui/icons`), copied unchanged so the main window matches Telegram Desktop pixel for pixel. Their licence makes the whole app GPL-3.0. |
+| Intro email illustration `assets/tdesktop-intro/email*.png` (compiled in) | GPL-3.0 (`licenses/GPL-3.0.txt`) | Final frame of Telegram Desktop's `Telegram/Resources/animations/cloud_password/email.tgs`, rendered at the source's 66px size and 2x/3x. Derived from animation data, not from a reference screenshot. |
 | Emoji sheets `assets/emoji/tdesktop/` (compiled in) | Distributed in Telegram Desktop's GPL-3.0 repository (`licenses/GPL-3.0.txt`); the repository states no separate licence for the artwork | Telegram Desktop's built-in emoji (`Telegram/Resources/emoji/emoji_1..8.webp` and `set0_preview.webp`), the default "Telegram Desktop" set. Sheets renumbered from 0; `config.json` is generated from `lib_ui/emoji.txt` with tdesktop's own `codegen_emoji` data code (`scripts/tdesktop_parity/emoji_index`). |
 
 ## Source not used

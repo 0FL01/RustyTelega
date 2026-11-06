@@ -15,6 +15,8 @@ pub(crate) const MAX_RESPONSE_BYTES: u64 = 1_048_576;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReleaseInfo {
+    #[serde(default)]
+    pub prerelease: bool,
     pub version: String,
     pub notes: String,
     pub url: String,
@@ -289,6 +291,7 @@ fn release_state(release: GithubRelease, version: Version, current: &Version) ->
         valid_asset(&asset, &release.tag_name).then_some(asset)
     });
     UpdateState::Available(ReleaseInfo {
+        prerelease: release.prerelease || !version.pre.is_empty(),
         version: version.to_string(),
         notes: release.body.unwrap_or_default(),
         url: release.html_url,
@@ -317,8 +320,11 @@ fn check_endpoint(list: bool) -> (String, bool) {
 /// Blocking, bounded check of the latest stable release; callers run it on
 /// the background executor.
 #[cfg(feature = "ui")]
-pub fn check_latest_release() -> UpdateState {
-    match fetch_release_json(false) {
+pub fn check_latest_release(beta: bool) -> UpdateState {
+    match fetch_release_json(beta) {
+        Ok((status, body)) if beta => {
+            interpret_beta_release_list(status, &body, crate::version::APP)
+        }
         Ok((status, body)) => interpret_release(status, &body, crate::version::APP),
         Err(Fetch::Unreachable) => UpdateState::Failed(
             "Could not reach the release server. Check your connection and retry.",
@@ -327,6 +333,28 @@ pub fn check_latest_release() -> UpdateState {
             UpdateState::Failed("Could not read release information. Retry the check.")
         }
     }
+}
+
+/// Explicit opt-in only: choose the newest valid stable or beta release by
+/// semantic precedence; drafts never enter the installer.
+pub fn interpret_beta_release_list(status: u16, body: &[u8], current: &str) -> UpdateState {
+    if status != 200 || body.len() as u64 > MAX_RESPONSE_BYTES {
+        return interpret_release(status, body, current);
+    }
+    let (Ok(releases), Ok(current)) = (
+        serde_json::from_slice::<Vec<GithubRelease>>(body),
+        Version::parse(current),
+    ) else {
+        return UpdateState::Failed("Invalid release information. Retry the check.");
+    };
+    let newest = releases
+        .into_iter()
+        .filter(|release| !release.draft)
+        .filter_map(|release| release_version(&release.tag_name).map(|version| (release, version)))
+        .max_by(|(_, a), (_, b)| a.cmp_precedence(b));
+    newest.map_or(UpdateState::NoRelease, |(release, version)| {
+        release_state(release, version, &current)
+    })
 }
 
 #[cfg(feature = "ui")]
@@ -376,6 +404,7 @@ mod tests {
     #[test]
     fn a_staged_update_says_it_is_ready_and_waits_for_a_restart() {
         let release = ReleaseInfo {
+            prerelease: false,
             version: "9.9.9".into(),
             notes: String::new(),
             url: String::new(),
@@ -436,6 +465,7 @@ mod tests {
         let version = format!("{}.0.0", current.major.checked_add(1).unwrap());
         let tag = format!("v{version}");
         let release = |page: &str, asset: &str| ReleaseInfo {
+            prerelease: false,
             version: version.clone(),
             notes: "Changes".into(),
             url: format!("{page}/tag/{tag}"),
@@ -469,11 +499,11 @@ mod tests {
             UpdateState::Available(trusted.clone())
         );
         // Startup and the helper both revalidate the release saved in a plan.
-        assert!(crate::update_install::valid_release(&trusted));
+        assert!(crate::update_install::valid_release(&trusted, false));
 
         for (page, asset) in [(upstream, upstream), (upstream, fork), (fork, upstream)] {
             let rejected = release(page, asset);
-            assert!(!crate::update_install::valid_release(&rejected));
+            assert!(!crate::update_install::valid_release(&rejected, false));
             let state = interpret_release(200, body(&rejected).as_bytes(), crate::version::APP);
             if page == upstream {
                 assert!(matches!(
@@ -484,6 +514,44 @@ mod tests {
                 assert!(matches!(state, UpdateState::Available(info) if info.asset.is_none()));
                 assert!(!valid_asset(rejected.asset.as_ref().unwrap(), &tag));
             }
+        }
+    }
+
+    #[test]
+    fn beta_opt_in_preserves_github_flag_and_all_installer_checks() {
+        let prefs: crate::settings::UpdatePreferences = serde_json::from_str("{}").unwrap();
+        assert!(prefs.automatic && !prefs.beta);
+        let version = format!(
+            "{}.0.0",
+            Version::parse(crate::version::APP).unwrap().major + 1
+        );
+        let release = |tag: &str, prerelease, draft| {
+            json!({
+                "tag_name": tag, "html_url": format!("{RELEASES_URL}/tag/{tag}"), "body": "Beta notes", "draft": draft, "prerelease": prerelease,
+                "assets": [{ "name": update_asset_name(), "browser_download_url": format!("{RELEASES_URL}/download/{tag}/{}", update_asset_name()), "size": 123, "digest": format!("sha256:{}", "a".repeat(64)) }],
+            })
+        };
+        for tag in [format!("v{version}"), format!("v{version}-beta.1")] {
+            let beta = release(&tag, true, false);
+            assert!(matches!(
+                interpret_release(200, beta.to_string().as_bytes(), crate::version::APP),
+                UpdateState::Failed(_)
+            ));
+            let list = json!([
+                release("v0.0.1", false, false),
+                beta,
+                release("v999.0.0", true, true)
+            ]);
+            let UpdateState::Available(mut info) =
+                interpret_beta_release_list(200, list.to_string().as_bytes(), crate::version::APP)
+            else {
+                panic!("beta not offered after opt-in");
+            };
+            assert!(info.prerelease);
+            assert!(!crate::update_install::valid_release(&info, false));
+            assert!(crate::update_install::valid_release(&info, true));
+            info.asset.as_mut().unwrap().sha256 = "invalid".into();
+            assert!(!crate::update_install::valid_release(&info, true));
         }
     }
 

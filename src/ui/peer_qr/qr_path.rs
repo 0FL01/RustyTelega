@@ -8,8 +8,8 @@
 use std::fmt::Write as _;
 
 /// The module grid of an encoded link.
-pub(super) struct QrGrid {
-    pub(super) size: usize,
+pub(in crate::ui) struct QrGrid {
+    pub(in crate::ui) size: usize,
     dark: Vec<bool>,
 }
 
@@ -20,8 +20,11 @@ impl QrGrid {
     /// `link` encoded at error correction M (the disc in the middle
     /// covers under 4 % of the modules).
     pub(super) fn encode(link: &str) -> Option<QrGrid> {
-        let code = qrcode::QrCode::with_error_correction_level(link.as_bytes(), qrcode::EcLevel::M)
-            .ok()?;
+        Self::encode_with_level(link, qrcode::EcLevel::M)
+    }
+
+    pub(in crate::ui) fn encode_with_level(link: &str, level: qrcode::EcLevel) -> Option<QrGrid> {
+        let code = qrcode::QrCode::with_error_correction_level(link.as_bytes(), level).ok()?;
         let size = code.width();
         let dark = code
             .to_colors()
@@ -56,7 +59,7 @@ impl QrGrid {
 
     /// The path in module units (the grid is `size` × `size`), every
     /// shape wound the same way so one nonzero fill covers seams.
-    pub(super) fn path(&self) -> String {
+    pub(in crate::ui) fn path(&self) -> String {
         let mut d = String::new();
         let far = self.size.saturating_sub(FINDER) as f64;
         for (x, y) in [(0., 0.), (far, 0.), (0., far)] {

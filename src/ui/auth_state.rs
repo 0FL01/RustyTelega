@@ -14,6 +14,9 @@ pub(crate) struct AuthUi {
     pub(super) registration_last_input: Entity<TextareaState>,
     pub(super) accepted_registration_terms: Option<quill::telegram::envelope::RegistrationTerms>,
     pub(super) registration_notify_contacts: bool,
+    pub(super) registration_terms_open: bool,
+    pub(super) registration_photo: Option<super::profile_photo_sources::ChosenPhoto>,
+    pub(super) registration_submitted: bool,
     pub(super) email_input: Entity<TextareaState>,
     pub(super) phone_input: Entity<TextareaState>,
     pub(super) code_input: Entity<TextareaState>,
@@ -62,7 +65,7 @@ impl AuthUi {
         });
         let registration_last_input = cx.new(|cx| {
             TextareaState::new(window, cx)
-                .placeholder(tr(keys::Q_MISC_LAST_NAME_OPTIONAL))
+                .placeholder(tr(keys::SIGNUP_LASTNAME))
                 .auto_grow(1, 1)
         });
         let signin = super::signin_ui::SignInUi::new(window, cx);
@@ -72,6 +75,9 @@ impl AuthUi {
             registration_last_input,
             accepted_registration_terms: None,
             registration_notify_contacts: false,
+            registration_terms_open: false,
+            registration_photo: None,
+            registration_submitted: false,
             email_input,
             phone_input,
             code_input,

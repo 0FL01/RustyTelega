@@ -2,13 +2,13 @@
 use super::*;
 use crate::ids::RequestId;
 use crate::state::AuthPurpose;
-use crate::state::{PasswordOp, RequestPurpose};
+use crate::state::{PasswordOp, RequestPurpose, ShutdownPhase};
 use crate::telegram::envelope::{AuthorizationState, EmailResetState};
 use crate::telegram::requests::{
     cancel_password_reset, cancel_recovery_email_address_verification, check_authentication_code,
     check_authentication_email_code, check_authentication_password, check_login_email_address_code,
-    check_phone_number_code, check_recovery_email_address_code, get_countries, get_country_code,
-    get_password_state, recover_authentication_password, recover_password,
+    check_phone_number_code, check_recovery_email_address_code, destroy_request, get_countries,
+    get_country_code, get_password_state, recover_authentication_password, recover_password,
     request_authentication_password_recovery, request_password_recovery,
     request_qr_code_authentication, resend_authentication_code, resend_login_email_address_code,
     resend_phone_number_code, resend_recovery_email_address_code,
@@ -18,6 +18,28 @@ use crate::telegram::requests::{
 };
 
 impl<S: JsonSender> ConnectDriver<S> {
+    /// Only the intro QR -> Phone reset may discard this pre-auth database.
+    pub fn reset_qr_login(&mut self) -> Result<RequestId, ConnectSendError> {
+        if !matches!(
+            self.session.auth,
+            AuthorizationState::WaitOtherDeviceConfirmation { .. }
+        ) || !matches!(self.session.shutdown, ShutdownPhase::Running)
+            || self.session.my_user_id.is_some()
+            || self.session.requests.has_auth_submit()
+            || self.passkey_login_pending()
+        {
+            return Err(ConnectSendError::InvalidRequest);
+        }
+        self.shut_down_carriers();
+        let extra = self.session.request(RequestPurpose::Close, None);
+        if let Err(error) = self.sender.send_json(&destroy_request(extra)) {
+            self.session.requests.take(extra);
+            return Err(error);
+        }
+        self.session.begin_close();
+        Ok(extra)
+    }
+
     /// Slice A8: send `sendPhoneNumberCode` with
     /// `phoneNumberCodeTypeChange` (schema 1.8.67, line 14877) — the
     /// while-authorized change-number flow, NOT the auth flow. Guarded on
@@ -170,10 +192,10 @@ impl<S: JsonSender> ConnectDriver<S> {
     /// is how "Wrong number?" re-enters a number from the code screen.
     /// Phone value is never stored on the session or diagnostics.
     pub fn submit_phone(&mut self, phone: &str) -> Result<RequestId, ConnectSendError> {
-        if !matches!(
-            self.session.auth,
-            AuthorizationState::WaitPhoneNumber | AuthorizationState::WaitCode { .. }
-        ) || self.session.requests.has_auth_submit()
+        if !crate::auth::can_submit_phone(&self.session.auth)
+            || !matches!(self.session.shutdown, ShutdownPhase::Running)
+            || self.session.requests.has_auth_submit()
+            || self.passkey_login_pending()
         {
             return Err(ConnectSendError::InvalidRequest);
         }

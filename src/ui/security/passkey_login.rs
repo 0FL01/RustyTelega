@@ -10,9 +10,6 @@
 
 use super::passkey_ceremony::{CeremonyMode, CeremonySheet, CeremonyUi};
 use crate::ui::app::QuillApp;
-use gpui_kit::TestSupportExt;
-use gpui_kit::component::button::*;
-use gpui_kit::component::*;
 use gpui_kit::*;
 use quill::lang::{keys, tr};
 use quill::telegram::envelope::AuthorizationState;
@@ -84,41 +81,6 @@ impl QuillApp {
         }
         self.run_passkey_ticker(window, cx);
         cx.notify();
-    }
-
-    /// The link and, after a failed step, the server's error under it.
-    /// `None` when the link does not show.
-    pub(in crate::ui) fn passkey_login_link(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        if !self.passkey_login_link_shown() {
-            return None;
-        }
-        let busy = self.passkey_login_busy();
-        let error = self
-            .session()
-            .and_then(|s| s.settings.passkeys.login.error.clone())
-            .or_else(|| self.privacy.passkeys.demo_login_error.clone());
-        let mut column = div().flex().flex_col().items_center().gap_1().child(
-            Button::new("passkey-login")
-                .label(tr(keys::INTRO_QR_PASSKEY))
-                .ghost()
-                .loading(busy)
-                .disabled(busy)
-                .on_click(cx.listener(|this, _, window, cx| this.start_passkey_login(window, cx))),
-        );
-        if let Some(error) = error {
-            column = column.child(
-                div()
-                    .id("passkey-login-error")
-                    .test_support()
-                    .role(Role::Alert)
-                    .aria_label(error.clone())
-                    .text_sm()
-                    .text_center()
-                    .text_color(cx.theme().danger)
-                    .child(error),
-            );
-        }
-        Some(column.into_any_element())
     }
 }
 

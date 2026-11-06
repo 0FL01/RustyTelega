@@ -39,7 +39,10 @@ fn verdict(plan: &InstallPlan, exe: &Path) -> Verdict {
         && plan.bundle
         && !plan.files.is_empty()
         && present
-        && valid_release(&plan.release)
+        && valid_release(
+            &plan.release,
+            crate::settings::load_update_preferences().beta,
+        )
     {
         Verdict::Install
     } else {
@@ -231,6 +234,7 @@ mod tests {
 
     fn release(version: &str) -> ReleaseInfo {
         ReleaseInfo {
+            prerelease: false,
             version: version.into(),
             notes: String::new(),
             url: format!("{RELEASES_URL}/tag/v{version}"),

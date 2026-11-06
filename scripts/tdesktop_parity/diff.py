@@ -44,6 +44,9 @@ def main() -> int:
     draw = ImageDraw.Draw(mask)
     for box in (profile["masks"] if masked else []) + profile["always"]:
         draw.rectangle(box, fill=0)
+    if masked:
+        for box in profile.get("keep_ellipses", []):
+            draw.ellipse(box, fill=255)
     total = ImageChops.multiply(total, mask)
     bad = total.point(lambda v: 255 if v > TOLERANCE else 0)
 

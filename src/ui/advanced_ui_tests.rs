@@ -323,6 +323,7 @@ fn a_release_the_check_finds_downloads_on_its_own(cx: &mut TestAppContext) {
     let (app, _shell, mut vcx) = new_app(cx);
     let vcx = &mut vcx;
     let release = ReleaseInfo {
+        prerelease: false,
         version: "999.0.0".into(),
         notes: String::new(),
         url: format!("{RELEASES_URL}/tag/v999.0.0"),
@@ -362,6 +363,33 @@ fn a_release_the_check_finds_downloads_on_its_own(cx: &mut TestAppContext) {
             "the download finished (offline here) and its result is shown"
         );
     });
+    app.update_in(vcx, |app, _, cx| {
+        let prefs = app.settings.update_preferences;
+        app.apply_check_result(UpdateState::Available(release.clone()), cx);
+        let progress = match &app.settings.update_state {
+            UpdateState::Downloading(_, progress) => progress.clone(),
+            _ => panic!("a download worker must be pending"),
+        };
+        app.set_update_preferences(false, prefs.beta, cx);
+        app.set_update_preferences(true, prefs.beta, cx);
+        assert!(progress.is_held());
+        assert!(matches!(&app.settings.update_state, UpdateState::Downloading(_, current) if *current == progress), "the held worker retains exclusive ownership until its completion");
+    });
+    vcx.run_until_parked();
+    app.update_in(vcx, |app, _, cx| {
+        assert!(
+            matches!(app.settings.update_state, UpdateState::Idle),
+            "the stale worker has exited and released download ownership"
+        );
+        let prefs = app.settings.update_preferences;
+        app.settings.update_state = UpdateState::Installing(release);
+        app.set_update_preferences(!prefs.automatic, !prefs.beta, cx);
+        assert_eq!(app.settings.update_preferences, prefs);
+        assert!(matches!(
+            app.settings.update_state,
+            UpdateState::Installing(_)
+        ));
+    });
     quill::update_install::force_self_update_available(None);
 }
 
@@ -373,6 +401,7 @@ fn a_low_disk_holds_the_update_download_until_it_is_healthy(cx: &mut TestAppCont
     let (app, _shell, mut vcx) = new_app(cx);
     let vcx = &mut vcx;
     let release = ReleaseInfo {
+        prerelease: false,
         version: "999.0.0".into(),
         notes: String::new(),
         url: format!("{RELEASES_URL}/tag/v999.0.0"),

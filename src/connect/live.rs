@@ -51,6 +51,38 @@ pub fn wait_closed<S: JsonSender>(
     }
 }
 
+pub(crate) fn poll_reset_phone<S: JsonSender>(
+    driver: &mut ConnectDriver<S>,
+    bridge: &ReceiveBridge,
+    budget: Duration,
+) -> Option<bool> {
+    use crate::telegram::envelope::{AuthPayload, EnvelopePayload};
+    let deadline = super::closing::deadline_after(budget);
+    while Instant::now() < deadline {
+        let Some(owned) = bridge.next_timeout(Duration::ZERO) else {
+            return bridge.stopped_unexpectedly().then_some(false);
+        };
+        if let EnvelopePayload::Auth(AuthPayload::UpdateAuthorizationState(state)) =
+            &owned.envelope.payload
+        {
+            match state {
+                AuthorizationState::WaitPhoneNumber if driver.session.my_user_id.is_none() => {
+                    return Some(driver.ingest(owned).is_ok());
+                }
+                AuthorizationState::WaitTdlibParameters => {}
+                _ => return Some(false),
+            }
+        }
+        if driver.ingest(owned).is_err()
+            || !matches!(driver.session.auth, AuthorizationState::WaitTdlibParameters)
+            || driver.session.my_user_id.is_some()
+        {
+            return Some(false);
+        }
+    }
+    None
+}
+
 /// Open LiveTdJson + receive bridge when gate + restore succeed.
 ///
 /// The app closes clients through a [`ClosingSet`] (never blocking).
@@ -64,9 +96,41 @@ pub struct LiveConnect {
     pub driver: ConnectDriver<LiveSender>,
     pub bridge: ReceiveBridge,
     _live: LiveTdJson,
+    discarded_auth: bool,
 }
 
 impl LiveConnect {
+    /// The caller detaches this generation first and hands it to ClosingSet.
+    /// Late QR success is drained without authorizing or running Ready work.
+    pub fn begin_qr_phone_reset(&mut self) -> Result<(), ConnectSendError> {
+        self.driver.reset_qr_login()?;
+        self.discarded_auth = true;
+        Ok(())
+    }
+
+    /// Nonblocking confirmation before the fresh client is exposed to the UI.
+    pub fn poll_reset_phone(&mut self) -> Option<bool> {
+        let result = poll_reset_phone(
+            &mut self.driver,
+            &self.bridge,
+            super::closing::CLOSE_DRAIN_BUDGET,
+        );
+        if result == Some(false) {
+            self.discard_reset_client();
+        }
+        result
+    }
+
+    pub fn discard_reset_client(&mut self) {
+        if self.discarded_auth {
+            return;
+        }
+        // Failed/unexpected fresh auth also belongs to a discarded generation.
+        // Close without ever ingesting a late Ready from it.
+        let _ = self.driver.request_close();
+        self.discarded_auth = true;
+    }
+
     /// Close the TDLib client and join the receive thread. Safe to call twice.
     /// Does not panic; a timeout still joins the thread so Drop can unload.
     pub fn shutdown(&mut self, wait: Duration) {
@@ -75,6 +139,22 @@ impl LiveConnect {
         }
         // A dead receive loop can never deliver Closed; do not wait for it.
         if self.bridge.stopped_unexpectedly() {
+            self.bridge.shutdown();
+            return;
+        }
+        if self.discarded_auth {
+            let deadline = super::closing::deadline_after(wait);
+            while Instant::now() < deadline {
+                if super::closing::drain_discarded_auth(
+                    &mut self.driver,
+                    &self.bridge,
+                    super::closing::CLOSE_DRAIN_BUDGET,
+                ) != CloseProgress::Pending
+                {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
             self.bridge.shutdown();
             return;
         }
@@ -98,11 +178,17 @@ impl Drop for LiveConnect {
 
 impl Closable for LiveConnect {
     fn begin_close(&mut self) {
-        super::closing::begin_close_bridged(&mut self.driver, &self.bridge);
+        if !self.discarded_auth {
+            super::closing::begin_close_bridged(&mut self.driver, &self.bridge);
+        }
     }
 
     fn drain(&mut self, budget: Duration) -> CloseProgress {
-        super::closing::drain_bridged(&mut self.driver, &self.bridge, budget)
+        if self.discarded_auth {
+            super::closing::drain_discarded_auth(&mut self.driver, &self.bridge, budget)
+        } else {
+            super::closing::drain_bridged(&mut self.driver, &self.bridge, budget)
+        }
     }
 
     fn finish(&mut self) {
@@ -266,5 +352,6 @@ fn open_prepared_client(
         driver,
         bridge,
         _live: live,
+        discarded_auth: false,
     })
 }
