@@ -1,6 +1,6 @@
 # Goal: Pixel-exact sign-in flow after Telegram Desktop 7.3.5
 
-Status: active
+Status: complete
 Source: user instruction 2026-11-05 ("Надо допилить pixel perfect ... процесс экрана входа не соответствует tdesktop"), then "Приступить к реализации и коммит пуш потом"; reference `artifacts/intro-ref/{start,qr,phone,phone-filled,phone-error,settings,qr-back}.png`; follows `2026-11-04-tdesktop-pixel-exact.md`
 Last updated: 2026-11-06
 
@@ -98,11 +98,12 @@ Primary evidence for reference screens: a fresh `scripts/tdesktop_parity/build.s
     - `ready-tdesktop-parity` stays at no worse than 0.37% at tolerance 24, all 22 runs at (0,0) and ink in [0.97, 1.03].
     - `cargo fmt --all -- --check`, core and UI clippy with `-D warnings`, `cargo test --lib`, `cargo test --features demo-capture --bin quill` with `LC_TIME=C.UTF-8`, `pull_next_ui_tests`, `paragraph_cache_scroll`, `scripts/check-file-size.sh` and `scripts/check-hotspots.sh` are recorded.
     - Scoped changes are committed and pushed to `origin/main`, the goal is updated, and the original WIP is preserved.
-  - Status: in_progress
+  - Status: verified
   - Evidence:
      - `cargo fmt --all -- --check`, core `cargo clippy --no-default-features --all-targets --locked -- -D warnings`, and UI `cargo clippy --features demo-capture --all-targets --locked -p quill -p quill-calls-sys -p quill-webview-protocol -- -D warnings` pass. Latest UI correction is checked in `signup-switch-clippy.log`; core has no subsequent changes.
      - `cargo test --lib --locked`: **7139 passed, 1 known inherited palette failure, 23 ignored**, not aggregate PASS (`delivery-core-suite.log`). `LC_TIME=C.UTF-8 cargo test --features demo-capture --locked --bin quill -- --test-threads=1`: **2734 passed, 0 failed, 2 ignored** in 1068.37s (`ui-suite-delivery.log`). That full binary predates only the final three-line account-switch cleanup; current `failure_card_tests` covers that owner correction: **13 passed, 2723 filtered**, `signup-switch-owner.log`.
-     - `pull_next_ui_tests` filename filter selects zero (not coverage); actual `ui::pull_next_ui::tests`: **5 passed, 1 known preexisting isolated render-count failure**. `paragraph_cache_scroll`: **6 passed**. `bash scripts/check-file-size.sh`: PASS, limit 1000. Parity profile tests: **2 passed**. The committed hotspot check and remote delivery remain.
+     - `pull_next_ui_tests` filename filter selects zero (not coverage); actual `ui::pull_next_ui::tests`: **5 passed, 1 known preexisting isolated render-count failure**. `paragraph_cache_scroll`: **6 passed**. `bash scripts/check-file-size.sh`: PASS, limit 1000. Parity profile tests: **2 passed**. `bash scripts/check-hotspots.sh` passes under the documented `Hotspot-change` commit trailer for the required shared owners; it reports the palette match-size warning rather than requiring an unrelated palette refactor (`hotspots-delivery.log`).
+     - Product commit `a05289e73bd6bf041a58a51b6eebf63c95fca8cd` is pushed to `origin/main`; `git ls-remote origin refs/heads/main` equals local HEAD (`product-remote-verification.txt`). The original scoped WIP is included; the staged-path audit excluded references, binaries, tokens, pycache, dependencies and CI changes.
 
 ### Constraints
 
@@ -159,20 +160,18 @@ Primary evidence for reference screens: a fresh `scripts/tdesktop_parity/build.s
 
 ## Current Checkpoint
 
-- Closes: R9 regression/review/delivery. R6/R7 source-only and R8 reference/functional evidence are recorded.
-- Smallest next action: commit the reviewed scoped diff, run committed hotspot qualification, push and verify origin/main, then record delivery closure.
-- Expected evidence: source geometry and deterministic UI/auth tests for R6/R7, reference capture for R8, mandatory R9 gates and final Sol review. Live reset/submit is unavailable without credentials and is not claimed.
-- Stop or replan if: a genuinely new proven external blocker appears. Reset authorization and the plate/widget geometry are resolved and must not be reopened.
+- Closed: R1–R9 with the recorded qualifications. No further substantive work remains.
+- Delivery: product commit and remote SHA are verified; publish this documentation-only closure. No new UI review is needed for evidence/status bookkeeping.
 
 ## Current State
 
-- Resolved: R1–R8 have current source/reference/deterministic evidence and final-code review; R9 awaits committed hotspot and remote delivery. No live new-build auth claim. Current native binary reports `--embedded-credentials`: **none**. Credentials are absent from the environment/local files; they were not extracted. Historical installed-binary live evidence is not new-build PASS.
+- Resolved: R1–R9 have current source/reference/deterministic evidence, final-code review, committed hotspot qualification and verified product delivery. No live new-build auth claim. Current native binary reports `--embedded-credentials`: **none**. Credentials are absent from the environment/local files; they were not extracted. Historical installed-binary live evidence is not new-build PASS.
 - Current R9 main capture: `intro-delivery/captures/main-delivery-full.png` at **1920x1036**, then explicit historical donor crop `1919x1034+0+0` to `main-delivery.png`. **22/22 runs (0,0), ink [0.98,1.01], total 0.36% @24 / 0.57% @8 / 3.16% @0**. `main-delivery-{align,diff}.txt` and `main-delivery-diff/heat.png` are the reports. The fixture alone gives the real native caret a 3-second phase; production timing/focus and all main profile boxes/masks remain unchanged.
 - Current checks use the recorded native pkg-config/sysroot and `LC_TIME=C.UTF-8`. Core strict clippy, fmt and file-size gates pass. Final core `cargo test --lib --locked`: **7139 passed, 1 failed, 23 ignored**; the sole failure is the owner-identified original-palette-WIP `custom_themes_are_stored_by_name`, not aggregate PASS. The obsolete old Password rejection assertion now checks Ready, matching approved R5. Current UI strict clippy passes; failure-card/UI **13 passed**, source scale clamp **1 passed**, updater/installing guard **1 passed**, paragraph-cache scroll **6 passed**. Isolated actual pull module: **5 passed, 1 failed** in the known preexisting media-panel render-count assertion; literal filename filter selected zero and is not counted as coverage.
 - The first full UI attempt was interrupted, not PASS: it had reached Settings tests, not hung in viewer cover (both cover tests passed). GDB showed active Taffy layout; no viewer runtime change was made. Its three in-scope regressions were corrected: accessible startup-failure heading/body and the old 100%-minimum clamp expectation. The complete final-caption UI run subsequently passed **2734/0/2**; the final nonvisual switch-owner cleanup is covered by the current **13/13** affected tests, not falsely attributed to that older full-suite binary.
 - Preserved: all 124 original palette role declarations and all six original 124-value palette prefixes compare equal to the inherited WIP. Five source Settings palette roles were appended. Permanent test-notification silence, existing signatures/CI/release and user data remain untouched; no dependencies were added.
 - Review corrections: the Connection subpage mounts its existing proxy owner, guarded signup picker completion reaches the real crop, held download workers retain exclusive ownership until completion, and source later-step copy/input captions replace legacy copy. Source recovery instructions omit the unavailable email pattern rather than inventing server metadata. Updater cancellation/installation and disk-held resume checks each pass **1 test**. `captures/late-steps-delivery.png` and the six full `intro-*-delivery.png` are source-only inspection, not pixel qualification.
-- Final rereview: `ses_e4f986e9cffecPHM5ZZJshpm0V` closes all four P2 mechanisms and the newly reachable cross-account signup-photo P1; no blocking or nonblocking findings remain in the correction scope. The common switch cleanup discards photo/submission/terms-layer state before both adoption and startup. The current real-switch regression stops at the existing unknown-account failure after cleanup, proves all fields cleared and generation unchanged, and retains picker/terms/Back assertions. Together with inspected dominance over both connection branches this is sufficient owner proof, **not executed native adoption or sender-level/live proof**. Final tracked review hash `34f89eecc726…`, untracked `fa931a2d9940…`; subsequent edits are delivery-evidence documentation only. Blocker: none; committed hotspot and delivery remain.
+- Final rereview: `ses_e4f986e9cffecPHM5ZZJshpm0V` closes all four P2 mechanisms and the newly reachable cross-account signup-photo P1; no blocking or nonblocking findings remain in the correction scope. The common switch cleanup discards photo/submission/terms-layer state before both adoption and startup. The current real-switch regression stops at the existing unknown-account failure after cleanup, proves all fields cleared and generation unchanged, and retains picker/terms/Back assertions. Together with inspected dominance over both connection branches this is sufficient owner proof, **not executed native adoption or sender-level/live proof**. Final tracked review hash `34f89eecc726…`, untracked `fa931a2d9940…`; subsequent edits are delivery-evidence documentation only. Blocker: none. Product delivery is verified; this closure is documentation only.
 
 ## Earlier checkpoint record (superseded by Current State)
 
@@ -207,6 +206,7 @@ Primary evidence for reference screens: a fresh `scripts/tdesktop_parity/build.s
 
 ## Checkpoint History
 
+- 2026-11-06: R6–R8 implemented and source/reference qualified; final-code Sol's four P2s and newly reachable cross-account photo P1 corrected and closed. R9 records both qualified known failures, complete UI success plus the subsequent targeted owner regression, final main/Settings captures and committed hotspot override. Product `a05289e73bd6bf041a58a51b6eebf63c95fca8cd` pushed and remote SHA verified; goal complete, documentation-only closure follows.
 - 2026-11-05: confirmed R4/R5 review findings require the minimal live-auth update hook for pending Phone presentation and the existing shell dialog registry for banned-number handling. The notification policy and updater/installer remain untouched; no new backend, dependency or generic state machine is added. Targeted fix checks and rereview follow.
 
 - 2026-11-05: plan reviewed by Review-Sol-Global; the Back-to-phone policy, first-run consumers and empty Settings runs were added. Implementation starts with R1 and the QR -> Phone gate.
@@ -221,7 +221,7 @@ Primary evidence for reference screens: a fresh `scripts/tdesktop_parity/build.s
 
 ## Completion
 
-- Resolved outcomes: R1–R8; R9 is in progress only for committed hotspot and remote delivery.
-- Commands and artifacts: recorded above under R1/R3 and Current State; no reference screenshots, binaries, QR tokens or account data are committed.
-- Constraint and diff-scope check: uncommitted scope is the approved intro, guarded reset, source assets/font isolation, later forms/photo, Settings opt-in updater policy and their direct consumers/tests/docs. Original palette entries are preserved. No dependency, reference/binary/token or test-notification change is admitted. Final-code review and delivery remain; no whole-product/live READY is claimed.
-- Final status: active pending scoped commit, committed hotspot and verified push. Source/reference checks and current Sol review are complete with the explicit known-failure/live-evidence qualifications above. Earlier reset/geometry/update-policy decisions stand.
+- Resolved outcomes: R1–R9, with explicit source-only, known-failure and unavailable-live-evidence qualifications.
+- Commands and artifacts: recorded above; delivery artifacts and exact logs are under `/home/stfu/.cache/opencode-tmp/opencode/intro-delivery/`. Product `a05289e73bd6bf041a58a51b6eebf63c95fca8cd` is verified on `origin/main`. No reference screenshots, binaries, QR tokens or account data are committed.
+- Constraint and diff-scope check: committed scope is the approved intro, guarded reset, source assets/font isolation, later forms/photo, Settings opt-in updater policy and their direct consumers/tests/docs. All original palette entries and permanent test-notification silence are preserved. No dependency, reference/binary/token, CI/release or signature-verification change is admitted. This final bookkeeping diff changes only this goal document; no separate cosmetic review is required.
+- Final status: complete. The frozen objective is delivered with the qualifications above, not whole-product, release or live-auth READY. Stop substantive work.
